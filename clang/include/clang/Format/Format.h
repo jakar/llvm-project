@@ -1876,7 +1876,7 @@ struct FormatStyle {
   ///    new int[3]{1, 2, 3};                   new int[3]{ 1, 2, 3 };
   /// \endcode
   bool Cpp11BracedListStyle;
-  
+
   /// If there is a break after the opening parenthesis, also break
   /// before the closing parenthesis
   /// \code

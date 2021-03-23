@@ -2127,7 +2127,7 @@ the configuration (without a prefix: ``Auto``).
 
     false:
     someLongFunction(
-        argument1, argument2);        
+        argument1, argument2);
 
 **DeriveLineEnding** (``bool``)
   Analyze the formatted file for the most used line ending (``\r\n``
