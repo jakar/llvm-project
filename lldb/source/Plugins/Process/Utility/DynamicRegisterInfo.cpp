@@ -1,44 +1,61 @@
-//===-- DynamicRegisterInfo.cpp ----------------------------*- C++ -*-===//
+//===-- DynamicRegisterInfo.cpp -------------------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
 #include "DynamicRegisterInfo.h"
 
-// C Includes
-// C++ Includes
-// Other libraries and framework includes
-// Project includes
-#include "lldb/Core/ArchSpec.h"
 #include "lldb/Core/StreamFile.h"
-#include "lldb/Core/StructuredData.h"
 #include "lldb/DataFormatters/FormatManager.h"
 #include "lldb/Host/StringConvert.h"
+#include "lldb/Interpreter/OptionArgParser.h"
+#include "lldb/Utility/ArchSpec.h"
 #include "lldb/Utility/RegularExpression.h"
 #include "lldb/Utility/StringExtractor.h"
+#include "lldb/Utility/StructuredData.h"
 
 using namespace lldb;
 using namespace lldb_private;
 
-DynamicRegisterInfo::DynamicRegisterInfo()
-    : m_regs(), m_sets(), m_set_reg_nums(), m_set_names(), m_value_regs_map(),
-      m_invalidate_regs_map(), m_dynamic_reg_size_map(),
-      m_reg_data_byte_size(0), m_finalized(false) {}
-
 DynamicRegisterInfo::DynamicRegisterInfo(
     const lldb_private::StructuredData::Dictionary &dict,
-    const lldb_private::ArchSpec &arch)
-    : m_regs(), m_sets(), m_set_reg_nums(), m_set_names(), m_value_regs_map(),
-      m_invalidate_regs_map(), m_dynamic_reg_size_map(),
-      m_reg_data_byte_size(0), m_finalized(false) {
+    const lldb_private::ArchSpec &arch) {
   SetRegisterInfo(dict, arch);
 }
 
-DynamicRegisterInfo::~DynamicRegisterInfo() {}
+DynamicRegisterInfo::DynamicRegisterInfo(DynamicRegisterInfo &&info) {
+  MoveFrom(std::move(info));
+}
+
+DynamicRegisterInfo &
+DynamicRegisterInfo::operator=(DynamicRegisterInfo &&info) {
+  MoveFrom(std::move(info));
+  return *this;
+}
+
+void DynamicRegisterInfo::MoveFrom(DynamicRegisterInfo &&info) {
+  m_regs = std::move(info.m_regs);
+  m_sets = std::move(info.m_sets);
+  m_set_reg_nums = std::move(info.m_set_reg_nums);
+  m_set_names = std::move(info.m_set_names);
+  m_value_regs_map = std::move(info.m_value_regs_map);
+  m_invalidate_regs_map = std::move(info.m_invalidate_regs_map);
+  m_dynamic_reg_size_map = std::move(info.m_dynamic_reg_size_map);
+
+  m_reg_data_byte_size = info.m_reg_data_byte_size;
+  m_finalized = info.m_finalized;
+
+  if (m_finalized) {
+    const size_t num_sets = m_sets.size();
+    for (size_t set = 0; set < num_sets; ++set)
+      m_sets[set].registers = m_set_reg_nums[set].data();
+  }
+
+  info.Clear();
+}
 
 size_t
 DynamicRegisterInfo::SetRegisterInfo(const StructuredData::Dictionary &dict,
@@ -48,13 +65,9 @@ DynamicRegisterInfo::SetRegisterInfo(const StructuredData::Dictionary &dict,
   if (dict.GetValueForKeyAsArray("sets", sets)) {
     const uint32_t num_sets = sets->GetSize();
     for (uint32_t i = 0; i < num_sets; ++i) {
-      std::string set_name_str;
       ConstString set_name;
-      if (sets->GetItemAtIndexAsString(i, set_name_str))
-        set_name.SetCString(set_name_str.c_str());
-      if (set_name) {
-        RegisterSet new_set = {set_name.AsCString(), NULL, 0, NULL};
-        m_sets.push_back(new_set);
+      if (sets->GetItemAtIndexAsString(i, set_name) && !set_name.IsEmpty()) {
+        m_sets.push_back({set_name.AsCString(), nullptr, 0, nullptr});
       } else {
         Clear();
         printf("error: register sets must have valid names\n");
@@ -63,6 +76,7 @@ DynamicRegisterInfo::SetRegisterInfo(const StructuredData::Dictionary &dict,
     }
     m_set_reg_nums.resize(m_sets.size());
   }
+
   StructuredData::Array *regs = nullptr;
   if (!dict.GetValueForKeyAsArray("registers", regs))
     return 0;
@@ -80,8 +94,8 @@ DynamicRegisterInfo::SetRegisterInfo(const StructuredData::Dictionary &dict,
       return 0;
     }
 
-    // { 'name':'rcx'       , 'bitsize' :  64, 'offset' :  16, 'encoding':'uint'
-    // , 'format':'hex'         , 'set': 0, 'ehframe' : 2,
+    // { 'name':'rcx'       , 'bitsize' :  64, 'offset' :  16,
+    // 'encoding':'uint' , 'format':'hex'         , 'set': 0, 'ehframe' : 2,
     // 'dwarf' : 2, 'generic':'arg4', 'alt-name':'arg4', },
     RegisterInfo reg_info;
     std::vector<uint32_t> value_regs;
@@ -106,16 +120,13 @@ DynamicRegisterInfo::SetRegisterInfo(const StructuredData::Dictionary &dict,
     const ByteOrder byte_order = arch.GetByteOrder();
 
     if (reg_info.byte_offset == UINT32_MAX) {
-      // No offset for this register, see if the register has a value expression
-      // which indicates this register is part of another register. Value
-      // expressions
-      // are things like "rax[31:0]" which state that the current register's
-      // value
-      // is in a concrete register "rax" in bits 31:0. If there is a value
-      // expression
-      // we can calculate the offset
+      // No offset for this register, see if the register has a value
+      // expression which indicates this register is part of another register.
+      // Value expressions are things like "rax[31:0]" which state that the
+      // current register's value is in a concrete register "rax" in bits 31:0.
+      // If there is a value expression we can calculate the offset
       bool success = false;
-      std::string slice_str;
+      llvm::StringRef slice_str;
       if (reg_info_dict->GetValueForKeyAsString("slice", slice_str, nullptr)) {
         // Slices use the following format:
         //  REGNAME[MSBIT:LSBIT]
@@ -126,76 +137,65 @@ DynamicRegisterInfo::SetRegisterInfo(const StructuredData::Dictionary &dict,
         // ends at
         static RegularExpression g_bitfield_regex(
             llvm::StringRef("([A-Za-z_][A-Za-z0-9_]*)\\[([0-9]+):([0-9]+)\\]"));
-        RegularExpression::Match regex_match(3);
-        if (g_bitfield_regex.Execute(slice_str, &regex_match)) {
-          llvm::StringRef reg_name_str;
-          std::string msbit_str;
-          std::string lsbit_str;
-          if (regex_match.GetMatchAtIndex(slice_str.c_str(), 1, reg_name_str) &&
-              regex_match.GetMatchAtIndex(slice_str.c_str(), 2, msbit_str) &&
-              regex_match.GetMatchAtIndex(slice_str.c_str(), 3, lsbit_str)) {
-            const uint32_t msbit =
-                StringConvert::ToUInt32(msbit_str.c_str(), UINT32_MAX);
-            const uint32_t lsbit =
-                StringConvert::ToUInt32(lsbit_str.c_str(), UINT32_MAX);
-            if (msbit != UINT32_MAX && lsbit != UINT32_MAX) {
-              if (msbit > lsbit) {
-                const uint32_t msbyte = msbit / 8;
-                const uint32_t lsbyte = lsbit / 8;
+        llvm::SmallVector<llvm::StringRef, 4> matches;
+        if (g_bitfield_regex.Execute(slice_str, &matches)) {
+          std::string reg_name_str = matches[1].str();
+          std::string msbit_str = matches[2].str();
+          std::string lsbit_str = matches[3].str();
+          const uint32_t msbit =
+              StringConvert::ToUInt32(msbit_str.c_str(), UINT32_MAX);
+          const uint32_t lsbit =
+              StringConvert::ToUInt32(lsbit_str.c_str(), UINT32_MAX);
+          if (msbit != UINT32_MAX && lsbit != UINT32_MAX) {
+            if (msbit > lsbit) {
+              const uint32_t msbyte = msbit / 8;
+              const uint32_t lsbyte = lsbit / 8;
 
-                ConstString containing_reg_name(reg_name_str);
+              const RegisterInfo *containing_reg_info =
+                  GetRegisterInfo(reg_name_str);
+              if (containing_reg_info) {
+                const uint32_t max_bit = containing_reg_info->byte_size * 8;
+                if (msbit < max_bit && lsbit < max_bit) {
+                  m_invalidate_regs_map[containing_reg_info
+                                            ->kinds[eRegisterKindLLDB]]
+                      .push_back(i);
+                  m_value_regs_map[i].push_back(
+                      containing_reg_info->kinds[eRegisterKindLLDB]);
+                  m_invalidate_regs_map[i].push_back(
+                      containing_reg_info->kinds[eRegisterKindLLDB]);
 
-                RegisterInfo *containing_reg_info =
-                    GetRegisterInfo(containing_reg_name);
-                if (containing_reg_info) {
-                  const uint32_t max_bit = containing_reg_info->byte_size * 8;
-                  if (msbit < max_bit && lsbit < max_bit) {
-                    m_invalidate_regs_map[containing_reg_info
-                                              ->kinds[eRegisterKindLLDB]]
-                        .push_back(i);
-                    m_value_regs_map[i].push_back(
-                        containing_reg_info->kinds[eRegisterKindLLDB]);
-                    m_invalidate_regs_map[i].push_back(
-                        containing_reg_info->kinds[eRegisterKindLLDB]);
-
-                    if (byte_order == eByteOrderLittle) {
-                      success = true;
-                      reg_info.byte_offset =
-                          containing_reg_info->byte_offset + lsbyte;
-                    } else if (byte_order == eByteOrderBig) {
-                      success = true;
-                      reg_info.byte_offset =
-                          containing_reg_info->byte_offset + msbyte;
-                    } else {
-                      llvm_unreachable("Invalid byte order");
-                    }
+                  if (byte_order == eByteOrderLittle) {
+                    success = true;
+                    reg_info.byte_offset =
+                        containing_reg_info->byte_offset + lsbyte;
+                  } else if (byte_order == eByteOrderBig) {
+                    success = true;
+                    reg_info.byte_offset =
+                        containing_reg_info->byte_offset + msbyte;
                   } else {
-                    if (msbit > max_bit)
-                      printf("error: msbit (%u) must be less than the bitsize "
-                             "of the register (%u)\n",
-                             msbit, max_bit);
-                    else
-                      printf("error: lsbit (%u) must be less than the bitsize "
-                             "of the register (%u)\n",
-                             lsbit, max_bit);
+                    llvm_unreachable("Invalid byte order");
                   }
                 } else {
-                  printf("error: invalid concrete register \"%s\"\n",
-                         containing_reg_name.GetCString());
+                  if (msbit > max_bit)
+                    printf("error: msbit (%u) must be less than the bitsize "
+                           "of the register (%u)\n",
+                           msbit, max_bit);
+                  else
+                    printf("error: lsbit (%u) must be less than the bitsize "
+                           "of the register (%u)\n",
+                           lsbit, max_bit);
                 }
               } else {
-                printf("error: msbit (%u) must be greater than lsbit (%u)\n",
-                       msbit, lsbit);
+                printf("error: invalid concrete register \"%s\"\n",
+                       reg_name_str.c_str());
               }
             } else {
-              printf("error: msbit (%u) and lsbit (%u) must be valid\n", msbit,
-                     lsbit);
+              printf("error: msbit (%u) must be greater than lsbit (%u)\n",
+                     msbit, lsbit);
             }
           } else {
-            // TODO: print error invalid slice string that doesn't follow the
-            // format
-            printf("error: failed to extract regex matches for parsing the "
-                   "register bitfield regex\n");
+            printf("error: msbit (%u) and lsbit (%u) must be valid\n", msbit,
+                   lsbit);
           }
         } else {
           // TODO: print error invalid slice string that doesn't follow the
@@ -214,8 +214,8 @@ DynamicRegisterInfo::SetRegisterInfo(const StructuredData::Dictionary &dict,
               ConstString composite_reg_name;
               if (composite_reg_list->GetItemAtIndexAsString(
                       composite_idx, composite_reg_name, nullptr)) {
-                RegisterInfo *composite_reg_info =
-                    GetRegisterInfo(composite_reg_name);
+                const RegisterInfo *composite_reg_info =
+                    GetRegisterInfo(composite_reg_name.GetStringRef());
                 if (composite_reg_info) {
                   composite_offset = std::min(composite_offset,
                                               composite_reg_info->byte_offset);
@@ -269,17 +269,15 @@ DynamicRegisterInfo::SetRegisterInfo(const StructuredData::Dictionary &dict,
 
     reg_info.byte_size = bitsize / 8;
 
-    std::string dwarf_opcode_string;
+    llvm::StringRef dwarf_opcode_string;
     if (reg_info_dict->GetValueForKeyAsString("dynamic_size_dwarf_expr_bytes",
                                               dwarf_opcode_string)) {
-      reg_info.dynamic_size_dwarf_len = dwarf_opcode_string.length() / 2;
+      reg_info.dynamic_size_dwarf_len = dwarf_opcode_string.size() / 2;
       assert(reg_info.dynamic_size_dwarf_len > 0);
 
       std::vector<uint8_t> dwarf_opcode_bytes(reg_info.dynamic_size_dwarf_len);
       uint32_t j;
-      StringExtractor opcode_extractor;
-      // Swap "dwarf_opcode_string" over into "opcode_extractor"
-      opcode_extractor.GetStringRef().swap(dwarf_opcode_string);
+      StringExtractor opcode_extractor(dwarf_opcode_string);
       uint32_t ret_val = opcode_extractor.GetHexBytesAvail(dwarf_opcode_bytes);
       UNUSED_IF_ASSERT_DISABLED(ret_val);
       assert(ret_val == reg_info.dynamic_size_dwarf_len);
@@ -290,9 +288,10 @@ DynamicRegisterInfo::SetRegisterInfo(const StructuredData::Dictionary &dict,
       reg_info.dynamic_size_dwarf_expr_bytes = m_dynamic_reg_size_map[i].data();
     }
 
-    std::string format_str;
+    llvm::StringRef format_str;
     if (reg_info_dict->GetValueForKeyAsString("format", format_str, nullptr)) {
-      if (Args::StringToFormat(format_str.c_str(), reg_info.format, NULL)
+      if (OptionArgParser::ToFormat(format_str.str().c_str(), reg_info.format,
+                                    nullptr)
               .Fail()) {
         Clear();
         printf("error: invalid 'format' value in register dictionary\n");
@@ -304,7 +303,7 @@ DynamicRegisterInfo::SetRegisterInfo(const StructuredData::Dictionary &dict,
                                              eFormatHex);
     }
 
-    std::string encoding_str;
+    llvm::StringRef encoding_str;
     if (reg_info_dict->GetValueForKeyAsString("encoding", encoding_str))
       reg_info.encoding = Args::StringToEncoding(encoding_str, eEncodingUint);
     else
@@ -334,7 +333,7 @@ DynamicRegisterInfo::SetRegisterInfo(const StructuredData::Dictionary &dict,
     reg_info.kinds[lldb::eRegisterKindEHFrame] = eh_frame_regno;
     reg_info_dict->GetValueForKeyAsInteger(
         "dwarf", reg_info.kinds[lldb::eRegisterKindDWARF], LLDB_INVALID_REGNUM);
-    std::string generic_str;
+    llvm::StringRef generic_str;
     if (reg_info_dict->GetValueForKeyAsString("generic", generic_str))
       reg_info.kinds[lldb::eRegisterKindGeneric] =
           Args::StringToGenericRegister(generic_str);
@@ -355,8 +354,8 @@ DynamicRegisterInfo::SetRegisterInfo(const StructuredData::Dictionary &dict,
           uint64_t invalidate_reg_num;
           if (invalidate_reg_list->GetItemAtIndexAsString(
                   idx, invalidate_reg_name)) {
-            RegisterInfo *invalidate_reg_info =
-                GetRegisterInfo(invalidate_reg_name);
+            const RegisterInfo *invalidate_reg_info =
+                GetRegisterInfo(invalidate_reg_name.GetStringRef());
             if (invalidate_reg_info) {
               m_invalidate_regs_map[i].push_back(
                   invalidate_reg_info->kinds[eRegisterKindLLDB]);
@@ -404,7 +403,7 @@ void DynamicRegisterInfo::AddRegister(RegisterInfo &reg_info,
   const uint32_t reg_num = m_regs.size();
   reg_info.name = reg_name.AsCString();
   assert(reg_info.name);
-  reg_info.alt_name = reg_alt_name.AsCString(NULL);
+  reg_info.alt_name = reg_alt_name.AsCString(nullptr);
   uint32_t i;
   if (reg_info.value_regs) {
     for (i = 0; reg_info.value_regs[i] != LLDB_INVALID_REGNUM; ++i)
@@ -429,9 +428,6 @@ void DynamicRegisterInfo::AddRegister(RegisterInfo &reg_info,
   assert(set < m_set_reg_nums.size());
   assert(set < m_set_names.size());
   m_set_reg_nums[set].push_back(reg_num);
-  size_t end_reg_offset = reg_info.byte_offset + reg_info.byte_size;
-  if (m_reg_data_byte_size < end_reg_offset)
-    m_reg_data_byte_size = end_reg_offset;
 }
 
 void DynamicRegisterInfo::Finalize(const ArchSpec &arch) {
@@ -443,7 +439,7 @@ void DynamicRegisterInfo::Finalize(const ArchSpec &arch) {
   for (size_t set = 0; set < num_sets; ++set) {
     assert(m_sets.size() == m_set_reg_nums.size());
     m_sets[set].num_registers = m_set_reg_nums[set].size();
-    m_sets[set].registers = &m_set_reg_nums[set][0];
+    m_sets[set].registers = m_set_reg_nums[set].data();
   }
 
   // sort and unique all value registers and make sure each is terminated with
@@ -453,7 +449,7 @@ void DynamicRegisterInfo::Finalize(const ArchSpec &arch) {
                                  end = m_value_regs_map.end();
        pos != end; ++pos) {
     if (pos->second.size() > 1) {
-      std::sort(pos->second.begin(), pos->second.end());
+      llvm::sort(pos->second.begin(), pos->second.end());
       reg_num_collection::iterator unique_end =
           std::unique(pos->second.begin(), pos->second.end());
       if (unique_end != pos->second.end())
@@ -470,7 +466,7 @@ void DynamicRegisterInfo::Finalize(const ArchSpec &arch) {
     if (m_value_regs_map.find(i) != m_value_regs_map.end())
       m_regs[i].value_regs = m_value_regs_map[i].data();
     else
-      m_regs[i].value_regs = NULL;
+      m_regs[i].value_regs = nullptr;
   }
 
   // Expand all invalidation dependencies
@@ -498,13 +494,12 @@ void DynamicRegisterInfo::Finalize(const ArchSpec &arch) {
   }
 
   // sort and unique all invalidate registers and make sure each is terminated
-  // with
-  // LLDB_INVALID_REGNUM
+  // with LLDB_INVALID_REGNUM
   for (reg_to_regs_map::iterator pos = m_invalidate_regs_map.begin(),
                                  end = m_invalidate_regs_map.end();
        pos != end; ++pos) {
     if (pos->second.size() > 1) {
-      std::sort(pos->second.begin(), pos->second.end());
+      llvm::sort(pos->second.begin(), pos->second.end());
       reg_num_collection::iterator unique_end =
           std::unique(pos->second.begin(), pos->second.end());
       if (unique_end != pos->second.end())
@@ -520,11 +515,11 @@ void DynamicRegisterInfo::Finalize(const ArchSpec &arch) {
     if (m_invalidate_regs_map.find(i) != m_invalidate_regs_map.end())
       m_regs[i].invalidate_regs = m_invalidate_regs_map[i].data();
     else
-      m_regs[i].invalidate_regs = NULL;
+      m_regs[i].invalidate_regs = nullptr;
   }
 
-  // Check if we need to automatically set the generic registers in case
-  // they weren't set
+  // Check if we need to automatically set the generic registers in case they
+  // weren't set
   bool generic_regs_specified = false;
   for (const auto &reg : m_regs) {
     if (reg.kinds[eRegisterKindGeneric] != LLDB_INVALID_REGNUM) {
@@ -536,6 +531,7 @@ void DynamicRegisterInfo::Finalize(const ArchSpec &arch) {
   if (!generic_regs_specified) {
     switch (arch.GetMachine()) {
     case llvm::Triple::aarch64:
+    case llvm::Triple::aarch64_32:
     case llvm::Triple::aarch64_be:
       for (auto &reg : m_regs) {
         if (strcmp(reg.name, "pc") == 0)
@@ -616,7 +612,69 @@ void DynamicRegisterInfo::Finalize(const ArchSpec &arch) {
       break;
     }
   }
+
+  // At this stage call ConfigureOffsets to calculate register offsets for
+  // targets supporting dynamic offset calculation. It also calculates
+  // total byte size of register data.
+  ConfigureOffsets();
+
+  // Check if register info is reconfigurable
+  // AArch64 SVE register set has configurable register sizes
+  if (arch.GetTriple().isAArch64()) {
+    for (const auto &reg : m_regs) {
+      if (strcmp(reg.name, "vg") == 0) {
+        m_is_reconfigurable = true;
+        break;
+      }
+    }
+  }
 }
+
+void DynamicRegisterInfo::ConfigureOffsets() {
+  // We are going to create a map between remote (eRegisterKindProcessPlugin)
+  // and local (eRegisterKindLLDB) register numbers. This map will give us
+  // remote register numbers in increasing order for offset calculation.
+  std::map<uint32_t, uint32_t> remote_to_local_regnum_map;
+  for (const auto &reg : m_regs)
+    remote_to_local_regnum_map[reg.kinds[eRegisterKindProcessPlugin]] =
+        reg.kinds[eRegisterKindLLDB];
+
+  // At this stage we manually calculate g/G packet offsets of all primary
+  // registers, only if target XML or qRegisterInfo packet did not send
+  // an offset explicitly.
+  uint32_t reg_offset = 0;
+  for (auto const &regnum_pair : remote_to_local_regnum_map) {
+    if (m_regs[regnum_pair.second].byte_offset == LLDB_INVALID_INDEX32 &&
+        m_regs[regnum_pair.second].value_regs == nullptr) {
+      m_regs[regnum_pair.second].byte_offset = reg_offset;
+
+      reg_offset = m_regs[regnum_pair.second].byte_offset +
+                   m_regs[regnum_pair.second].byte_size;
+    }
+  }
+
+  // Now update all value_regs with each register info as needed
+  for (auto &reg : m_regs) {
+    if (reg.value_regs != nullptr) {
+      // Assign a valid offset to all pseudo registers if not assigned by stub.
+      // Pseudo registers with value_regs list populated will share same offset
+      // as that of their corresponding primary register in value_regs list.
+      if (reg.byte_offset == LLDB_INVALID_INDEX32) {
+        uint32_t value_regnum = reg.value_regs[0];
+        if (value_regnum != LLDB_INVALID_INDEX32)
+          reg.byte_offset =
+              GetRegisterInfoAtIndex(remote_to_local_regnum_map[value_regnum])
+                  ->byte_offset;
+      }
+    }
+
+    reg_offset = reg.byte_offset + reg.byte_size;
+    if (m_reg_data_byte_size < reg_offset)
+      m_reg_data_byte_size = reg_offset;
+  }
+}
+
+bool DynamicRegisterInfo::IsReconfigurable() { return m_is_reconfigurable; }
 
 size_t DynamicRegisterInfo::GetNumRegisters() const { return m_regs.size(); }
 
@@ -630,19 +688,27 @@ const RegisterInfo *
 DynamicRegisterInfo::GetRegisterInfoAtIndex(uint32_t i) const {
   if (i < m_regs.size())
     return &m_regs[i];
-  return NULL;
+  return nullptr;
 }
 
 RegisterInfo *DynamicRegisterInfo::GetRegisterInfoAtIndex(uint32_t i) {
   if (i < m_regs.size())
     return &m_regs[i];
-  return NULL;
+  return nullptr;
+}
+
+const RegisterInfo *DynamicRegisterInfo::GetRegisterInfo(uint32_t kind,
+                                                         uint32_t num) const {
+  uint32_t reg_index = ConvertRegisterKindToRegisterNumber(kind, num);
+  if (reg_index != LLDB_INVALID_REGNUM)
+    return &m_regs[reg_index];
+  return nullptr;
 }
 
 const RegisterSet *DynamicRegisterInfo::GetRegisterSet(uint32_t i) const {
   if (i < m_sets.size())
     return &m_sets[i];
-  return NULL;
+  return nullptr;
 }
 
 uint32_t DynamicRegisterInfo::GetRegisterSetIndexByName(ConstString &set_name,
@@ -655,7 +721,7 @@ uint32_t DynamicRegisterInfo::GetRegisterSetIndexByName(ConstString &set_name,
 
   m_set_names.push_back(set_name);
   m_set_reg_nums.resize(m_set_reg_nums.size() + 1);
-  RegisterSet new_set = {set_name.AsCString(), NULL, 0, NULL};
+  RegisterSet new_set = {set_name.AsCString(), nullptr, 0, nullptr};
   m_sets.push_back(new_set);
   return m_sets.size() - 1;
 }
@@ -736,14 +802,10 @@ void DynamicRegisterInfo::Dump() const {
   }
 }
 
-lldb_private::RegisterInfo *DynamicRegisterInfo::GetRegisterInfo(
-    const lldb_private::ConstString &reg_name) {
-  for (auto &reg_info : m_regs) {
-    // We can use pointer comparison since we used a ConstString to set
-    // the "name" member in AddRegister()
-    if (reg_info.name == reg_name.GetCString()) {
+const lldb_private::RegisterInfo *
+DynamicRegisterInfo::GetRegisterInfo(llvm::StringRef reg_name) const {
+  for (auto &reg_info : m_regs)
+    if (reg_info.name == reg_name)
       return &reg_info;
-    }
-  }
-  return NULL;
+  return nullptr;
 }

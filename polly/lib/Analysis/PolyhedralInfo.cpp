@@ -1,21 +1,21 @@
 //===--------- PolyhedralInfo.cpp  - Create Scops from LLVM IR-------------===//
-///
-///                     The LLVM Compiler Infrastructure
-///
-/// This file is distributed under the University of Illinois Open Source
-/// License. See LICENSE.TXT for details.
-///
+//
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+//
 //===----------------------------------------------------------------------===//
-///
-/// An interface to the Polyhedral analysis engine(Polly) of LLVM.
-///
-/// This pass provides an interface to the polyhedral analysis performed by
-/// Polly.
-///
-/// This interface provides basic interface like isParallel, isVectorizable
-/// that can be used in LLVM transformation passes.
-///
-/// Work in progress, this file is subject to change.
+//
+// An interface to the Polyhedral analysis engine(Polly) of LLVM.
+//
+// This pass provides an interface to the polyhedral analysis performed by
+// Polly.
+//
+// This interface provides basic interface like isParallel, isVectorizable
+// that can be used in LLVM transformation passes.
+//
+// Work in progress, this file is subject to change.
+//
 //===----------------------------------------------------------------------===//
 
 #include "polly/PolyhedralInfo.h"
@@ -25,9 +25,9 @@
 #include "polly/ScopInfo.h"
 #include "polly/Support/GICHelper.h"
 #include "llvm/Analysis/LoopInfo.h"
+#include "llvm/InitializePasses.h"
 #include "llvm/Support/Debug.h"
-#include <isl/map.h>
-#include <isl/union_map.h>
+#include "isl/union_map.h"
 
 using namespace llvm;
 using namespace polly;
@@ -53,7 +53,7 @@ void PolyhedralInfo::getAnalysisUsage(AnalysisUsage &AU) const {
 
 bool PolyhedralInfo::runOnFunction(Function &F) {
   DI = &getAnalysis<DependenceInfoWrapperPass>();
-  SI = &getAnalysis<ScopInfoWrapperPass>();
+  SI = getAnalysis<ScopInfoWrapperPass>().getSI();
   return false;
 }
 
@@ -79,15 +79,17 @@ bool PolyhedralInfo::checkParallel(Loop *L, isl_pw_aff **MinDepDistPtr) const {
       DI->getDependences(const_cast<Scop *>(S), Dependences::AL_Access);
   if (!D.hasValidDependences())
     return false;
-  DEBUG(dbgs() << "Loop :\t" << L->getHeader()->getName() << ":\n");
+  LLVM_DEBUG(dbgs() << "Loop :\t" << L->getHeader()->getName() << ":\n");
 
   isl_union_map *Deps =
       D.getDependences(Dependences::TYPE_RAW | Dependences::TYPE_WAW |
-                       Dependences::TYPE_WAR | Dependences::TYPE_RED);
-  DEBUG(dbgs() << "Dependences :\t" << stringFromIslObj(Deps) << "\n");
+                       Dependences::TYPE_WAR | Dependences::TYPE_RED)
+          .release();
+
+  LLVM_DEBUG(dbgs() << "Dependences :\t" << stringFromIslObj(Deps) << "\n");
 
   isl_union_map *Schedule = getScheduleForLoop(S, L);
-  DEBUG(dbgs() << "Schedule: \t" << stringFromIslObj(Schedule) << "\n");
+  LLVM_DEBUG(dbgs() << "Schedule: \t" << stringFromIslObj(Schedule) << "\n");
 
   IsParallel = D.isParallel(Schedule, Deps, MinDepDistPtr);
   isl_union_map_free(Schedule);
@@ -121,30 +123,29 @@ const Scop *PolyhedralInfo::getScopContainingLoop(Loop *L) const {
 //    Stmt[i0, i1] -> [i0, i1]
 __isl_give isl_union_map *PolyhedralInfo::getScheduleForLoop(const Scop *S,
                                                              Loop *L) const {
-  isl_union_map *Schedule = isl_union_map_empty(S->getParamSpace());
+  isl_union_map *Schedule = isl_union_map_empty(S->getParamSpace().release());
   int CurrDim = S->getRelativeLoopDepth(L);
-  DEBUG(dbgs() << "Relative loop depth:\t" << CurrDim << "\n");
+  LLVM_DEBUG(dbgs() << "Relative loop depth:\t" << CurrDim << "\n");
   assert(CurrDim >= 0 && "Loop in region should have at least depth one");
 
-  for (auto *BB : L->blocks()) {
-    auto *SS = S->getStmtFor(BB);
-    if (!SS)
-      continue;
+  for (auto &SS : *S) {
+    if (L->contains(SS.getSurroundingLoop())) {
 
-    unsigned int MaxDim = SS->getNumIterators();
-    DEBUG(dbgs() << "Maximum depth of Stmt:\t" << MaxDim << "\n");
-    auto *ScheduleMap = SS->getSchedule();
-    assert(ScheduleMap &&
-           "Schedules that contain extension nodes require special handling.");
+      unsigned int MaxDim = SS.getNumIterators();
+      LLVM_DEBUG(dbgs() << "Maximum depth of Stmt:\t" << MaxDim << "\n");
+      isl_map *ScheduleMap = SS.getSchedule().release();
+      assert(
+          ScheduleMap &&
+          "Schedules that contain extension nodes require special handling.");
 
-    ScheduleMap = isl_map_project_out(ScheduleMap, isl_dim_out, CurrDim + 1,
-                                      MaxDim - CurrDim - 1);
-    ScheduleMap =
-        isl_map_set_tuple_id(ScheduleMap, isl_dim_in, SS->getDomainId());
-    Schedule =
-        isl_union_map_union(Schedule, isl_union_map_from_map(ScheduleMap));
+      ScheduleMap = isl_map_project_out(ScheduleMap, isl_dim_out, CurrDim + 1,
+                                        MaxDim - CurrDim - 1);
+      ScheduleMap = isl_map_set_tuple_id(ScheduleMap, isl_dim_in,
+                                         SS.getDomainId().release());
+      Schedule =
+          isl_union_map_union(Schedule, isl_union_map_from_map(ScheduleMap));
+    }
   }
-
   Schedule = isl_union_map_coalesce(Schedule);
   return Schedule;
 }

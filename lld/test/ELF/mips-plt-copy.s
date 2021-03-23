@@ -1,23 +1,22 @@
+# REQUIRES: mips
 # Check creating of R_MIPS_COPY and R_MIPS_JUMP_SLOT dynamic relocations
 # and corresponding PLT entries.
 
 # RUN: llvm-mc -filetype=obj -triple=mips-unknown-linux %s -o %t.o
 # RUN: llvm-mc -filetype=obj -triple=mips-unknown-linux \
 # RUN:         %S/Inputs/mips-dynamic.s -o %t.so.o
-# RUN: ld.lld %t.so.o -shared -o %t.so
+# RUN: ld.lld %t.so.o -shared -soname=t.so -o %t.so
 # RUN: ld.lld %t.o %t.so -o %t.exe
-# RUN: llvm-readobj -r -mips-plt-got %t.exe | FileCheck %s
-
-# REQUIRES: mips
+# RUN: llvm-readobj -r -A %t.exe | FileCheck %s
 
 # CHECK:      Relocations [
 # CHECK-NEXT:   Section ({{.*}}) .rel.dyn {
-# CHECK-NEXT:     0x{{[0-9A-F]+}} R_MIPS_COPY data0 0x0
-# CHECK-NEXT:     0x{{[0-9A-F]+}} R_MIPS_COPY data1 0x0
+# CHECK-DAG:      0x{{[0-9A-F]+}} R_MIPS_COPY data0
+# CHECK-DAG:      0x{{[0-9A-F]+}} R_MIPS_COPY data1
 # CHECK-NEXT:   }
 # CHECK-NEXT:   Section ({{.*}}) .rel.plt {
-# CHECK-NEXT:     0x{{[0-9A-F]+}} R_MIPS_JUMP_SLOT foo0 0x0
-# CHECK-NEXT:     0x{{[0-9A-F]+}} R_MIPS_JUMP_SLOT foo1 0x0
+# CHECK-DAG:      0x{{[0-9A-F]+}} R_MIPS_JUMP_SLOT foo0
+# CHECK-DAG:      0x{{[0-9A-F]+}} R_MIPS_JUMP_SLOT foo1
 # CHECK-NEXT:   }
 # CHECK-NEXT: ]
 

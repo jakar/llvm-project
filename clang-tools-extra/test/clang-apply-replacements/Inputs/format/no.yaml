@@ -1,10 +1,14 @@
 ---
 MainSourceFile:  no.cpp
-Diagnostics:     
+Diagnostics:
   - DiagnosticName:  test-no
-    Replacements:    
-      - FilePath:        $(path)/no.cpp
-        Offset:          94
-        Length:          3
-        ReplacementText: 'auto '
+    DiagnosticMessage:
+      Message: Fix
+      FilePath: $(path)/no.cpp
+      FileOffset: 94
+      Replacements:
+        - FilePath:        $(path)/no.cpp
+          Offset:          94
+          Length:          3
+          ReplacementText: 'auto '
 ...

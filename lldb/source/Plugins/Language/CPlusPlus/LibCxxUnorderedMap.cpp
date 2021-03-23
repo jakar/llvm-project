@@ -1,26 +1,21 @@
-//===-- LibCxxUnorderedMap.cpp ----------------------------------*- C++ -*-===//
+//===-- LibCxxUnorderedMap.cpp --------------------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
-// C Includes
-// C++ Includes
-// Other libraries and framework includes
-// Project includes
 #include "LibCxx.h"
 
+#include "Plugins/TypeSystem/Clang/TypeSystemClang.h"
 #include "lldb/Core/ValueObject.h"
 #include "lldb/Core/ValueObjectConstResult.h"
 #include "lldb/DataFormatters/FormattersHelpers.h"
-#include "lldb/Symbol/ClangASTContext.h"
 #include "lldb/Target/Target.h"
 #include "lldb/Utility/DataBufferHeap.h"
 #include "lldb/Utility/Endian.h"
-#include "lldb/Utility/Error.h"
+#include "lldb/Utility/Status.h"
 #include "lldb/Utility/Stream.h"
 
 using namespace lldb;
@@ -44,7 +39,7 @@ public:
 
   bool MightHaveChildren() override;
 
-  size_t GetIndexOfChildWithName(const ConstString &name) override;
+  size_t GetIndexOfChildWithName(ConstString name) override;
 
 private:
   CompilerType m_element_type;
@@ -83,7 +78,7 @@ lldb::ValueObjectSP lldb_private::formatters::
     if (m_next_element == nullptr)
       return lldb::ValueObjectSP();
 
-    Error error;
+    Status error;
     ValueObjectSP node_sp = m_next_element->Dereference(error);
     if (!node_sp || error.Fail())
       return lldb::ValueObjectSP();
@@ -121,11 +116,10 @@ lldb::ValueObjectSP lldb_private::formatters::
         if (!first_sp)
           return nullptr;
         m_element_type = first_sp->GetCompilerType();
-        lldb::TemplateArgumentKind kind;
-        m_element_type = m_element_type.GetTemplateArgument(0, kind);
+        m_element_type = m_element_type.GetTypeTemplateArgument(0);
         m_element_type = m_element_type.GetPointeeType();
         m_node_type = m_element_type;
-        m_element_type = m_element_type.GetTemplateArgument(0, kind);
+        m_element_type = m_element_type.GetTypeTemplateArgument(0);
         std::string name;
         m_element_type =
             m_element_type.GetFieldAtIndex(0, name, nullptr, nullptr, nullptr);
@@ -153,7 +147,7 @@ lldb::ValueObjectSP lldb_private::formatters::
   StreamString stream;
   stream.Printf("[%" PRIu64 "]", (uint64_t)idx);
   DataExtractor data;
-  Error error;
+  Status error;
   val_hash.first->GetData(data, error);
   if (error.Fail())
     return lldb::ValueObjectSP();
@@ -215,7 +209,7 @@ bool lldb_private::formatters::LibcxxStdUnorderedMapSyntheticFrontEnd::
 }
 
 size_t lldb_private::formatters::LibcxxStdUnorderedMapSyntheticFrontEnd::
-    GetIndexOfChildWithName(const ConstString &name) {
+    GetIndexOfChildWithName(ConstString name) {
   return ExtractIndexFromString(name.GetCString());
 }
 

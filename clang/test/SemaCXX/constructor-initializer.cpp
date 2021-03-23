@@ -250,7 +250,7 @@ namespace test3 {
     B(const String& s, int e=0) // expected-error {{unknown type name}} 
       : A(e), m_String(s) , m_ErrorStr(__null) {} // expected-error {{no matching constructor}} expected-error {{does not name}}
     B(const B& e)
-      : A(e), m_String(e.m_String), m_ErrorStr(__null) { // expected-error {{does not name}} \
+      : A(e), m_String(e.m_String), m_ErrorStr(__null) { // expected-error 2{{does not name}} \
       // expected-error {{no member named 'm_String' in 'test3::B'}}
     }
   };
@@ -301,4 +301,23 @@ namespace PR14073 {
   struct S1 { union { int n; }; S1() : n(n) {} };  // expected-warning {{field 'n' is uninitialized when used here}}
   struct S2 { union { union { int n; }; char c; }; S2() : n(n) {} };  // expected-warning {{field 'n' is uninitialized when used here}}
   struct S3 { struct { int n; }; S3() : n(n) {} };  // expected-warning {{field 'n' is uninitialized when used here}}
+}
+
+namespace PR10758 {
+struct A;
+struct B {
+  B (A const &); // expected-note 2 {{candidate constructor not viable: no known conversion from 'const PR10758::B' to 'const PR10758::A &' for 1st argument}}
+  B (B &); // expected-note 2 {{candidate constructor not viable: 1st argument ('const PR10758::B') would lose const qualifier}}
+};
+struct A {
+  A (B); // expected-note 2 {{passing argument to parameter here}}
+};
+
+B f(B const &b) {
+  return b; // expected-error {{no matching constructor for initialization of 'PR10758::B'}}
+}
+
+A f2(const B &b) {
+  return b; // expected-error {{no matching constructor for initialization of 'PR10758::B'}}
+}
 }

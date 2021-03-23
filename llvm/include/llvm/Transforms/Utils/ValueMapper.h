@@ -1,9 +1,8 @@
 //===- ValueMapper.h - Remapping for constants and metadata -----*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -16,14 +15,22 @@
 #define LLVM_TRANSFORMS_UTILS_VALUEMAPPER_H
 
 #include "llvm/ADT/ArrayRef.h"
-#include "llvm/IR/ValueMap.h"
 #include "llvm/IR/ValueHandle.h"
+#include "llvm/IR/ValueMap.h"
 
 namespace llvm {
 
-class Value;
+class Constant;
+class Function;
+class GlobalIndirectSymbol;
+class GlobalVariable;
 class Instruction;
-typedef ValueMap<const Value *, WeakTrackingVH> ValueToValueMapTy;
+class MDNode;
+class Metadata;
+class Type;
+class Value;
+
+using ValueToValueMapTy = ValueMap<const Value *, WeakTrackingVH>;
 
 /// This is a class that can be implemented by clients to remap types when
 /// cloning constants and instructions.
@@ -44,10 +51,10 @@ class ValueMaterializer {
   virtual void anchor(); // Out of line method.
 
 protected:
-  ~ValueMaterializer() = default;
   ValueMaterializer() = default;
   ValueMaterializer(const ValueMaterializer &) = default;
   ValueMaterializer &operator=(const ValueMaterializer &) = default;
+  ~ValueMaterializer() = default;
 
 public:
   /// This method can be implemented to generate a mapped Value on demand. For
@@ -82,16 +89,18 @@ enum RemapFlags {
   /// \a MapMetadata() always ignores this flag.
   RF_IgnoreMissingLocals = 2,
 
-  /// Instruct the remapper to move distinct metadata instead of duplicating it
-  /// when there are module-level changes.
-  RF_MoveDistinctMDs = 4,
+  /// Instruct the remapper to reuse and mutate distinct metadata (remapping
+  /// them in place) instead of cloning remapped copies. This flag has no
+  /// effect when when RF_NoModuleLevelChanges, since that implies an identity
+  /// mapping.
+  RF_ReuseAndMutateDistinctMDs = 4,
 
   /// Any global values not in value map are mapped to null instead of mapping
   /// to self.  Illegal if RF_IgnoreMissingLocals is also set.
   RF_NullMapMissingGlobalValues = 8,
 };
 
-static inline RemapFlags operator|(RemapFlags LHS, RemapFlags RHS) {
+inline RemapFlags operator|(RemapFlags LHS, RemapFlags RHS) {
   return RemapFlags(unsigned(LHS) | unsigned(RHS));
 }
 
@@ -113,10 +122,10 @@ static inline RemapFlags operator|(RemapFlags LHS, RemapFlags RHS) {
 /// instance:
 /// - \a scheduleMapGlobalInitializer()
 /// - \a scheduleMapAppendingVariable()
-/// - \a scheduleMapGlobalAliasee()
+/// - \a scheduleMapGlobalIndirectSymbol()
 /// - \a scheduleRemapFunction()
 ///
-/// Sometimes a callback needs a diferent mapping context.  Such a context can
+/// Sometimes a callback needs a different mapping context.  Such a context can
 /// be registered using \a registerAlternateMappingContext(), which takes an
 /// alternate \a ValueToValueMapTy and \a ValueMaterializer and returns a ID to
 /// pass into the schedule*() functions.
@@ -173,8 +182,9 @@ public:
                                     bool IsOldCtorDtor,
                                     ArrayRef<Constant *> NewMembers,
                                     unsigned MappingContextID = 0);
-  void scheduleMapGlobalAliasee(GlobalAlias &GA, Constant &Aliasee,
-                                unsigned MappingContextID = 0);
+  void scheduleMapGlobalIndirectSymbol(GlobalIndirectSymbol &GIS,
+                                       Constant &Target,
+                                       unsigned MappingContextID = 0);
   void scheduleRemapFunction(Function &F, unsigned MappingContextID = 0);
 };
 

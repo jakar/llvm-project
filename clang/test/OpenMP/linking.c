@@ -20,9 +20,19 @@
 // RUN: %clang -no-canonical-prefixes %s -### -o %t.o 2>&1 \
 // RUN:     -fopenmp=libgomp -target i386-unknown-linux -rtlib=platform \
 // RUN:   | FileCheck --check-prefix=CHECK-GOMP-LD-32 %s
+
+// RUN: %clang -no-canonical-prefixes %s -### -o %t.o 2>&1 -fopenmp-simd -target i386-unknown-linux -rtlib=platform | FileCheck --check-prefix SIMD-ONLY2 %s
+// SIMD-ONLY2-NOT: lgomp
+// SIMD-ONLY2-NOT: lomp
+// SIMD-ONLY2-NOT: liomp
 // CHECK-GOMP-LD-32: "{{.*}}ld{{(.exe)?}}"
 // CHECK-GOMP-LD-32: "-lgomp" "-lrt"
 // CHECK-GOMP-LD-32: "-lpthread" "-lc"
+
+// RUN: %clang -no-canonical-prefixes %s -### -o %t.o 2>&1 -fopenmp-simd -target i386-unknown-linux -rtlib=platform | FileCheck --check-prefix SIMD-ONLY2 %s
+// SIMD-ONLY2-NOT: lgomp
+// SIMD-ONLY2-NOT: lomp
+// SIMD-ONLY2-NOT: liomp
 //
 // RUN: %clang -no-canonical-prefixes %s -### -o %t.o 2>&1 \
 // RUN:     -fopenmp=libgomp -target x86_64-unknown-linux -rtlib=platform \
@@ -71,7 +81,7 @@
 // CHECK-LD-OVERRIDE-64: "-lgomp" "-lrt"
 // CHECK-LD-OVERRIDE-64: "-lpthread" "-lc"
 //
-// RUN: %clang -no-canonical-prefixes %s -### -o %t.o 2>&1 \
+// RUN: %clang -no-canonical-prefixes -fuse-ld=link %s -### -o %t.o 2>&1 \
 // RUN:     -fopenmp=libomp -target x86_64-msvc-win32 -rtlib=platform \
 // RUN:   | FileCheck --check-prefix=CHECK-MSVC-LINK-64 %s
 // CHECK-MSVC-LINK-64: link.exe
@@ -79,10 +89,20 @@
 // CHECK-MSVC-LINK-64-SAME: -nodefaultlib:vcompd.lib
 // CHECK-MSVC-LINK-64-SAME: -libpath:{{.+}}/../lib
 // CHECK-MSVC-LINK-64-SAME: -defaultlib:libomp.lib
+
+// RUN: %clang -no-canonical-prefixes %s -### -o %t.o 2>&1 -fopenmp-simd -target x86_64-msvc-win32 -rtlib=platform | FileCheck --check-prefix SIMD-ONLY11 %s
+// SIMD-ONLY11-NOT: libiomp
+// SIMD-ONLY11-NOT: libomp
+// SIMD-ONLY11-NOT: libgomp
 //
-// RUN: %clang -no-canonical-prefixes %s -### -o %t.o 2>&1 \
+// RUN: %clang -no-canonical-prefixes %s -fuse-ld=link -### -o %t.o 2>&1 \
 // RUN:     -fopenmp=libiomp5 -target x86_64-msvc-win32 -rtlib=platform \
 // RUN:   | FileCheck --check-prefix=CHECK-MSVC-ILINK-64 %s
+
+// RUN: %clang -no-canonical-prefixes %s -### -o %t.o 2>&1 -fopenmp-simd -target x86_64-msvc-win32 -rtlib=platform | FileCheck --check-prefix SIMD-ONLY11 %s
+// SIMD-ONLY11-NOT: libiomp
+// SIMD-ONLY11-NOT: libomp
+// SIMD-ONLY11-NOT: libgomp
 // CHECK-MSVC-ILINK-64: link.exe
 // CHECK-MSVC-ILINK-64-SAME: -nodefaultlib:vcomp.lib
 // CHECK-MSVC-ILINK-64-SAME: -nodefaultlib:vcompd.lib

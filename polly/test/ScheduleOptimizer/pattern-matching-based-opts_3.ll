@@ -24,6 +24,7 @@
 ;	     C[i][j] += alpha * A[i][k] * B[k][j];
 ;        }
 ;
+; CHECK-LABEL: Printing analysis 'Polly - Generate an AST from the SCoP (isl)' for region: 'bb8 => bb32' in function 'kernel_gemm':
 ; CHECK:    {
 ; CHECK-NEXT:      // 1st level tiling - Tiles
 ; CHECK-NEXT:      for (int c0 = 0; c0 <= 32; c0 += 1)
@@ -76,6 +77,7 @@
 ; CHECK-NEXT:          }
 ; CHECK-NEXT:    }
 ;
+; EXTRACTION-OF-MACRO-KERNEL-LABEL: Printing analysis 'Polly - Generate an AST from the SCoP (isl)' for region: 'bb8 => bb32' in function 'kernel_gemm':
 ; EXTRACTION-OF-MACRO-KERNEL:    {
 ; EXTRACTION-OF-MACRO-KERNEL-NEXT:      // 1st level tiling - Tiles
 ; EXTRACTION-OF-MACRO-KERNEL-NEXT:      for (int c0 = 0; c0 <= 32; c0 += 1)
@@ -100,6 +102,7 @@
 ; EXTRACTION-OF-MACRO-KERNEL-NEXT:          for (int c3 = 0; c3 <= 131; c3 += 1)
 ; EXTRACTION-OF-MACRO-KERNEL-NEXT:            for (int c4 = 0; c4 <= 23; c4 += 1)
 ; EXTRACTION-OF-MACRO-KERNEL-NEXT:              for (int c5 = 0; c5 <= 255; c5 += 1) {
+; EXTRACTION-OF-MACRO-KERNEL-NEXT:                // Loop Vectorizer Disabled
 ; EXTRACTION-OF-MACRO-KERNEL-NEXT:                // Register tiling - Points
 ; EXTRACTION-OF-MACRO-KERNEL-NEXT:                {
 ; EXTRACTION-OF-MACRO-KERNEL-NEXT:                  Stmt_Copy_0(96 * c2 + 4 * c4, 8 * c3, 256 * c1 + c5);

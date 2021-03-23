@@ -1,11 +1,11 @@
 
 CHECK_CXX_SOURCE_COMPILES("
-#ifdef _MSC_VER
-#include <Intrin.h> /* Workaround for PR19898. */
+#ifdef _WIN32
+#include <intrin.h> /* Workaround for PR19898. */
 #include <windows.h>
 #endif
 int main() {
-#ifdef _MSC_VER
+#ifdef _WIN32
         volatile LONG val = 1;
         MemoryBarrier();
         InterlockedCompareExchange(&val, 0, 1);
@@ -38,28 +38,56 @@ int main() {
 
 " COMPILER_RT_TARGET_HAS_FCNTL_LCK)
 
+CHECK_CXX_SOURCE_COMPILES("
+#include <sys/utsname.h>
+int main() {
+ return 0;
+}
+
+" COMPILER_RT_TARGET_HAS_UNAME)
+
 add_compiler_rt_component(profile)
 
 set(PROFILE_SOURCES
   GCDAProfiling.c
   InstrProfiling.c
+  InstrProfilingInternal.c
   InstrProfilingValue.c
+  InstrProfilingBiasVar.c
   InstrProfilingBuffer.c
   InstrProfilingFile.c
   InstrProfilingMerge.c
   InstrProfilingMergeFile.c
+  InstrProfilingNameVar.c
+  InstrProfilingVersionVar.c
   InstrProfilingWriter.c
   InstrProfilingPlatformDarwin.c
+  InstrProfilingPlatformFuchsia.c
   InstrProfilingPlatformLinux.c
   InstrProfilingPlatformOther.c
-  InstrProfilingRuntime.cc
-  InstrProfilingUtil.c)
+  InstrProfilingPlatformWindows.c
+  InstrProfilingRuntime.cpp
+  InstrProfilingUtil.c
+  )
+
+set(PROFILE_HEADERS
+  InstrProfiling.h
+  InstrProfilingInternal.h
+  InstrProfilingPort.h
+  InstrProfilingUtil.h
+  WindowsMMap.h
+  )
 
 if(WIN32)
-    list(APPEND PROFILE_SOURCES WindowsMMap.c)
+  list(APPEND PROFILE_SOURCES
+    WindowsMMap.c
+    )
 endif()
 
-if(UNIX)
+include_directories(..)
+include_directories(../../include)
+
+if(FUCHSIA OR UNIX)
  set(EXTRA_FLAGS
      -fPIC
      -Wno-pedantic)
@@ -69,13 +97,24 @@ if(COMPILER_RT_TARGET_HAS_ATOMICS)
  set(EXTRA_FLAGS
      ${EXTRA_FLAGS}
      -DCOMPILER_RT_HAS_ATOMICS=1)
-endif() 
+endif()
 
 if(COMPILER_RT_TARGET_HAS_FCNTL_LCK)
  set(EXTRA_FLAGS
      ${EXTRA_FLAGS}
      -DCOMPILER_RT_HAS_FCNTL_LCK=1)
 endif()
+
+if(COMPILER_RT_TARGET_HAS_UNAME)
+ set(EXTRA_FLAGS
+     ${EXTRA_FLAGS}
+     -DCOMPILER_RT_HAS_UNAME=1)
+endif()
+
+# We don't use the C++ Standard Library here, so avoid including it by mistake.
+append_list_if(COMPILER_RT_HAS_NOSTDINCXX_FLAG -nostdinc++ EXTRA_FLAGS)
+# XRay uses C++ standard library headers.
+string(REGEX REPLACE "-stdlib=[a-zA-Z+]*" "" CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS})
 
 # This appears to be a C-only warning banning the use of locals in aggregate
 # initializers. All other compilers accept this, though.
@@ -89,6 +128,7 @@ if(APPLE)
     ARCHS ${PROFILE_SUPPORTED_ARCH}
     CFLAGS ${EXTRA_FLAGS}
     SOURCES ${PROFILE_SOURCES}
+    ADDITIONAL_HEADERS ${PROFILE_HEADERS}
     PARENT_TARGET profile)
 else()
   add_compiler_rt_runtime(clang_rt.profile
@@ -96,5 +136,6 @@ else()
     ARCHS ${PROFILE_SUPPORTED_ARCH}
     CFLAGS ${EXTRA_FLAGS}
     SOURCES ${PROFILE_SOURCES}
+    ADDITIONAL_HEADERS ${PROFILE_HEADERS}
     PARENT_TARGET profile)
 endif()

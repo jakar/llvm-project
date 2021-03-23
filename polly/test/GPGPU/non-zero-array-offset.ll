@@ -7,20 +7,16 @@
 ;
 ; REQUIRES: pollyacc
 
-; CODE: Code
-; CODE-NEXT: ====
-; CODE-NEXT: # host
-; CODE-NEXT: {
-; CODE-NEXT:   cudaCheckReturn(cudaMemcpy(dev_MemRef_B, MemRef_B, (16) * sizeof(float), cudaMemcpyHostToDevice));
-; CODE-NEXT:   cudaCheckReturn(cudaMemcpy(dev_MemRef_A, MemRef_A, (8) * sizeof(float), cudaMemcpyHostToDevice));
-; CODE-NEXT:   {
-; CODE-NEXT:     dim3 k0_dimBlock(8);
+; CODE:      cudaCheckReturn(cudaMemcpy(dev_MemRef_B, MemRef_B, (16) * sizeof(float), cudaMemcpyHostToDevice));
+; CODE-NEXT: cudaCheckReturn(cudaMemcpy(dev_MemRef_A, MemRef_A, (8) * sizeof(float), cudaMemcpyHostToDevice));
+
+; CODE:          dim3 k0_dimBlock(8);
 ; CODE-NEXT:     dim3 k0_dimGrid(1);
 ; CODE-NEXT:     kernel0 <<<k0_dimGrid, k0_dimBlock>>> (dev_MemRef_B);
 ; CODE-NEXT:     cudaCheckKernel();
 ; CODE-NEXT:   }
 
-; CODE:   {
+; CODE:        {
 ; CODE-NEXT:     dim3 k1_dimBlock(8);
 ; CODE-NEXT:     dim3 k1_dimGrid(1);
 ; CODE-NEXT:     kernel1 <<<k1_dimGrid, k1_dimBlock>>> (dev_MemRef_A);
@@ -29,7 +25,6 @@
 
 ; CODE:   cudaCheckReturn(cudaMemcpy(MemRef_B, dev_MemRef_B, (16) * sizeof(float), cudaMemcpyDeviceToHost));
 ; CODE-NEXT:   cudaCheckReturn(cudaMemcpy(MemRef_A, dev_MemRef_A, (8) * sizeof(float), cudaMemcpyDeviceToHost));
-; CODE-NEXT: }
 
 ; CODE: # kernel0
 ; CODE-NEXT: Stmt_bb3(t0);

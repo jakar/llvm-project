@@ -1,9 +1,8 @@
-//===--- lib/CodeGen/DIE.h - DWARF Info Entries -----------------*- C++ -*-===//
+//===- lib/CodeGen/DIE.h - DWARF Info Entries -------------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -11,8 +10,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_LIB_CODEGEN_ASMPRINTER_DIE_H
-#define LLVM_LIB_CODEGEN_ASMPRINTER_DIE_H
+#ifndef LLVM_CODEGEN_DIE_H
+#define LLVM_CODEGEN_DIE_H
 
 #include "llvm/ADT/FoldingSet.h"
 #include "llvm/ADT/PointerIntPair.h"
@@ -21,16 +20,17 @@
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/iterator.h"
 #include "llvm/ADT/iterator_range.h"
+#include "llvm/BinaryFormat/Dwarf.h"
 #include "llvm/CodeGen/DwarfStringPoolEntry.h"
 #include "llvm/Support/AlignOf.h"
 #include "llvm/Support/Allocator.h"
-#include "llvm/Support/Dwarf.h"
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
 #include <iterator>
 #include <new>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 namespace llvm {
@@ -38,6 +38,7 @@ namespace llvm {
 class AsmPrinter;
 class DIE;
 class DIEUnit;
+class DwarfCompileUnit;
 class MCExpr;
 class MCSection;
 class MCSymbol;
@@ -53,11 +54,11 @@ class DIEAbbrevData {
   dwarf::Form Form;
 
   /// Dwarf attribute value for DW_FORM_implicit_const
-  int64_t Value;
+  int64_t Value = 0;
 
 public:
   DIEAbbrevData(dwarf::Attribute A, dwarf::Form F)
-      : Attribute(A), Form(F), Value(0) {}
+      : Attribute(A), Form(F) {}
   DIEAbbrevData(dwarf::Attribute A, int64_t V)
       : Attribute(A), Form(dwarf::DW_FORM_implicit_const), Value(V) {}
 
@@ -77,7 +78,7 @@ public:
 /// object.
 class DIEAbbrev : public FoldingSetNode {
   /// Unique number for node.
-  unsigned Number;
+  unsigned Number = 0;
 
   /// Dwarf tag code.
   dwarf::Tag Tag;
@@ -120,8 +121,8 @@ public:
   /// Print the abbreviation using the specified asm printer.
   void Emit(const AsmPrinter *AP) const;
 
-  void print(raw_ostream &O);
-  void dump();
+  void print(raw_ostream &O) const;
+  void dump() const;
 };
 
 //===--------------------------------------------------------------------===//
@@ -135,14 +136,15 @@ class DIEAbbrevSet {
   /// The bump allocator to use when creating DIEAbbrev objects in the uniqued
   /// storage container.
   BumpPtrAllocator &Alloc;
-  /// \brief FoldingSet that uniques the abbreviations.
-  llvm::FoldingSet<DIEAbbrev> AbbreviationsSet;
+  /// FoldingSet that uniques the abbreviations.
+  FoldingSet<DIEAbbrev> AbbreviationsSet;
   /// A list of all the unique abbreviations in use.
   std::vector<DIEAbbrev *> Abbreviations;
 
 public:
   DIEAbbrevSet(BumpPtrAllocator &A) : Alloc(A) {}
   ~DIEAbbrevSet();
+
   /// Generate the abbreviation declaration for a DIE and return a pointer to
   /// the generated abbreviation.
   ///
@@ -188,7 +190,7 @@ public:
   uint64_t getValue() const { return Integer; }
   void setValue(uint64_t Val) { Integer = Val; }
 
-  void EmitValue(const AsmPrinter *AP, dwarf::Form Form) const;
+  void emitValue(const AsmPrinter *Asm, dwarf::Form Form) const;
   unsigned SizeOf(const AsmPrinter *AP, dwarf::Form Form) const;
 
   void print(raw_ostream &O) const;
@@ -205,7 +207,7 @@ public:
   /// Get MCExpr.
   const MCExpr *getValue() const { return Expr; }
 
-  void EmitValue(const AsmPrinter *AP, dwarf::Form Form) const;
+  void emitValue(const AsmPrinter *AP, dwarf::Form Form) const;
   unsigned SizeOf(const AsmPrinter *AP, dwarf::Form Form) const;
 
   void print(raw_ostream &O) const;
@@ -222,10 +224,30 @@ public:
   /// Get MCSymbol.
   const MCSymbol *getValue() const { return Label; }
 
-  void EmitValue(const AsmPrinter *AP, dwarf::Form Form) const;
+  void emitValue(const AsmPrinter *AP, dwarf::Form Form) const;
   unsigned SizeOf(const AsmPrinter *AP, dwarf::Form Form) const;
 
   void print(raw_ostream &O) const;
+};
+
+//===--------------------------------------------------------------------===//
+/// A BaseTypeRef DIE.
+class DIEBaseTypeRef {
+  const DwarfCompileUnit *CU;
+  const uint64_t Index;
+  static constexpr unsigned ULEB128PadSize = 4;
+
+public:
+  explicit DIEBaseTypeRef(const DwarfCompileUnit *TheCU, uint64_t Idx)
+    : CU(TheCU), Index(Idx) {}
+
+  /// EmitValue - Emit base type reference.
+  void emitValue(const AsmPrinter *AP, dwarf::Form Form) const;
+  /// SizeOf - Determine size of the base type reference in bytes.
+  unsigned SizeOf(const AsmPrinter *AP, dwarf::Form Form) const;
+
+  void print(raw_ostream &O) const;
+  uint64_t getIndex() const { return Index; }
 };
 
 //===--------------------------------------------------------------------===//
@@ -238,7 +260,7 @@ class DIEDelta {
 public:
   DIEDelta(const MCSymbol *Hi, const MCSymbol *Lo) : LabelHi(Hi), LabelLo(Lo) {}
 
-  void EmitValue(const AsmPrinter *AP, dwarf::Form Form) const;
+  void emitValue(const AsmPrinter *AP, dwarf::Form Form) const;
   unsigned SizeOf(const AsmPrinter *AP, dwarf::Form Form) const;
 
   void print(raw_ostream &O) const;
@@ -257,7 +279,7 @@ public:
   /// Grab the string out of the object.
   StringRef getString() const { return S.getString(); }
 
-  void EmitValue(const AsmPrinter *AP, dwarf::Form Form) const;
+  void emitValue(const AsmPrinter *AP, dwarf::Form Form) const;
   unsigned SizeOf(const AsmPrinter *AP, dwarf::Form Form) const;
 
   void print(raw_ostream &O) const;
@@ -279,7 +301,7 @@ public:
   /// Grab the string out of the object.
   StringRef getString() const { return S; }
 
-  void EmitValue(const AsmPrinter *AP, dwarf::Form Form) const;
+  void emitValue(const AsmPrinter *AP, dwarf::Form Form) const;
   unsigned SizeOf(const AsmPrinter *AP, dwarf::Form Form) const;
 
   void print(raw_ostream &O) const;
@@ -289,18 +311,16 @@ public:
 /// A pointer to another debug information entry.  An instance of this class can
 /// also be used as a proxy for a debug information entry not yet defined
 /// (ie. types.)
-class DIE;
 class DIEEntry {
   DIE *Entry;
 
-  DIEEntry() = delete;
-
 public:
+  DIEEntry() = delete;
   explicit DIEEntry(DIE &E) : Entry(&E) {}
 
   DIE &getEntry() const { return *Entry; }
 
-  void EmitValue(const AsmPrinter *AP, dwarf::Form Form) const;
+  void emitValue(const AsmPrinter *AP, dwarf::Form Form) const;
   unsigned SizeOf(const AsmPrinter *AP, dwarf::Form Form) const;
 
   void print(raw_ostream &O) const;
@@ -319,7 +339,23 @@ public:
   /// Grab the current index out.
   size_t getValue() const { return Index; }
 
-  void EmitValue(const AsmPrinter *AP, dwarf::Form Form) const;
+  void emitValue(const AsmPrinter *AP, dwarf::Form Form) const;
+  unsigned SizeOf(const AsmPrinter *AP, dwarf::Form Form) const;
+
+  void print(raw_ostream &O) const;
+};
+
+//===--------------------------------------------------------------------===//
+/// A BaseTypeRef DIE.
+class DIEAddrOffset {
+  DIEInteger Addr;
+  DIEDelta Offset;
+
+public:
+  explicit DIEAddrOffset(uint64_t Idx, const MCSymbol *Hi, const MCSymbol *Lo)
+      : Addr(Idx), Offset(Hi, Lo) {}
+
+  void emitValue(const AsmPrinter *AP, dwarf::Form Form) const;
   unsigned SizeOf(const AsmPrinter *AP, dwarf::Form Form) const;
 
   void print(raw_ostream &O) const;
@@ -348,10 +384,11 @@ private:
   ///
   /// All values that aren't standard layout (or are larger than 8 bytes)
   /// should be stored by reference instead of by value.
-  typedef AlignedCharArrayUnion<DIEInteger, DIEString, DIEExpr, DIELabel,
-                                DIEDelta *, DIEEntry, DIEBlock *, DIELoc *,
-                                DIELocList>
-      ValTy;
+  using ValTy =
+      AlignedCharArrayUnion<DIEInteger, DIEString, DIEExpr, DIELabel,
+                            DIEDelta *, DIEEntry, DIEBlock *, DIELoc *,
+                            DIELocList, DIEBaseTypeRef *, DIEAddrOffset *>;
+
   static_assert(sizeof(ValTy) <= sizeof(uint64_t) ||
                     sizeof(ValTy) <= sizeof(void *),
                 "Expected all large types to be stored via pointer");
@@ -363,12 +400,12 @@ private:
     static_assert(std::is_standard_layout<T>::value ||
                       std::is_pointer<T>::value,
                   "Expected standard layout or pointer");
-    new (reinterpret_cast<void *>(Val.buffer)) T(V);
+    new (reinterpret_cast<void *>(&Val)) T(V);
   }
 
-  template <class T> T *get() { return reinterpret_cast<T *>(Val.buffer); }
+  template <class T> T *get() { return reinterpret_cast<T *>(&Val); }
   template <class T> const T *get() const {
-    return reinterpret_cast<const T *>(Val.buffer);
+    return reinterpret_cast<const T *>(&Val);
   }
   template <class T> void destruct() { get<T>()->~T(); }
 
@@ -383,11 +420,11 @@ private:
       return;
 #define HANDLE_DIEVALUE_SMALL(T)                                               \
   case is##T:                                                                  \
-    destruct<DIE##T>();
+    destruct<DIE##T>();                                                        \
     return;
 #define HANDLE_DIEVALUE_LARGE(T)                                               \
   case is##T:                                                                  \
-    destruct<const DIE##T *>();
+    destruct<const DIE##T *>();                                                \
     return;
 #include "llvm/CodeGen/DIEValue.def"
     }
@@ -466,7 +503,7 @@ public:
 #include "llvm/CodeGen/DIEValue.def"
 
   /// Emit value via the Dwarf writer.
-  void EmitValue(const AsmPrinter *AP) const;
+  void emitValue(const AsmPrinter *AP) const;
 
   /// Return the size of a value in bytes.
   unsigned SizeOf(const AsmPrinter *AP) const;
@@ -486,10 +523,12 @@ struct IntrusiveBackListNode {
 };
 
 struct IntrusiveBackListBase {
-  typedef IntrusiveBackListNode Node;
+  using Node = IntrusiveBackListNode;
+
   Node *Last = nullptr;
 
   bool empty() const { return !Last; }
+
   void push_back(Node &N) {
     assert(N.Next.getPointer() == &N && "Expected unlinked node");
     assert(N.Next.getInt() == true && "Expected unlinked node");
@@ -500,19 +539,59 @@ struct IntrusiveBackListBase {
     }
     Last = &N;
   }
+
+  void push_front(Node &N) {
+    assert(N.Next.getPointer() == &N && "Expected unlinked node");
+    assert(N.Next.getInt() == true && "Expected unlinked node");
+
+    if (Last) {
+      N.Next.setPointerAndInt(Last->Next.getPointer(), false);
+      Last->Next.setPointerAndInt(&N, true);
+    } else {
+      Last = &N;
+    }
+  }
 };
 
 template <class T> class IntrusiveBackList : IntrusiveBackListBase {
 public:
   using IntrusiveBackListBase::empty;
+
   void push_back(T &N) { IntrusiveBackListBase::push_back(N); }
+  void push_front(T &N) { IntrusiveBackListBase::push_front(N); }
   T &back() { return *static_cast<T *>(Last); }
   const T &back() const { return *static_cast<T *>(Last); }
+  T &front() {
+    return *static_cast<T *>(Last ? Last->Next.getPointer() : nullptr);
+  }
+  const T &front() const {
+    return *static_cast<T *>(Last ? Last->Next.getPointer() : nullptr);
+  }
+
+  void takeNodes(IntrusiveBackList<T> &Other) {
+    if (Other.empty())
+      return;
+
+    T *FirstNode = static_cast<T *>(Other.Last->Next.getPointer());
+    T *IterNode = FirstNode;
+    do {
+      // Keep a pointer to the node and increment the iterator.
+      T *TmpNode = IterNode;
+      IterNode = static_cast<T *>(IterNode->Next.getPointer());
+
+      // Unlink the node and push it back to this list.
+      TmpNode->Next.setPointerAndInt(TmpNode, true);
+      push_back(*TmpNode);
+    } while (IterNode != FirstNode);
+
+    Other.Last = nullptr;
+  }
 
   class const_iterator;
   class iterator
       : public iterator_facade_base<iterator, std::forward_iterator_tag, T> {
     friend class const_iterator;
+
     Node *N = nullptr;
 
   public:
@@ -528,7 +607,6 @@ public:
     T &operator*() const { return *static_cast<T *>(N); }
 
     bool operator==(const iterator &X) const { return N == X.N; }
-    bool operator!=(const iterator &X) const { return N != X.N; }
   };
 
   class const_iterator
@@ -551,7 +629,6 @@ public:
     const T &operator*() const { return *static_cast<const T *>(N); }
 
     bool operator==(const const_iterator &X) const { return N == X.N; }
-    bool operator!=(const const_iterator &X) const { return N != X.N; }
   };
 
   iterator begin() {
@@ -585,10 +662,12 @@ public:
 class DIEValueList {
   struct Node : IntrusiveBackListNode {
     DIEValue V;
+
     explicit Node(DIEValue V) : V(V) {}
   };
 
-  typedef IntrusiveBackList<Node> ListTy;
+  using ListTy = IntrusiveBackList<Node>;
+
   ListTy List;
 
 public:
@@ -597,9 +676,10 @@ public:
       : public iterator_adaptor_base<value_iterator, ListTy::iterator,
                                      std::forward_iterator_tag, DIEValue> {
     friend class const_value_iterator;
-    typedef iterator_adaptor_base<value_iterator, ListTy::iterator,
-                                  std::forward_iterator_tag,
-                                  DIEValue> iterator_adaptor;
+
+    using iterator_adaptor =
+        iterator_adaptor_base<value_iterator, ListTy::iterator,
+                              std::forward_iterator_tag, DIEValue>;
 
   public:
     value_iterator() = default;
@@ -612,9 +692,9 @@ public:
   class const_value_iterator : public iterator_adaptor_base<
                                    const_value_iterator, ListTy::const_iterator,
                                    std::forward_iterator_tag, const DIEValue> {
-    typedef iterator_adaptor_base<const_value_iterator, ListTy::const_iterator,
-                                  std::forward_iterator_tag,
-                                  const DIEValue> iterator_adaptor;
+    using iterator_adaptor =
+        iterator_adaptor_base<const_value_iterator, ListTy::const_iterator,
+                              std::forward_iterator_tag, const DIEValue>;
 
   public:
     const_value_iterator() = default;
@@ -627,8 +707,8 @@ public:
     const DIEValue &operator*() const { return wrapped()->V; }
   };
 
-  typedef iterator_range<value_iterator> value_range;
-  typedef iterator_range<const_value_iterator> const_value_range;
+  using value_range = iterator_range<value_iterator>;
+  using const_value_range = iterator_range<const_value_iterator>;
 
   value_iterator addValue(BumpPtrAllocator &Alloc, const DIEValue &V) {
     List.push_back(*new (Alloc) Node(V));
@@ -639,6 +719,10 @@ public:
                     dwarf::Form Form, T &&Value) {
     return addValue(Alloc, DIEValue(Attribute, Form, std::forward<T>(Value)));
   }
+
+  /// Take ownership of the nodes in \p Other, and append them to the back of
+  /// the list.
+  void takeValues(DIEValueList &Other) { List.takeNodes(Other.List); }
 
   value_range values() {
     return make_range(value_iterator(List.begin()), value_iterator(List.end()));
@@ -657,15 +741,15 @@ class DIE : IntrusiveBackListNode, public DIEValueList {
   friend class DIEUnit;
 
   /// Dwarf unit relative offset.
-  unsigned Offset;
+  unsigned Offset = 0;
   /// Size of instance + children.
-  unsigned Size;
+  unsigned Size = 0;
   unsigned AbbrevNumber = ~0u;
   /// Dwarf tag code.
   dwarf::Tag Tag = (dwarf::Tag)0;
   /// Set to true to force a DIE to emit an abbreviation that says it has
   /// children even when it doesn't. This is used for unit testing purposes.
-  bool ForceChildren;
+  bool ForceChildren = false;
   /// Children DIEs.
   IntrusiveBackList<DIE> Children;
 
@@ -673,19 +757,18 @@ class DIE : IntrusiveBackListNode, public DIEValueList {
   /// DIEUnit which contains this DIE as its unit DIE.
   PointerUnion<DIE *, DIEUnit *> Owner;
 
-  DIE() = delete;
-  explicit DIE(dwarf::Tag Tag) : Offset(0), Size(0), Tag(Tag),
-      ForceChildren(false) {}
+  explicit DIE(dwarf::Tag Tag) : Tag(Tag) {}
 
 public:
+  DIE() = delete;
+  DIE(const DIE &RHS) = delete;
+  DIE(DIE &&RHS) = delete;
+  DIE &operator=(const DIE &RHS) = delete;
+  DIE &operator=(const DIE &&RHS) = delete;
+
   static DIE *get(BumpPtrAllocator &Alloc, dwarf::Tag Tag) {
     return new (Alloc) DIE(Tag);
   }
-
-  DIE(const DIE &RHS) = delete;
-  DIE(DIE &&RHS) = delete;
-  void operator=(const DIE &RHS) = delete;
-  void operator=(const DIE &&RHS) = delete;
 
   // Accessors.
   unsigned getAbbrevNumber() const { return AbbrevNumber; }
@@ -696,10 +779,10 @@ public:
   bool hasChildren() const { return ForceChildren || !Children.empty(); }
   void setForceChildren(bool B) { ForceChildren = B; }
 
-  typedef IntrusiveBackList<DIE>::iterator child_iterator;
-  typedef IntrusiveBackList<DIE>::const_iterator const_child_iterator;
-  typedef iterator_range<child_iterator> child_range;
-  typedef iterator_range<const_child_iterator> const_child_range;
+  using child_iterator = IntrusiveBackList<DIE>::iterator;
+  using const_child_iterator = IntrusiveBackList<DIE>::const_iterator;
+  using child_range = iterator_range<child_iterator>;
+  using const_child_range = iterator_range<const_child_iterator>;
 
   child_range children() {
     return make_range(Children.begin(), Children.end());
@@ -721,7 +804,7 @@ public:
 
   /// Get the absolute offset within the .debug_info or .debug_types section
   /// for this DIE.
-  unsigned getDebugSectionOffset() const;
+  uint64_t getDebugSectionOffset() const;
 
   /// Compute the offset of this DIE and all its children.
   ///
@@ -754,7 +837,7 @@ public:
   ///
   /// \returns the DIEUnit that represents the compile or type unit that owns
   /// this DIE, or NULL if this DIE hasn't been added to a unit DIE.
-  const DIEUnit *getUnit() const;
+  DIEUnit *getUnit() const;
 
   void setOffset(unsigned O) { Offset = O; }
   void setSize(unsigned S) { Size = S; }
@@ -767,6 +850,13 @@ public:
     return Children.back();
   }
 
+  DIE &addChildFront(DIE *Child) {
+    assert(!Child->getParent() && "Child should be orphaned");
+    Child->Owner = this;
+    Children.push_front(*Child);
+    return Children.front();
+  }
+
   /// Find a value in the DIE with the attribute given.
   ///
   /// Returns a default-constructed DIEValue (where \a DIEValue::getType()
@@ -774,7 +864,7 @@ public:
   DIEValue findAttribute(dwarf::Attribute Attribute) const;
 
   void print(raw_ostream &O, unsigned IndentCount = 0) const;
-  void dump();
+  void dump() const;
 };
 
 //===--------------------------------------------------------------------===//
@@ -790,14 +880,11 @@ class DIEUnit {
   /// a valid section depending on the client that is emitting DWARF.
   MCSection *Section;
   uint64_t Offset; /// .debug_info or .debug_types absolute section offset.
-  uint32_t Length; /// The length in bytes of all of the DIEs in this unit.
-  const uint16_t Version; /// The Dwarf version number for this unit.
-  const uint8_t AddrSize; /// The size in bytes of an address for this unit.
 protected:
-  ~DIEUnit() = default;
+  virtual ~DIEUnit() = default;
 
 public:
-  DIEUnit(uint16_t Version, uint8_t AddrSize, dwarf::Tag UnitTag);
+  explicit DIEUnit(dwarf::Tag UnitTag);
   DIEUnit(const DIEUnit &RHS) = delete;
   DIEUnit(DIEUnit &&RHS) = delete;
   void operator=(const DIEUnit &RHS) = delete;
@@ -819,33 +906,31 @@ public:
   ///
   /// \returns Section pointer which can be NULL.
   MCSection *getSection() const { return Section; }
-  void setDebugSectionOffset(unsigned O) { Offset = O; }
-  unsigned getDebugSectionOffset() const { return Offset; }
-  void setLength(uint64_t L) { Length = L; }
-  uint64_t getLength() const { return Length; }
-  uint16_t getDwarfVersion() const { return Version; }
-  uint16_t getAddressSize() const { return AddrSize; }
+  void setDebugSectionOffset(uint64_t O) { Offset = O; }
+  uint64_t getDebugSectionOffset() const { return Offset; }
   DIE &getUnitDie() { return Die; }
   const DIE &getUnitDie() const { return Die; }
 };
 
 struct BasicDIEUnit final : DIEUnit {
-  BasicDIEUnit(uint16_t Version, uint8_t AddrSize, dwarf::Tag UnitTag)
-      : DIEUnit(Version, AddrSize, UnitTag) {}
+  explicit BasicDIEUnit(dwarf::Tag UnitTag) : DIEUnit(UnitTag) {}
 };
 
 //===--------------------------------------------------------------------===//
 /// DIELoc - Represents an expression location.
 //
 class DIELoc : public DIEValueList {
-  mutable unsigned Size; // Size in bytes excluding size header.
+  mutable unsigned Size = 0; // Size in bytes excluding size header.
 
 public:
-  DIELoc() : Size(0) {}
+  DIELoc() = default;
 
   /// ComputeSize - Calculate the size of the location expression.
   ///
   unsigned ComputeSize(const AsmPrinter *AP) const;
+
+  // TODO: move setSize() and Size to DIEValueList.
+  void setSize(unsigned size) { Size = size; }
 
   /// BestForm - Choose the best form for data.
   ///
@@ -862,7 +947,7 @@ public:
     return dwarf::DW_FORM_block;
   }
 
-  void EmitValue(const AsmPrinter *AP, dwarf::Form Form) const;
+  void emitValue(const AsmPrinter *Asm, dwarf::Form Form) const;
   unsigned SizeOf(const AsmPrinter *AP, dwarf::Form Form) const;
 
   void print(raw_ostream &O) const;
@@ -872,14 +957,17 @@ public:
 /// DIEBlock - Represents a block of values.
 //
 class DIEBlock : public DIEValueList {
-  mutable unsigned Size; // Size in bytes excluding size header.
+  mutable unsigned Size = 0; // Size in bytes excluding size header.
 
 public:
-  DIEBlock() : Size(0) {}
+  DIEBlock() = default;
 
   /// ComputeSize - Calculate the size of the location expression.
   ///
   unsigned ComputeSize(const AsmPrinter *AP) const;
+
+  // TODO: move setSize() and Size to DIEValueList.
+  void setSize(unsigned size) { Size = size; }
 
   /// BestForm - Choose the best form for data.
   ///
@@ -893,7 +981,7 @@ public:
     return dwarf::DW_FORM_block;
   }
 
-  void EmitValue(const AsmPrinter *AP, dwarf::Form Form) const;
+  void emitValue(const AsmPrinter *Asm, dwarf::Form Form) const;
   unsigned SizeOf(const AsmPrinter *AP, dwarf::Form Form) const;
 
   void print(raw_ostream &O) const;
@@ -901,4 +989,4 @@ public:
 
 } // end namespace llvm
 
-#endif // LLVM_LIB_CODEGEN_ASMPRINTER_DIE_H
+#endif // LLVM_CODEGEN_DIE_H

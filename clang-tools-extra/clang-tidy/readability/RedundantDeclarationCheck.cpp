@@ -1,9 +1,8 @@
 //===--- RedundantDeclarationCheck.cpp - clang-tidy------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -18,12 +17,29 @@ namespace clang {
 namespace tidy {
 namespace readability {
 
+AST_MATCHER(FunctionDecl, doesDeclarationForceExternallyVisibleDefinition) {
+  return Node.doesDeclarationForceExternallyVisibleDefinition();
+}
+
+RedundantDeclarationCheck::RedundantDeclarationCheck(StringRef Name,
+                                                     ClangTidyContext *Context)
+    : ClangTidyCheck(Name, Context),
+      IgnoreMacros(Options.getLocalOrGlobal("IgnoreMacros", true)) {}
+
+void RedundantDeclarationCheck::storeOptions(
+    ClangTidyOptions::OptionMap &Opts) {
+  Options.store(Opts, "IgnoreMacros", IgnoreMacros);
+}
+
 void RedundantDeclarationCheck::registerMatchers(MatchFinder *Finder) {
-  auto UnlessDefinition = unless(isDefinition());
-  Finder->addMatcher(namedDecl(anyOf(varDecl(UnlessDefinition),
-                                     functionDecl(UnlessDefinition)))
-                         .bind("Decl"),
-                     this);
+  Finder->addMatcher(
+      namedDecl(anyOf(varDecl(unless(isDefinition())),
+                      functionDecl(unless(anyOf(
+                          isDefinition(), isDefaulted(),
+                          doesDeclarationForceExternallyVisibleDefinition(),
+                          hasParent(friendDecl()))))))
+          .bind("Decl"),
+      this);
 }
 
 void RedundantDeclarationCheck::check(const MatchFinder::MatchResult &Result) {
@@ -35,6 +51,13 @@ void RedundantDeclarationCheck::check(const MatchFinder::MatchResult &Result) {
     return;
   if (Prev->getLocation() == D->getLocation())
     return;
+  if (IgnoreMacros &&
+      (D->getLocation().isMacroID() || Prev->getLocation().isMacroID()))
+    return;
+  // Don't complain when the previous declaration is a friend declaration.
+  for (const auto &Parent : Result.Context->getParents(*Prev))
+    if (Parent.get<FriendDecl>())
+      return;
 
   const SourceManager &SM = *Result.SourceManager;
 
@@ -45,8 +68,8 @@ void RedundantDeclarationCheck::check(const MatchFinder::MatchResult &Result) {
   bool MultiVar = false;
   if (const auto *VD = dyn_cast<VarDecl>(D)) {
     // Is this a multivariable declaration?
-    for (const auto Other : VD->getDeclContext()->decls()) {
-      if (Other != D && Other->getLocStart() == VD->getLocStart()) {
+    for (const auto *Other : VD->getDeclContext()->decls()) {
+      if (Other != D && Other->getBeginLoc() == VD->getBeginLoc()) {
         MultiVar = true;
         break;
       }
@@ -63,7 +86,6 @@ void RedundantDeclarationCheck::check(const MatchFinder::MatchResult &Result) {
   }
   diag(Prev->getLocation(), "previously declared here", DiagnosticIDs::Note);
 }
-
 } // namespace readability
 } // namespace tidy
 } // namespace clang

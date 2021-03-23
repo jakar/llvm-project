@@ -1,4 +1,5 @@
-; RUN: opt -print-memderefs -analyze -S <%s | FileCheck %s
+; RUN: opt -print-memderefs -analyze -S < %s -enable-new-pm=0 | FileCheck %s
+; RUN: opt -passes=print-memderefs -S < %s -disable-output 2>&1 | FileCheck %s
 
 ; Uses the print-deref (+ analyze to print) pass to run
 ; isDereferenceablePointer() on many load instruction operands
@@ -20,9 +21,12 @@ declare i32* @foo()
 @globalptr.align16 = external global i8, align 16
 
 ; CHECK-LABEL: 'test'
-define void @test(i32 addrspace(1)* dereferenceable(8) %dparam,
+define void @test(%struct.A* sret(%struct.A) %result,
+                  i32 addrspace(1)* dereferenceable(8) %dparam,
                   i8 addrspace(1)* dereferenceable(32) align 1 %dparam.align1,
-                  i8 addrspace(1)* dereferenceable(32) align 16 %dparam.align16)
+                  i8 addrspace(1)* dereferenceable(32) align 16 %dparam.align16,
+                  i8* byval(i8) %i8_byval,
+                  %struct.A* byval(%struct.A) %A_byval)
     gc "statepoint-example" {
 ; CHECK: The following are dereferenceable:
 entry:
@@ -34,12 +38,26 @@ entry:
     %alloca = alloca i1
     %load2 = load i1, i1* %alloca
 
-; CHECK: %dparam{{.*}}(aligned)
+    ; Load from empty array alloca
+; CHECK-NOT: %empty_alloca
+    %empty_alloca = alloca i8, i64 0
+    %empty_load = load i8, i8* %empty_alloca
+
+    ; Loads from sret arguments
+; CHECK: %sret_gep{{.*}}(aligned)
+    %sret_gep = getelementptr inbounds %struct.A, %struct.A* %result, i64 0, i32 1, i64 2
+    load i8, i8* %sret_gep
+
+; CHECK-NOT: %sret_gep_outside
+    %sret_gep_outside = getelementptr %struct.A, %struct.A* %result, i64 0, i32 1, i64 7
+    load i8, i8* %sret_gep_outside
+
+; CHECK: %dparam{{.*}}(unaligned)
     %load3 = load i32, i32 addrspace(1)* %dparam
 
-; CHECK: %relocate{{.*}}(aligned)
-    %tok = tail call token (i64, i32, i1 ()*, i32, i32, ...) @llvm.experimental.gc.statepoint.p0f_i1f(i64 0, i32 0, i1 ()* @return_i1, i32 0, i32 0, i32 0, i32 0, i32 addrspace(1)* %dparam)
-    %relocate = call i32 addrspace(1)* @llvm.experimental.gc.relocate.p1i32(token %tok, i32 7, i32 7)
+; CHECK: %relocate{{.*}}(unaligned)
+    %tok = tail call token (i64, i32, i1 ()*, i32, i32, ...) @llvm.experimental.gc.statepoint.p0f_i1f(i64 0, i32 0, i1 ()* @return_i1, i32 0, i32 0, i32 0, i32 0) ["gc-live" (i32 addrspace(1)* %dparam)]
+    %relocate = call i32 addrspace(1)* @llvm.experimental.gc.relocate.p1i32(token %tok, i32 0, i32 0)
     %load4 = load i32, i32 addrspace(1)* %relocate
 
 ; CHECK-NOT: %nparam
@@ -53,7 +71,7 @@ entry:
     %load6 = load i32, i32* %nd_load
 
     ; Load from a dereferenceable load
-; CHECK: %d4_load{{.*}}(aligned)
+; CHECK: %d4_load{{.*}}(unaligned)
     %d4_load = load i32*, i32** @globali32ptr, !dereferenceable !0
     %load7 = load i32, i32* %d4_load
 
@@ -68,7 +86,7 @@ entry:
     %load9 = load i32, i32* %d_or_null_load
 
     ; Load from a non-null pointer with dereferenceable_or_null
-; CHECK: %d_or_null_non_null_load{{.*}}(aligned)
+; CHECK: %d_or_null_non_null_load{{.*}}(unaligned)
     %d_or_null_non_null_load = load i32*, i32** @globali32ptr, !nonnull !2, !dereferenceable_or_null !0
     %load10 = load i32, i32* %d_or_null_non_null_load
 
@@ -93,6 +111,18 @@ entry:
 ; CHECK: %dparam.align16{{.*}}(aligned)
     %load15 = load i8, i8 addrspace(1)* %dparam.align1, align 16
     %load16 = load i8, i8 addrspace(1)* %dparam.align16, align 16
+
+    ; Loads from byval arguments
+; CHECK: %i8_byval{{.*}}(aligned)
+    %i8_byval_load = load i8, i8* %i8_byval
+
+; CHECK-NOT: %byval_cast
+    %byval_cast = bitcast i8* %i8_byval to i32*
+    %bad_byval_load = load i32, i32* %byval_cast
+
+; CHECK: %byval_gep{{.*}}(aligned)
+    %byval_gep = getelementptr inbounds %struct.A, %struct.A* %A_byval, i64 0, i32 1, i64 2
+    load i8, i8* %byval_gep
 
     ; Loads from aligned allocas
 ; CHECK: %alloca.align1{{.*}}(unaligned)
@@ -141,6 +171,14 @@ entry:
     %load28 = load i32, i32* %alloca.noalign, align 8
 
     ret void
+}
+
+; CHECK: The following are dereferenceable:
+; CHECK: %ptr = inttoptr i32 %val to i32*, !dereferenceable !0
+define i32 @f_0(i32 %val) {
+  %ptr = inttoptr i32 %val to i32*, !dereferenceable !0
+  %load29 = load i32, i32* %ptr, align 8
+  ret i32 %load29
 }
 
 ; Just check that we don't crash.

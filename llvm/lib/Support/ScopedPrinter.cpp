@@ -1,6 +1,5 @@
 #include "llvm/Support/ScopedPrinter.h"
 
-#include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/Format.h"
 #include <cctype>
 
@@ -13,7 +12,7 @@ raw_ostream &operator<<(raw_ostream &OS, const HexNumber &Value) {
   return OS;
 }
 
-const std::string to_hexString(uint64_t Value, bool UpperCase) {
+std::string to_hexString(uint64_t Value, bool UpperCase) {
   std::string number;
   llvm::raw_string_ostream stream(number);
   stream << format_hex_no_prefix(Value, 1, UpperCase);

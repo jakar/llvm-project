@@ -1,9 +1,8 @@
-//===--- CrossWindowsToolChain.cpp - Cross Windows Tool Chain -------------===//
+//===-- CrossWindows.cpp - Cross Windows Tool Chain -----------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -20,6 +19,7 @@ using namespace clang::driver;
 using namespace clang::driver::toolchains;
 
 using llvm::opt::ArgList;
+using llvm::opt::ArgStringList;
 
 void tools::CrossWindows::Assembler::ConstructJob(
     Compilation &C, const JobAction &JA, const InputInfo &Output,
@@ -36,6 +36,7 @@ void tools::CrossWindows::Assembler::ConstructJob(
     llvm_unreachable("unsupported architecture");
   case llvm::Triple::arm:
   case llvm::Triple::thumb:
+  case llvm::Triple::aarch64:
     break;
   case llvm::Triple::x86:
     CmdArgs.push_back("--32");
@@ -56,7 +57,8 @@ void tools::CrossWindows::Assembler::ConstructJob(
   const std::string Assembler = TC.GetProgramPath("as");
   Exec = Args.MakeArgString(Assembler);
 
-  C.addCommand(llvm::make_unique<Command>(JA, *this, Exec, CmdArgs, Inputs));
+  C.addCommand(std::make_unique<Command>(JA, *this, ResponseFileSupport::None(),
+                                         Exec, CmdArgs, Inputs, Output));
 }
 
 void tools::CrossWindows::Linker::ConstructJob(
@@ -98,6 +100,9 @@ void tools::CrossWindows::Linker::ConstructJob(
     // FIXME: this is incorrect for WinCE
     CmdArgs.push_back("thumb2pe");
     break;
+  case llvm::Triple::aarch64:
+    CmdArgs.push_back("arm64pe");
+    break;
   case llvm::Triple::x86:
     CmdArgs.push_back("i386pe");
     EntryPoint.append("_");
@@ -111,6 +116,7 @@ void tools::CrossWindows::Linker::ConstructJob(
     switch (T.getArch()) {
     default:
       llvm_unreachable("unsupported architecture");
+    case llvm::Triple::aarch64:
     case llvm::Triple::arm:
     case llvm::Triple::thumb:
     case llvm::Triple::x86_64:
@@ -122,7 +128,8 @@ void tools::CrossWindows::Linker::ConstructJob(
     }
 
     CmdArgs.push_back("-shared");
-    CmdArgs.push_back("-Bdynamic");
+    CmdArgs.push_back(Args.hasArg(options::OPT_static) ? "-Bstatic"
+                                                       : "-Bdynamic");
 
     CmdArgs.push_back("--enable-auto-image-base");
 
@@ -160,8 +167,7 @@ void tools::CrossWindows::Linker::ConstructJob(
   TC.AddFilePathLibArgs(Args, CmdArgs);
   AddLinkerInputs(TC, Inputs, Args, CmdArgs, JA);
 
-  if (D.CCCIsCXX() && !Args.hasArg(options::OPT_nostdlib) &&
-      !Args.hasArg(options::OPT_nodefaultlibs)) {
+  if (TC.ShouldLinkCXXStdlib(Args)) {
     bool StaticCXX = Args.hasArg(options::OPT_static_libstdcxx) &&
                      !Args.hasArg(options::OPT_static);
     if (StaticCXX)
@@ -197,24 +203,17 @@ void tools::CrossWindows::Linker::ConstructJob(
 
   Exec = Args.MakeArgString(TC.GetLinkerPath());
 
-  C.addCommand(llvm::make_unique<Command>(JA, *this, Exec, CmdArgs, Inputs));
+  C.addCommand(std::make_unique<Command>(JA, *this,
+                                         ResponseFileSupport::AtFileUTF8(),
+                                         Exec, CmdArgs, Inputs, Output));
 }
 
 CrossWindowsToolChain::CrossWindowsToolChain(const Driver &D,
                                              const llvm::Triple &T,
                                              const llvm::opt::ArgList &Args)
-    : Generic_GCC(D, T, Args) {
-  if (D.CCCIsCXX() && GetCXXStdlibType(Args) == ToolChain::CST_Libstdcxx) {
-    const std::string &SysRoot = D.SysRoot;
+    : Generic_GCC(D, T, Args) {}
 
-    // libstdc++ resides in /usr/lib, but depends on libgcc which is placed in
-    // /usr/lib/gcc.
-    getFilePaths().push_back(SysRoot + "/usr/lib");
-    getFilePaths().push_back(SysRoot + "/usr/lib/gcc");
-  }
-}
-
-bool CrossWindowsToolChain::IsUnwindTablesDefault() const {
+bool CrossWindowsToolChain::IsUnwindTablesDefault(const ArgList &Args) const {
   // FIXME: all non-x86 targets need unwind tables, however, LLVM currently does
   // not know how to emit them.
   return getArch() == llvm::Triple::x86_64;
@@ -238,8 +237,15 @@ AddClangSystemIncludeArgs(const llvm::opt::ArgList &DriverArgs,
   const Driver &D = getDriver();
   const std::string &SysRoot = D.SysRoot;
 
-  if (DriverArgs.hasArg(options::OPT_nostdlibinc))
+  auto AddSystemAfterIncludes = [&]() {
+    for (const auto &P : DriverArgs.getAllArgValues(options::OPT_isystem_after))
+      addSystemInclude(DriverArgs, CC1Args, P);
+  };
+
+  if (DriverArgs.hasArg(options::OPT_nostdinc)) {
+    AddSystemAfterIncludes();
     return;
+  }
 
   addSystemInclude(DriverArgs, CC1Args, SysRoot + "/usr/local/include");
   if (!DriverArgs.hasArg(options::OPT_nobuiltininc)) {
@@ -247,56 +253,35 @@ AddClangSystemIncludeArgs(const llvm::opt::ArgList &DriverArgs,
     llvm::sys::path::append(ResourceDir, "include");
     addSystemInclude(DriverArgs, CC1Args, ResourceDir);
   }
-  for (const auto &P : DriverArgs.getAllArgValues(options::OPT_isystem_after))
-    addSystemInclude(DriverArgs, CC1Args, P);
+  AddSystemAfterIncludes();
   addExternCSystemInclude(DriverArgs, CC1Args, SysRoot + "/usr/include");
 }
 
 void CrossWindowsToolChain::
 AddClangCXXStdlibIncludeArgs(const llvm::opt::ArgList &DriverArgs,
                              llvm::opt::ArgStringList &CC1Args) const {
-  const llvm::Triple &Triple = getTriple();
   const std::string &SysRoot = getDriver().SysRoot;
 
-  if (DriverArgs.hasArg(options::OPT_nostdlibinc) ||
+  if (DriverArgs.hasArg(options::OPT_nostdinc) ||
       DriverArgs.hasArg(options::OPT_nostdincxx))
     return;
 
-  switch (GetCXXStdlibType(DriverArgs)) {
-  case ToolChain::CST_Libcxx:
+  if (GetCXXStdlibType(DriverArgs) == ToolChain::CST_Libcxx)
     addSystemInclude(DriverArgs, CC1Args, SysRoot + "/usr/include/c++/v1");
-    break;
-
-  case ToolChain::CST_Libstdcxx:
-    addSystemInclude(DriverArgs, CC1Args, SysRoot + "/usr/include/c++");
-    addSystemInclude(DriverArgs, CC1Args,
-                     SysRoot + "/usr/include/c++/" + Triple.str());
-    addSystemInclude(DriverArgs, CC1Args,
-                     SysRoot + "/usr/include/c++/backwards");
-  }
 }
 
 void CrossWindowsToolChain::
-AddCXXStdlibLibArgs(const llvm::opt::ArgList &DriverArgs,
-                    llvm::opt::ArgStringList &CC1Args) const {
-  switch (GetCXXStdlibType(DriverArgs)) {
-  case ToolChain::CST_Libcxx:
-    CC1Args.push_back("-lc++");
-    break;
-  case ToolChain::CST_Libstdcxx:
-    CC1Args.push_back("-lstdc++");
-    CC1Args.push_back("-lmingw32");
-    CC1Args.push_back("-lmingwex");
-    CC1Args.push_back("-lgcc");
-    CC1Args.push_back("-lmoldname");
-    CC1Args.push_back("-lmingw32");
-    break;
-  }
+AddCXXStdlibLibArgs(const llvm::opt::ArgList &Args,
+                    llvm::opt::ArgStringList &CmdArgs) const {
+  if (GetCXXStdlibType(Args) == ToolChain::CST_Libcxx)
+    CmdArgs.push_back("-lc++");
 }
 
 clang::SanitizerMask CrossWindowsToolChain::getSupportedSanitizers() const {
   SanitizerMask Res = ToolChain::getSupportedSanitizers();
   Res |= SanitizerKind::Address;
+  Res |= SanitizerKind::PointerCompare;
+  Res |= SanitizerKind::PointerSubtract;
   return Res;
 }
 

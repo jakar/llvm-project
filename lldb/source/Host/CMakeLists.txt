@@ -1,11 +1,20 @@
+if (APPLE AND LLVM_ENABLE_LOCAL_SUBMODULE_VISIBILITY)
+  # The arpa/inet.h header used in the files here is providing a miscompiled
+  # htonl function on macOS <= 10.15 when local submodule visibility is active.
+  # Disabling modules in this directory until this is is fixed.
+  # See rdar://problem/62886385
+  remove_module_flags()
+endif()
+
 macro(add_host_subdirectory group)
   list(APPEND HOST_SOURCES ${ARGN})
   source_group(${group} FILES ${ARGN})
 endmacro()
 
 add_host_subdirectory(common
-  common/File.cpp
+  common/FileAction.cpp
   common/FileCache.cpp
+  common/File.cpp
   common/FileSystem.cpp
   common/GetOptInc.cpp
   common/Host.cpp
@@ -13,38 +22,30 @@ add_host_subdirectory(common
   common/HostNativeThreadBase.cpp
   common/HostProcess.cpp
   common/HostThread.cpp
-  common/IOObject.cpp
   common/LockFileBase.cpp
+  common/LZMA.cpp
   common/MainLoop.cpp
   common/MonitoringProcessLauncher.cpp
-  common/NativeBreakpoint.cpp
-  common/NativeBreakpointList.cpp
-  common/NativeWatchpointList.cpp
   common/NativeProcessProtocol.cpp
   common/NativeRegisterContext.cpp
   common/NativeThreadProtocol.cpp
+  common/NativeWatchpointList.cpp
   common/OptionParser.cpp
   common/PipeBase.cpp
+  common/ProcessLaunchInfo.cpp
   common/ProcessRunLock.cpp
   common/PseudoTerminal.cpp
-  common/Socket.cpp
   common/SocketAddress.cpp
-  common/SoftwareBreakpoint.cpp
+  common/Socket.cpp
   common/StringConvert.cpp
-  common/Symbols.cpp
   common/TCPSocket.cpp
   common/Terminal.cpp
   common/ThreadLauncher.cpp
-  common/XML.cpp
   common/UDPSocket.cpp
+  common/XML.cpp
   )
 
-# Keep track of whether we want to provide a define for the
-# Python's architecture-specific lib path (i.e. where a
-# Python lldb module would go).
-set (get_python_libdir 0)
-
-if (NOT LLDB_DISABLE_LIBEDIT)
+if (LLDB_ENABLE_LIBEDIT)
   add_host_subdirectory(common
     common/Editline.cpp
     )
@@ -53,10 +54,6 @@ endif()
 add_host_subdirectory(posix
   posix/ConnectionFileDescriptorPosix.cpp
   )
-
-if(NOT LLDB_DISABLE_PYTHON)
-  list(APPEND LLDB_PLUGINS lldbPluginScriptInterpreterPython)
-endif()
 
 if (CMAKE_SYSTEM_NAME MATCHES "Windows")
   add_host_subdirectory(windows
@@ -74,14 +71,9 @@ if (CMAKE_SYSTEM_NAME MATCHES "Windows")
     windows/Windows.cpp
     )
 else()
-  if (NOT LLDB_DISABLE_PYTHON)
-    # We'll grab the arch-specific python libdir on POSIX systems.
-    set (get_python_libdir 1)
-  endif()
-
   add_host_subdirectory(posix
     posix/DomainSocket.cpp
-    posix/FileSystem.cpp
+    posix/FileSystemPosix.cpp
     posix/HostInfoPosix.cpp
     posix/HostProcessPosix.cpp
     posix/HostThreadPosix.cpp
@@ -90,19 +82,10 @@ else()
     posix/ProcessLauncherPosixFork.cpp
     )
 
-  if (NOT (CMAKE_SYSTEM_NAME MATCHES "Android"))
-    add_host_subdirectory(posix
-      posix/ProcessLauncherPosix.cpp
-      )
-  endif()
-
   if (CMAKE_SYSTEM_NAME MATCHES "Darwin")
-    include_directories(SYSTEM ${LIBXML2_INCLUDE_DIR})
+    add_subdirectory(macosx/objcxx)
+    set(LLDBObjCLibs lldbHostMacOSXObjCXX)
     add_host_subdirectory(macosx
-      macosx/Host.mm
-      macosx/HostInfoMacOSX.mm
-      macosx/HostThreadMacOSX.mm
-      macosx/Symbols.cpp
       macosx/cfcpp/CFCBundle.cpp
       macosx/cfcpp/CFCData.cpp
       macosx/cfcpp/CFCMutableArray.cpp
@@ -110,6 +93,10 @@ else()
       macosx/cfcpp/CFCMutableSet.cpp
       macosx/cfcpp/CFCString.cpp
       )
+    if(APPLE_EMBEDDED)
+      set_property(SOURCE macosx/Host.mm APPEND PROPERTY
+               COMPILE_DEFINITIONS "NO_XPC_SERVICES=1")
+    endif()
 
 
   elseif (CMAKE_SYSTEM_NAME MATCHES "Linux|Android")
@@ -134,7 +121,7 @@ else()
 
   elseif (CMAKE_SYSTEM_NAME MATCHES "NetBSD")
     add_host_subdirectory(netbsd
-      netbsd/Host.cpp
+      netbsd/HostNetBSD.cpp
       netbsd/HostInfoNetBSD.cpp
       )
 
@@ -146,35 +133,47 @@ else()
   endif()
 endif()
 
-if (${get_python_libdir})
-  # Call a python script to gather the arch-specific libdir for
-  # modules like the lldb module.
-  execute_process(
-    COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/../../scripts/get_relative_lib_dir.py
-    RESULT_VARIABLE get_libdir_status
-    OUTPUT_VARIABLE relative_libdir
-    )
-  if (get_libdir_status EQUAL 0)
-    add_definitions(-DLLDB_PYTHON_RELATIVE_LIBDIR="${relative_libdir}")
+set(EXTRA_LIBS)
+if (CMAKE_SYSTEM_NAME MATCHES "NetBSD")
+  list(APPEND EXTRA_LIBS kvm)
+endif()
+if (LLDB_ENABLE_LIBXML2)
+  list(APPEND EXTRA_LIBS ${LIBXML2_LIBRARIES})
+endif()
+if (HAVE_LIBDL)
+  list(APPEND EXTRA_LIBS ${CMAKE_DL_LIBS})
+endif()
+if (LLDB_ENABLE_LIBEDIT)
+  list(APPEND EXTRA_LIBS ${LibEdit_LIBRARIES})
+endif()
+if (LLDB_ENABLE_LZMA)
+  list(APPEND EXTRA_LIBS ${LIBLZMA_LIBRARIES})
+endif()
+if (WIN32)
+  list(APPEND LLDB_SYSTEM_LIBS psapi)
+endif()
+
+if (LLDB_ENABLE_LIBEDIT)
+  list(APPEND LLDB_LIBEDIT_LIBS ${LibEdit_LIBRARIES})
+  if (LLVM_BUILD_STATIC)
+    list(APPEND LLDB_SYSTEM_LIBS gpm)
   endif()
 endif()
 
-if (CMAKE_SYSTEM_NAME MATCHES "NetBSD")
- set(EXTRA_LIBS kvm)
-endif ()
-
 add_lldb_library(lldbHost
   ${HOST_SOURCES}
-  
+
   LINK_LIBS
-    lldbCore
-    lldbInterpreter
-    lldbSymbol
-    lldbTarget
     lldbUtility
-    ${LLDB_PLUGINS}
     ${EXTRA_LIBS}
-  
+    ${LLDBObjCLibs}
+    ${LLDB_LIBEDIT_LIBS}
+
   LINK_COMPONENTS
+    Object
     Support
   )
+
+if (LLDB_ENABLE_LIBEDIT)
+  target_include_directories(lldbHost PUBLIC ${LibEdit_INCLUDE_DIRS})
+endif()

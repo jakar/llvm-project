@@ -1,14 +1,12 @@
 //===---- IRReader.cpp - Reader for LLVM IR files -------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
 #include "llvm/IRReader/IRReader.h"
-#include "llvm-c/Core.h"
 #include "llvm-c/IRReader.h"
 #include "llvm/AsmParser/Parser.h"
 #include "llvm/Bitcode/BitcodeReader.h"
@@ -26,14 +24,14 @@ namespace llvm {
   extern bool TimePassesIsEnabled;
 }
 
-static const char *const TimeIRParsingGroupName = "irparse";
-static const char *const TimeIRParsingGroupDescription = "LLVM IR Parsing";
-static const char *const TimeIRParsingName = "parse";
-static const char *const TimeIRParsingDescription = "Parse IR";
+const char TimeIRParsingGroupName[] = "irparse";
+const char TimeIRParsingGroupDescription[] = "LLVM IR Parsing";
+const char TimeIRParsingName[] = "parse";
+const char TimeIRParsingDescription[] = "Parse IR";
 
-static std::unique_ptr<Module>
-getLazyIRModule(std::unique_ptr<MemoryBuffer> Buffer, SMDiagnostic &Err,
-                LLVMContext &Context, bool ShouldLazyLoadMetadata) {
+std::unique_ptr<Module>
+llvm::getLazyIRModule(std::unique_ptr<MemoryBuffer> Buffer, SMDiagnostic &Err,
+                      LLVMContext &Context, bool ShouldLazyLoadMetadata) {
   if (isBitcode((const unsigned char *)Buffer->getBufferStart(),
                 (const unsigned char *)Buffer->getBufferEnd())) {
     Expected<std::unique_ptr<Module>> ModuleOrErr = getOwningLazyBitcodeModule(
@@ -68,14 +66,15 @@ std::unique_ptr<Module> llvm::getLazyIRFileModule(StringRef Filename,
 }
 
 std::unique_ptr<Module> llvm::parseIR(MemoryBufferRef Buffer, SMDiagnostic &Err,
-                                      LLVMContext &Context) {
+                                      LLVMContext &Context,
+                                      DataLayoutCallbackTy DataLayoutCallback) {
   NamedRegionTimer T(TimeIRParsingName, TimeIRParsingDescription,
                      TimeIRParsingGroupName, TimeIRParsingGroupDescription,
                      TimePassesIsEnabled);
   if (isBitcode((const unsigned char *)Buffer.getBufferStart(),
                 (const unsigned char *)Buffer.getBufferEnd())) {
     Expected<std::unique_ptr<Module>> ModuleOrErr =
-        parseBitcodeFile(Buffer, Context);
+        parseBitcodeFile(Buffer, Context, DataLayoutCallback);
     if (Error E = ModuleOrErr.takeError()) {
       handleAllErrors(std::move(E), [&](ErrorInfoBase &EIB) {
         Err = SMDiagnostic(Buffer.getBufferIdentifier(), SourceMgr::DK_Error,
@@ -86,20 +85,24 @@ std::unique_ptr<Module> llvm::parseIR(MemoryBufferRef Buffer, SMDiagnostic &Err,
     return std::move(ModuleOrErr.get());
   }
 
-  return parseAssembly(Buffer, Err, Context);
+  return parseAssembly(Buffer, Err, Context, nullptr, DataLayoutCallback);
 }
 
-std::unique_ptr<Module> llvm::parseIRFile(StringRef Filename, SMDiagnostic &Err,
-                                          LLVMContext &Context) {
+std::unique_ptr<Module>
+llvm::parseIRFile(StringRef Filename, SMDiagnostic &Err, LLVMContext &Context,
+                  DataLayoutCallbackTy DataLayoutCallback) {
   ErrorOr<std::unique_ptr<MemoryBuffer>> FileOrErr =
-      MemoryBuffer::getFileOrSTDIN(Filename);
+      MemoryBuffer::getFileOrSTDIN(Filename, /*FileSize*/ -1,
+                                   /*RequiresNullTerminator*/ true,
+                                   /*IsText*/ true);
   if (std::error_code EC = FileOrErr.getError()) {
     Err = SMDiagnostic(Filename, SourceMgr::DK_Error,
                        "Could not open input file: " + EC.message());
     return nullptr;
   }
 
-  return parseIR(FileOrErr.get()->getMemBufferRef(), Err, Context);
+  return parseIR(FileOrErr.get()->getMemBufferRef(), Err, Context,
+                 DataLayoutCallback);
 }
 
 //===----------------------------------------------------------------------===//

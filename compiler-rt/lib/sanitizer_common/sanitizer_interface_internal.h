@@ -1,9 +1,8 @@
 //===-- sanitizer_interface_internal.h --------------------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -29,6 +28,10 @@ extern "C" {
   // (casted to void *).
   SANITIZER_INTERFACE_ATTRIBUTE
   void __sanitizer_set_report_fd(void *fd);
+  // Get the current full report file path, if a path was specified by
+  // an earlier call to __sanitizer_set_report_path. Returns null otherwise.
+  SANITIZER_INTERFACE_ATTRIBUTE
+  const char *__sanitizer_get_report_path();
 
   typedef struct {
       int coverage_sandboxed;
@@ -46,13 +49,18 @@ extern "C" {
   SANITIZER_INTERFACE_ATTRIBUTE SANITIZER_WEAK_ATTRIBUTE
   void __sanitizer_report_error_summary(const char *error_summary);
 
-  SANITIZER_INTERFACE_ATTRIBUTE void __sanitizer_cov_init();
   SANITIZER_INTERFACE_ATTRIBUTE void __sanitizer_cov_dump();
   SANITIZER_INTERFACE_ATTRIBUTE void __sanitizer_dump_coverage(
       const __sanitizer::uptr *pcs, const __sanitizer::uptr len);
   SANITIZER_INTERFACE_ATTRIBUTE void __sanitizer_dump_trace_pc_guard_coverage();
 
   SANITIZER_INTERFACE_ATTRIBUTE void __sanitizer_cov(__sanitizer::u32 *guard);
+
+  // Returns 1 on the first call, then returns 0 thereafter.  Called by the tool
+  // to ensure only one report is printed when multiple errors occur
+  // simultaneously.
+  SANITIZER_INTERFACE_ATTRIBUTE int __sanitizer_acquire_crash_state();
+
   SANITIZER_INTERFACE_ATTRIBUTE
   void __sanitizer_annotate_contiguous_container(const void *beg,
                                                  const void *end,
@@ -81,6 +89,14 @@ extern "C" {
   SANITIZER_INTERFACE_ATTRIBUTE SANITIZER_WEAK_ATTRIBUTE
   void __sanitizer_cov_trace_cmp8();
   SANITIZER_INTERFACE_ATTRIBUTE SANITIZER_WEAK_ATTRIBUTE
+  void __sanitizer_cov_trace_const_cmp1();
+  SANITIZER_INTERFACE_ATTRIBUTE SANITIZER_WEAK_ATTRIBUTE
+  void __sanitizer_cov_trace_const_cmp2();
+  SANITIZER_INTERFACE_ATTRIBUTE SANITIZER_WEAK_ATTRIBUTE
+  void __sanitizer_cov_trace_const_cmp4();
+  SANITIZER_INTERFACE_ATTRIBUTE SANITIZER_WEAK_ATTRIBUTE
+  void __sanitizer_cov_trace_const_cmp8();
+  SANITIZER_INTERFACE_ATTRIBUTE SANITIZER_WEAK_ATTRIBUTE
   void __sanitizer_cov_trace_switch();
   SANITIZER_INTERFACE_ATTRIBUTE SANITIZER_WEAK_ATTRIBUTE
   void __sanitizer_cov_trace_div4();
@@ -95,6 +111,12 @@ extern "C" {
   SANITIZER_INTERFACE_ATTRIBUTE SANITIZER_WEAK_ATTRIBUTE
   void __sanitizer_cov_trace_pc_guard_init(__sanitizer::u32*,
                                            __sanitizer::u32*);
+  SANITIZER_INTERFACE_ATTRIBUTE SANITIZER_WEAK_ATTRIBUTE
+  void __sanitizer_cov_8bit_counters_init();
+  SANITIZER_INTERFACE_ATTRIBUTE SANITIZER_WEAK_ATTRIBUTE void
+  __sanitizer_cov_bool_flag_init();
+  SANITIZER_INTERFACE_ATTRIBUTE SANITIZER_WEAK_ATTRIBUTE void
+  __sanitizer_cov_pcs_init();
 } // extern "C"
 
 #endif  // SANITIZER_INTERFACE_INTERNAL_H

@@ -1,60 +1,40 @@
-set(LLVM_LINK_COMPONENTS support)
+set(LLVM_LINK_COMPONENTS
+  FrontendOpenMP
+  Support
+  )
 
 add_clang_library(clangTidyMiscModule
-  ArgumentCommentCheck.cpp
-  AssertSideEffectCheck.cpp
-  ForwardingReferenceOverloadCheck.cpp
-  MisplacedConstCheck.cpp
-  UnconventionalAssignOperatorCheck.cpp
-  BoolPointerImplicitConversionCheck.cpp
-  DanglingHandleCheck.cpp
   DefinitionsInHeadersCheck.cpp
-  FoldInitTypeCheck.cpp
-  ForwardDeclarationNamespaceCheck.cpp
-  InaccurateEraseCheck.cpp
-  IncorrectRoundings.cpp
-  InefficientAlgorithmCheck.cpp
-  MacroParenthesesCheck.cpp
-  MacroRepeatedSideEffectsCheck.cpp
   MiscTidyModule.cpp
-  MisplacedWideningCastCheck.cpp
-  MoveConstantArgumentCheck.cpp
-  MoveConstructorInitCheck.cpp
-  MoveForwardingReferenceCheck.cpp
-  MultipleStatementMacroCheck.cpp
+  MisplacedConstCheck.cpp
   NewDeleteOverloadsCheck.cpp
-  NoexceptMoveConstructorCheck.cpp
+  NoRecursionCheck.cpp
   NonCopyableObjects.cpp
+  NonPrivateMemberVariablesInClassesCheck.cpp
   RedundantExpressionCheck.cpp
-  SizeofContainerCheck.cpp
-  SizeofExpressionCheck.cpp
   StaticAssertCheck.cpp
-  StringCompareCheck.cpp
-  StringConstructorCheck.cpp
-  StringIntegerAssignmentCheck.cpp
-  StringLiteralWithEmbeddedNulCheck.cpp
-  SuspiciousEnumUsageCheck.cpp
-  SuspiciousMissingCommaCheck.cpp
-  SuspiciousSemicolonCheck.cpp
-  SuspiciousStringCompareCheck.cpp
-  SwappedArgumentsCheck.cpp
   ThrowByValueCatchByReferenceCheck.cpp
-  UndelegatedConstructor.cpp
+  UnconventionalAssignOperatorCheck.cpp
   UniqueptrResetReleaseCheck.cpp
   UnusedAliasDeclsCheck.cpp
   UnusedParametersCheck.cpp
-  UnusedRAIICheck.cpp
   UnusedUsingDeclsCheck.cpp
-  UseAfterMoveCheck.cpp
-  VirtualNearMissCheck.cpp
 
   LINK_LIBS
+  clangTidy
+  clangTidyUtils
+
+  DEPENDS
+  omp_gen
+  )
+
+clang_target_link_libraries(clangTidyMiscModule
+  PRIVATE
   clangAnalysis
   clangAST
   clangASTMatchers
   clangBasic
   clangLex
-  clangTidy
-  clangTidyUtils
+  clangSerialization
   clangTooling
   )

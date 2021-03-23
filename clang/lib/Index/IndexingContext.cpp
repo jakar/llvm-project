@@ -1,18 +1,19 @@
 //===- IndexingContext.cpp - Indexing context data ------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
 #include "IndexingContext.h"
-#include "clang/Index/IndexDataConsumer.h"
 #include "clang/AST/ASTContext.h"
-#include "clang/AST/DeclTemplate.h"
+#include "clang/AST/Attr.h"
 #include "clang/AST/DeclObjC.h"
+#include "clang/AST/DeclTemplate.h"
+#include "clang/Basic/SourceLocation.h"
 #include "clang/Basic/SourceManager.h"
+#include "clang/Index/IndexDataConsumer.h"
 
 using namespace clang;
 using namespace index;
@@ -34,6 +35,18 @@ const LangOptions &IndexingContext::getLangOpts() const {
 
 bool IndexingContext::shouldIndexFunctionLocalSymbols() const {
   return IndexOpts.IndexFunctionLocals;
+}
+
+bool IndexingContext::shouldIndexImplicitInstantiation() const {
+  return IndexOpts.IndexImplicitInstantiation;
+}
+
+bool IndexingContext::shouldIndexParametersInDeclarations() const {
+  return IndexOpts.IndexParametersInDeclarations;
+}
+
+bool IndexingContext::shouldIndexTemplateParameters() const {
+  return IndexOpts.IndexTemplateParameters;
 }
 
 bool IndexingContext::handleDecl(const Decl *D,
@@ -68,28 +81,41 @@ bool IndexingContext::handleReference(const NamedDecl *D, SourceLocation Loc,
   if (!shouldIndexFunctionLocalSymbols() && isFunctionLocalSymbol(D))
     return true;
 
-  if (isa<NonTypeTemplateParmDecl>(D) || isa<TemplateTypeParmDecl>(D))
+  if (!shouldIndexTemplateParameters() &&
+      (isa<NonTypeTemplateParmDecl>(D) || isa<TemplateTypeParmDecl>(D) ||
+       isa<TemplateTemplateParmDecl>(D))) {
     return true;
-    
+  }
+
   return handleDeclOccurrence(D, Loc, /*IsRef=*/true, Parent, Roles, Relations,
                               RefE, RefD, DC);
 }
 
+static void reportModuleReferences(const Module *Mod,
+                                   ArrayRef<SourceLocation> IdLocs,
+                                   const ImportDecl *ImportD,
+                                   IndexDataConsumer &DataConsumer) {
+  if (!Mod)
+    return;
+  reportModuleReferences(Mod->Parent, IdLocs.drop_back(), ImportD,
+                         DataConsumer);
+  DataConsumer.handleModuleOccurrence(
+      ImportD, Mod, (SymbolRoleSet)SymbolRole::Reference, IdLocs.back());
+}
+
 bool IndexingContext::importedModule(const ImportDecl *ImportD) {
+  if (ImportD->isInvalidDecl())
+    return true;
+
   SourceLocation Loc;
   auto IdLocs = ImportD->getIdentifierLocs();
   if (!IdLocs.empty())
-    Loc = IdLocs.front();
+    Loc = IdLocs.back();
   else
     Loc = ImportD->getLocation();
-  SourceManager &SM = Ctx->getSourceManager();
-  Loc = SM.getFileLoc(Loc);
-  if (Loc.isInvalid())
-    return true;
 
-  FileID FID;
-  unsigned Offset;
-  std::tie(FID, Offset) = SM.getDecomposedLoc(Loc);
+  SourceManager &SM = Ctx->getSourceManager();
+  FileID FID = SM.getFileID(SM.getFileLoc(Loc));
   if (FID.isInvalid())
     return true;
 
@@ -108,11 +134,17 @@ bool IndexingContext::importedModule(const ImportDecl *ImportD) {
     }
   }
 
+  const Module *Mod = ImportD->getImportedModule();
+  if (!ImportD->isImplicit() && Mod->Parent && !IdLocs.empty()) {
+    reportModuleReferences(Mod->Parent, IdLocs.drop_back(), ImportD,
+                           DataConsumer);
+  }
+
   SymbolRoleSet Roles = (unsigned)SymbolRole::Declaration;
   if (ImportD->isImplicit())
     Roles |= (unsigned)SymbolRole::Implicit;
 
-  return DataConsumer.handleModuleOccurence(ImportD, Roles, FID, Offset);
+  return DataConsumer.handleModuleOccurrence(ImportD, Mod, Roles, Loc);
 }
 
 bool IndexingContext::isTemplateImplicitInstantiation(const Decl *D) {
@@ -124,9 +156,23 @@ bool IndexingContext::isTemplateImplicitInstantiation(const Decl *D) {
     TKind = FD->getTemplateSpecializationKind();
   } else if (auto *VD = dyn_cast<VarDecl>(D)) {
     TKind = VD->getTemplateSpecializationKind();
+  } else if (const auto *RD = dyn_cast<CXXRecordDecl>(D)) {
+    if (RD->getInstantiatedFromMemberClass())
+      TKind = RD->getTemplateSpecializationKind();
+  } else if (const auto *ED = dyn_cast<EnumDecl>(D)) {
+    if (ED->getInstantiatedFromMemberEnum())
+      TKind = ED->getTemplateSpecializationKind();
+  } else if (isa<FieldDecl>(D) || isa<TypedefNameDecl>(D) ||
+             isa<EnumConstantDecl>(D)) {
+    if (const auto *Parent = dyn_cast<Decl>(D->getDeclContext()))
+      return isTemplateImplicitInstantiation(Parent);
   }
   switch (TKind) {
     case TSK_Undeclared:
+      // Instantiation maybe not happen yet when we see a SpecializationDecl,
+      // e.g. when the type doesn't need to be complete, we still treat it as an
+      // instantiation as we'd like to keep the canonicalized result consistent.
+      return isa<ClassTemplateSpecializationDecl>(D);
     case TSK_ExplicitSpecialization:
       return false;
     case TSK_ImplicitInstantiation:
@@ -151,14 +197,51 @@ bool IndexingContext::shouldIgnoreIfImplicit(const Decl *D) {
   return true;
 }
 
+static const CXXRecordDecl *
+getDeclContextForTemplateInstationPattern(const Decl *D) {
+  if (const auto *CTSD =
+          dyn_cast<ClassTemplateSpecializationDecl>(D->getDeclContext()))
+    return CTSD->getTemplateInstantiationPattern();
+  else if (const auto *RD = dyn_cast<CXXRecordDecl>(D->getDeclContext()))
+    return RD->getInstantiatedFromMemberClass();
+  return nullptr;
+}
+
 static const Decl *adjustTemplateImplicitInstantiation(const Decl *D) {
   if (const ClassTemplateSpecializationDecl *
       SD = dyn_cast<ClassTemplateSpecializationDecl>(D)) {
-    return SD->getTemplateInstantiationPattern();
+    const auto *Template = SD->getTemplateInstantiationPattern();
+    if (Template)
+      return Template;
+    // Fallback to primary template if no instantiation is available yet (e.g.
+    // the type doesn't need to be complete).
+    return SD->getSpecializedTemplate()->getTemplatedDecl();
   } else if (const FunctionDecl *FD = dyn_cast<FunctionDecl>(D)) {
     return FD->getTemplateInstantiationPattern();
   } else if (auto *VD = dyn_cast<VarDecl>(D)) {
     return VD->getTemplateInstantiationPattern();
+  } else if (const auto *RD = dyn_cast<CXXRecordDecl>(D)) {
+    return RD->getInstantiatedFromMemberClass();
+  } else if (const auto *ED = dyn_cast<EnumDecl>(D)) {
+    return ED->getInstantiatedFromMemberEnum();
+  } else if (isa<FieldDecl>(D) || isa<TypedefNameDecl>(D)) {
+    const auto *ND = cast<NamedDecl>(D);
+    if (const CXXRecordDecl *Pattern =
+            getDeclContextForTemplateInstationPattern(ND)) {
+      for (const NamedDecl *BaseND : Pattern->lookup(ND->getDeclName())) {
+        if (BaseND->isImplicit())
+          continue;
+        if (BaseND->getKind() == ND->getKind())
+          return BaseND;
+      }
+    }
+  } else if (const auto *ECD = dyn_cast<EnumConstantDecl>(D)) {
+    if (const auto *ED = dyn_cast<EnumDecl>(ECD->getDeclContext())) {
+      if (const EnumDecl *Pattern = ED->getInstantiatedFromMemberEnum()) {
+        for (const NamedDecl *BaseECD : Pattern->lookup(ECD->getDeclName()))
+          return BaseECD;
+      }
+    }
   }
   return nullptr;
 }
@@ -187,6 +270,12 @@ static bool isDeclADefinition(const Decl *D, const DeclContext *ContainerDC, AST
   return false;
 }
 
+/// Whether the given NamedDecl should be skipped because it has no name.
+static bool shouldSkipNamelessDecl(const NamedDecl *ND) {
+  return (ND->getDeclName().isEmpty() && !isa<TagDecl>(ND) &&
+          !isa<ObjCCategoryDecl>(ND)) || isa<CXXDeductionGuideDecl>(ND);
+}
+
 static const Decl *adjustParent(const Decl *Parent) {
   if (!Parent)
     return nullptr;
@@ -201,8 +290,8 @@ static const Decl *adjustParent(const Decl *Parent) {
     } else if (auto RD = dyn_cast<RecordDecl>(Parent)) {
       if (RD->isAnonymousStructOrUnion())
         continue;
-    } else if (auto FD = dyn_cast<FieldDecl>(Parent)) {
-      if (FD->getDeclName().isEmpty())
+    } else if (auto ND = dyn_cast<NamedDecl>(Parent)) {
+      if (shouldSkipNamelessDecl(ND))
         continue;
     }
     return Parent;
@@ -212,8 +301,10 @@ static const Decl *adjustParent(const Decl *Parent) {
 static const Decl *getCanonicalDecl(const Decl *D) {
   D = D->getCanonicalDecl();
   if (auto TD = dyn_cast<TemplateDecl>(D)) {
-    D = TD->getTemplatedDecl();
-    assert(D->isCanonicalDecl());
+    if (auto TTD = TD->getTemplatedDecl()) {
+      D = TTD;
+      assert(D->isCanonicalDecl());
+    }
   }
 
   return D;
@@ -245,10 +336,12 @@ static bool shouldReportOccurrenceForSystemDeclOnlyMode(
       case SymbolRole::Dynamic:
       case SymbolRole::AddressOf:
       case SymbolRole::Implicit:
+      case SymbolRole::Undefinition:
       case SymbolRole::RelationReceivedBy:
       case SymbolRole::RelationCalledBy:
       case SymbolRole::RelationContainedBy:
       case SymbolRole::RelationSpecializationOf:
+      case SymbolRole::NameReference:
         return true;
       }
       llvm_unreachable("Unsupported SymbolRole value!");
@@ -273,19 +366,11 @@ bool IndexingContext::handleDeclOccurrence(const Decl *D, SourceLocation Loc,
                                            const DeclContext *ContainerDC) {
   if (D->isImplicit() && !isa<ObjCMethodDecl>(D))
     return true;
-  if (!isa<NamedDecl>(D) ||
-      (cast<NamedDecl>(D)->getDeclName().isEmpty() &&
-       !isa<TagDecl>(D) && !isa<ObjCCategoryDecl>(D)))
+  if (!isa<NamedDecl>(D) || shouldSkipNamelessDecl(cast<NamedDecl>(D)))
     return true;
 
   SourceManager &SM = Ctx->getSourceManager();
-  Loc = SM.getFileLoc(Loc);
-  if (Loc.isInvalid())
-    return true;
-
-  FileID FID;
-  unsigned Offset;
-  std::tie(FID, Offset) = SM.getDecomposedLoc(Loc);
+  FileID FID = SM.getFileID(SM.getFileLoc(Loc));
   if (FID.isInvalid())
     return true;
 
@@ -307,6 +392,9 @@ bool IndexingContext::handleDeclOccurrence(const Decl *D, SourceLocation Loc,
     }
   }
 
+  if (!OrigD)
+    OrigD = D;
+
   if (isTemplateImplicitInstantiation(D)) {
     if (!IsRef)
       return true;
@@ -315,9 +403,6 @@ bool IndexingContext::handleDeclOccurrence(const Decl *D, SourceLocation Loc,
       return true;
     assert(!isTemplateImplicitInstantiation(D));
   }
-
-  if (!OrigD)
-    OrigD = D;
 
   if (IsRef)
     Roles |= (unsigned)SymbolRole::Reference;
@@ -335,10 +420,9 @@ bool IndexingContext::handleDeclOccurrence(const Decl *D, SourceLocation Loc,
   FinalRelations.reserve(Relations.size()+1);
 
   auto addRelation = [&](SymbolRelation Rel) {
-    auto It = std::find_if(FinalRelations.begin(), FinalRelations.end(),
-                [&](SymbolRelation Elem)->bool {
-                  return Elem.RelatedSymbol == Rel.RelatedSymbol;
-                });
+    auto It = llvm::find_if(FinalRelations, [&](SymbolRelation Elem) -> bool {
+      return Elem.RelatedSymbol == Rel.RelatedSymbol;
+    });
     if (It != FinalRelations.end()) {
       It->Roles |= Rel.Roles;
     } else {
@@ -366,7 +450,27 @@ bool IndexingContext::handleDeclOccurrence(const Decl *D, SourceLocation Loc,
                                Rel.RelatedSymbol->getCanonicalDecl()));
   }
 
-  IndexDataConsumer::ASTNodeInfo Node{ OrigE, OrigD, Parent, ContainerDC };
-  return DataConsumer.handleDeclOccurence(D, Roles, FinalRelations, FID, Offset,
-                                          Node);
+  IndexDataConsumer::ASTNodeInfo Node{OrigE, OrigD, Parent, ContainerDC};
+  return DataConsumer.handleDeclOccurrence(D, Roles, FinalRelations, Loc, Node);
+}
+
+void IndexingContext::handleMacroDefined(const IdentifierInfo &Name,
+                                         SourceLocation Loc,
+                                         const MacroInfo &MI) {
+  SymbolRoleSet Roles = (unsigned)SymbolRole::Definition;
+  DataConsumer.handleMacroOccurrence(&Name, &MI, Roles, Loc);
+}
+
+void IndexingContext::handleMacroUndefined(const IdentifierInfo &Name,
+                                           SourceLocation Loc,
+                                           const MacroInfo &MI) {
+  SymbolRoleSet Roles = (unsigned)SymbolRole::Undefinition;
+  DataConsumer.handleMacroOccurrence(&Name, &MI, Roles, Loc);
+}
+
+void IndexingContext::handleMacroReference(const IdentifierInfo &Name,
+                                           SourceLocation Loc,
+                                           const MacroInfo &MI) {
+  SymbolRoleSet Roles = (unsigned)SymbolRole::Reference;
+  DataConsumer.handleMacroOccurrence(&Name, &MI, Roles, Loc);
 }

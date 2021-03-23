@@ -1,15 +1,15 @@
 //===----------------------------------------------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is dual licensed under the MIT and the University of Illinois Open
-// Source Licenses. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
 // test operator new[]
 // NOTE: asan and msan will not call the new handler.
 // UNSUPPORTED: sanitizer-new-delete
+// XFAIL: LIBCXX-WINDOWS-FIXME
 
 
 #include <new>
@@ -35,14 +35,14 @@ struct A
     ~A() {--A_constructed;}
 };
 
-int main()
+int main(int, char**)
 {
 #ifndef TEST_HAS_NO_EXCEPTIONS
     std::set_new_handler(my_new_handler);
     try
     {
-        void* volatile vp = operator new[] (std::numeric_limits<std::size_t>::max());
-        ((void)vp);
+        void* vp = operator new[] (std::numeric_limits<std::size_t>::max());
+        DoNotOptimize(vp);
         assert(false);
     }
     catch (std::bad_alloc&)
@@ -55,8 +55,12 @@ int main()
     }
 #endif
     A* ap = new A[3];
+    DoNotOptimize(ap);
     assert(ap);
     assert(A_constructed == 3);
     delete [] ap;
+    DoNotOptimize(ap);
     assert(A_constructed == 0);
+
+  return 0;
 }

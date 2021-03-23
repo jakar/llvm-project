@@ -1,7 +1,7 @@
-; RUN: opt %loadPolly -basicaa -polly-dependences -analyze -polly-dependences-analysis-type=value-based < %s | FileCheck %s -check-prefix=VALUE
-; RUN: opt %loadPolly -basicaa -polly-dependences -analyze -polly-dependences-analysis-type=memory-based < %s | FileCheck %s -check-prefix=MEMORY
-; RUN: opt %loadPolly -basicaa -polly-function-dependences -analyze -polly-dependences-analysis-type=value-based < %s | FileCheck %s -check-prefix=FUNC-VALUE
-; RUN: opt %loadPolly -basicaa -polly-function-dependences -analyze -polly-dependences-analysis-type=memory-based < %s | FileCheck %s -check-prefix=FUNC-MEMORY
+; RUN: opt %loadPolly -basic-aa -polly-dependences -analyze -polly-dependences-analysis-type=value-based < %s | FileCheck %s -check-prefix=VALUE
+; RUN: opt %loadPolly -basic-aa -polly-dependences -analyze -polly-dependences-analysis-type=memory-based < %s | FileCheck %s -check-prefix=MEMORY
+; RUN: opt %loadPolly -basic-aa -polly-function-dependences -analyze -polly-dependences-analysis-type=value-based < %s | FileCheck %s -check-prefix=FUNC-VALUE
+; RUN: opt %loadPolly -basic-aa -polly-function-dependences -analyze -polly-dependences-analysis-type=memory-based < %s | FileCheck %s -check-prefix=FUNC-MEMORY
 
 target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64"
 
@@ -83,7 +83,7 @@ do.end45:                                         ; preds = %do.cond42
 ; FUNC-VALUE:      RAW dependences:
 ; FUNC-VALUE-NEXT:     { [Stmt_do_body2[i0, i1, i2] -> Stmt_do_body2_Write3[]] -> [Stmt_do_body2[i0, i1, 1 + i2] -> Stmt_do_body2_Read0[]] : 0 <= i0 <= 35 and 0 <= i1 <= 35 and 0 <= i2 <= 34; Stmt_do_body2[i0, i1, i2] -> Stmt_do_body2[i0, i1, 1 + i2] : 0 <= i0 <= 35 and 0 <= i1 <= 35 and 0 <= i2 <= 34 }
 ; FUNC-VALUE-NEXT: WAR dependences:
-; FUNC-VALUE-NEXT:     { }
+; FUNC-VALUE-NEXT:     { [Stmt_do_body2[i0, i1, i2] -> Stmt_do_body2_Read0[]] -> [Stmt_do_body2[i0, i1, 1 + i2] -> Stmt_do_body2_Write3[]] : 0 <= i0 <= 35 and 0 <= i1 <= 35 and 0 <= i2 <= 34; Stmt_do_body2[i0, i1, i2] -> Stmt_do_body2[i0, i1, 1 + i2] : 0 <= i0 <= 35 and 0 <= i1 <= 35 and 0 <= i2 <= 34 }
 ; FUNC-VALUE-NEXT: WAW dependences:
 ; FUNC-VALUE-NEXT:     { [Stmt_do_body2[i0, i1, i2] -> Stmt_do_body2_Write3[]] -> [Stmt_do_body2[i0, i1, 1 + i2] -> Stmt_do_body2_Write3[]] : 0 <= i0 <= 35 and 0 <= i1 <= 35 and 0 <= i2 <= 34; Stmt_do_body2[i0, i1, i2] -> Stmt_do_body2[i0, i1, 1 + i2] : 0 <= i0 <= 35 and 0 <= i1 <= 35 and 0 <= i2 <= 34 }
 

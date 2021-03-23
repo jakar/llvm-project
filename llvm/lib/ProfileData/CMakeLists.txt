@@ -1,4 +1,5 @@
-add_llvm_library(LLVMProfileData
+add_llvm_component_library(LLVMProfileData
+  GCOV.cpp
   InstrProf.cpp
   InstrProfReader.cpp
   InstrProfWriter.cpp
@@ -12,6 +13,11 @@ add_llvm_library(LLVMProfileData
 
   DEPENDS
   intrinsics_gen
+
+  LINK_COMPONENTS
+  Core
+  Support
+  Demangle
   )
 
 add_subdirectory(Coverage)

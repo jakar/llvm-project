@@ -2,12 +2,12 @@
 ; RUN: llc < %s -mtriple=i686-unknown-unknown -mattr=+sse2 | FileCheck %s --check-prefix=X32
 ; RUN: llc < %s -mtriple=x86_64-unknown-unknown -mattr=+sse2 | FileCheck %s --check-prefix=X64
 
-@0 = external constant <4 x i32>		; <<4 x i32>*>:0 [#uses=1]
-@1 = external constant <4 x i16>		; <<4 x i16>*>:1 [#uses=1]
+@0 = external dso_local constant <4 x i32>		; <<4 x i32>*>:0 [#uses=1]
+@1 = external dso_local constant <4 x i16>		; <<4 x i16>*>:1 [#uses=1]
 
 define internal void @PR2585() {
 ; X32-LABEL: PR2585:
-; X32:       # BB#0:
+; X32:       # %bb.0:
 ; X32-NEXT:    pshuflw {{.*#+}} xmm0 = mem[0,2,2,3,4,5,6,7]
 ; X32-NEXT:    pshufhw {{.*#+}} xmm0 = xmm0[0,1,2,3,4,6,6,7]
 ; X32-NEXT:    pshufd {{.*#+}} xmm0 = xmm0[0,2,2,3]
@@ -15,7 +15,7 @@ define internal void @PR2585() {
 ; X32-NEXT:    retl
 ;
 ; X64-LABEL: PR2585:
-; X64:       # BB#0:
+; X64:       # %bb.0:
 ; X64-NEXT:    pshuflw {{.*#+}} xmm0 = mem[0,2,2,3,4,5,6,7]
 ; X64-NEXT:    pshufhw {{.*#+}} xmm0 = xmm0[0,1,2,3,4,6,6,7]
 ; X64-NEXT:    pshufd {{.*#+}} xmm0 = xmm0[0,2,2,3]

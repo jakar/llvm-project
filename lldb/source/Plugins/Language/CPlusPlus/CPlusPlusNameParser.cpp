@@ -1,9 +1,8 @@
-//===-- CPlusPlusNameParser.cpp ---------------------------------*- C++ -*-===//
+//===-- CPlusPlusNameParser.cpp -------------------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -25,8 +24,8 @@ Optional<ParsedFunction> CPlusPlusNameParser::ParseAsFunctionDefinition() {
   m_next_token_index = 0;
   Optional<ParsedFunction> result(None);
 
-  // Try to parse the name as function without a return type specified
-  // e.g. main(int, char*[])
+  // Try to parse the name as function without a return type specified e.g.
+  // main(int, char*[])
   {
     Bookmark start_position = SetBookmark();
     result = ParseFunctionImpl(false);
@@ -34,8 +33,8 @@ Optional<ParsedFunction> CPlusPlusNameParser::ParseAsFunctionDefinition() {
       return result;
   }
 
-  // Try to parse the name as function with function pointer return type
-  // e.g. void (*get_func(const char*))()
+  // Try to parse the name as function with function pointer return type e.g.
+  // void (*get_func(const char*))()
   result = ParseFuncPtr(true);
   if (result)
     return result;
@@ -183,13 +182,13 @@ bool CPlusPlusNameParser::ConsumeTemplateArgs() {
   Advance();
 
   // Consuming template arguments is a bit trickier than consuming function
-  // arguments, because '<' '>' brackets are not always trivially balanced.
-  // In some rare cases tokens '<' and '>' can appear inside template arguments
-  // as arithmetic or shift operators not as template brackets.
-  // Examples: std::enable_if<(10u)<(64), bool>
+  // arguments, because '<' '>' brackets are not always trivially balanced. In
+  // some rare cases tokens '<' and '>' can appear inside template arguments as
+  // arithmetic or shift operators not as template brackets. Examples:
+  // std::enable_if<(10u)<(64), bool>
   //           f<A<operator<(X,Y)::Subclass>>
-  // Good thing that compiler makes sure that really ambiguous cases of
-  // '>' usage should be enclosed within '()' brackets.
+  // Good thing that compiler makes sure that really ambiguous cases of '>'
+  // usage should be enclosed within '()' brackets.
   int template_counter = 1;
   bool can_open_template = false;
   while (HasMoreTokens() && template_counter > 0) {
@@ -208,9 +207,9 @@ bool CPlusPlusNameParser::ConsumeTemplateArgs() {
     case tok::less:
       // '<' is an attempt to open a subteamplte
       // check if parser is at the point where it's actually possible,
-      // otherwise it's just a part of an expression like 'sizeof(T)<(10)'.
-      // No need to do the same for '>' because compiler actually makes sure
-      // that '>' always surrounded by brackets to avoid ambiguity.
+      // otherwise it's just a part of an expression like 'sizeof(T)<(10)'. No
+      // need to do the same for '>' because compiler actually makes sure that
+      // '>' always surrounded by brackets to avoid ambiguity.
       if (can_open_template)
         ++template_counter;
       can_open_template = false;
@@ -242,8 +241,7 @@ bool CPlusPlusNameParser::ConsumeTemplateArgs() {
     }
   }
 
-  assert(template_counter >= 0);
-  if (template_counter > 0) {
+  if (template_counter != 0) {
     return false;
   }
   start_position.Remove();
@@ -270,6 +268,28 @@ bool CPlusPlusNameParser::ConsumeAnonymousNamespace() {
   if (!ConsumeToken(tok::r_paren)) {
     return false;
   }
+  start_position.Remove();
+  return true;
+}
+
+bool CPlusPlusNameParser::ConsumeLambda() {
+  Bookmark start_position = SetBookmark();
+  if (!ConsumeToken(tok::l_brace)) {
+    return false;
+  }
+  constexpr llvm::StringLiteral g_lambda("lambda");
+  if (HasMoreTokens() && Peek().is(tok::raw_identifier) &&
+      Peek().getRawIdentifier() == g_lambda) {
+    // Put the matched brace back so we can use ConsumeBrackets
+    TakeBack();
+  } else {
+    return false;
+  }
+
+  if (!ConsumeBrackets(tok::l_brace, tok::r_brace)) {
+    return false;
+  }
+
   start_position.Remove();
   return true;
 }
@@ -309,6 +329,37 @@ bool CPlusPlusNameParser::ConsumeOperator() {
   }
 
   const auto &token = Peek();
+
+  // When clang generates debug info it adds template parameters to names.
+  // Since clang doesn't add a space between the name and the template parameter
+  // in some cases we are not generating valid C++ names e.g.:
+  //
+  //   operator<<A::B>
+  //
+  // In some of these cases we will not parse them correctly. This fixes the
+  // issue by detecting this case and inserting tok::less in place of
+  // tok::lessless and returning successfully that we consumed the operator.
+  if (token.getKind() == tok::lessless) {
+    // Make sure we have more tokens before attempting to look ahead one more.
+    if (m_next_token_index + 1 < m_tokens.size()) {
+      // Look ahead two tokens.
+      clang::Token n_token = m_tokens[m_next_token_index + 1];
+      // If we find ( or < then this is indeed operator<< no need for fix.
+      if (n_token.getKind() != tok::l_paren && n_token.getKind() != tok::less) {
+        clang::Token tmp_tok;
+        tmp_tok.startToken();
+        tmp_tok.setLength(1);
+        tmp_tok.setLocation(token.getLocation().getLocWithOffset(1));
+        tmp_tok.setKind(tok::less);
+
+        m_tokens[m_next_token_index] = tmp_tok;
+
+        start_position.Remove();
+        return true;
+      }
+    }
+  }
+
   switch (token.getKind()) {
   case tok::kw_new:
   case tok::kw_delete:
@@ -367,10 +418,9 @@ void CPlusPlusNameParser::SkipFunctionQualifiers() {
 bool CPlusPlusNameParser::ConsumeBuiltinType() {
   bool result = false;
   bool continue_parsing = true;
-  // Built-in types can be made of a few keywords
-  // like 'unsigned long long int'. This function
-  // consumes all built-in type keywords without
-  // checking if they make sense like 'unsigned char void'.
+  // Built-in types can be made of a few keywords like 'unsigned long long
+  // int'. This function consumes all built-in type keywords without checking
+  // if they make sense like 'unsigned char void'.
   while (continue_parsing && HasMoreTokens()) {
     switch (Peek().getKind()) {
     case tok::kw_short:
@@ -502,6 +552,15 @@ CPlusPlusNameParser::ParseFullNameImpl() {
       state = State::AfterTwoColons;
       break;
     }
+    case tok::l_brace:
+      if (state == State::Beginning || state == State::AfterTwoColons) {
+        if (ConsumeLambda()) {
+          state = State::AfterIdentifier;
+          break;
+        }
+      }
+      continue_parsing = false;
+      break;
     case tok::coloncolon: // Type nesting delimiter.
       if (state != State::Beginning && state != State::AfterIdentifier &&
           state != State::AfterTemplate) {
@@ -597,7 +656,7 @@ static const clang::LangOptions &GetLangOptions() {
     g_options.CPlusPlus = true;
     g_options.CPlusPlus11 = true;
     g_options.CPlusPlus14 = true;
-    g_options.CPlusPlus1z = true;
+    g_options.CPlusPlus17 = true;
   });
   return g_options;
 }
@@ -612,6 +671,8 @@ static const llvm::StringMap<tok::TokenKind> &GetKeywordsMap() {
 }
 
 void CPlusPlusNameParser::ExtractTokens() {
+  if (m_text.empty())
+    return;
   clang::Lexer lexer(clang::SourceLocation(), GetLangOptions(), m_text.data(),
                      m_text.data(), m_text.data() + m_text.size());
   const auto &kw_map = GetKeywordsMap();

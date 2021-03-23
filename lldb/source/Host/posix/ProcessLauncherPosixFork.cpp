@@ -1,9 +1,8 @@
-//===-- ProcessLauncherLinux.cpp --------------------------------*- C++ -*-===//
+//===-- ProcessLauncherPosixFork.cpp --------------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -11,22 +10,25 @@
 #include "lldb/Host/Host.h"
 #include "lldb/Host/HostProcess.h"
 #include "lldb/Host/Pipe.h"
-#include "lldb/Target/ProcessLaunchInfo.h"
+#include "lldb/Host/ProcessLaunchInfo.h"
 #include "lldb/Utility/FileSpec.h"
 #include "lldb/Utility/Log.h"
+#include "llvm/Support/Errno.h"
 
 #include <limits.h>
 #include <sys/ptrace.h>
 #include <sys/wait.h>
+#include <unistd.h>
 
 #include <sstream>
+#include <csignal>
 
 #ifdef __ANDROID__
 #include <android/api-level.h>
 #define PT_TRACE_ME PTRACE_TRACEME
 #endif
 
-#if defined(__ANDROID_API__) && __ANDROID_API__ < 21
+#if defined(__ANDROID_API__) && __ANDROID_API__ < 15
 #include <linux/personality.h>
 #elif defined(__linux__)
 #include <sys/personality.h>
@@ -35,26 +37,21 @@
 using namespace lldb;
 using namespace lldb_private;
 
-static void FixupEnvironment(Args &env) {
+static void FixupEnvironment(Environment &env) {
 #ifdef __ANDROID__
   // If there is no PATH variable specified inside the environment then set the
   // path to /system/bin. It is required because the default path used by
   // execve() is wrong on android.
-  static const char *path = "PATH=";
-  for (auto &entry : env.entries()) {
-    if (entry.ref.startswith(path))
-      return;
-  }
-  env.AppendArgument(llvm::StringRef("PATH=/system/bin"));
+  env.try_emplace("PATH", "/system/bin");
 #endif
 }
 
 static void LLVM_ATTRIBUTE_NORETURN ExitWithError(int error_fd,
                                                   const char *operation) {
-  std::ostringstream os;
-  os << operation << " failed: " << strerror(errno);
-  write(error_fd, os.str().data(), os.str().size());
-  close(error_fd);
+  int err = errno;
+  llvm::raw_fd_ostream os(error_fd, true);
+  os << operation << " failed: " << llvm::sys::StrError(err);
+  os.flush();
   _exit(1);
 }
 
@@ -75,7 +72,8 @@ static void DisableASLRIfRequested(int error_fd, const ProcessLaunchInfo &info) 
 
 static void DupDescriptor(int error_fd, const FileSpec &file_spec, int fd,
                           int flags) {
-  int target_fd = ::open(file_spec.GetCString(), flags, 0666);
+  int target_fd = llvm::sys::RetryAfterSignal(-1, ::open,
+      file_spec.GetCString(), flags, 0666);
 
   if (target_fd == -1)
     ExitWithError(error_fd, "DupDescriptor-open");
@@ -92,14 +90,6 @@ static void DupDescriptor(int error_fd, const FileSpec &file_spec, int fd,
 
 static void LLVM_ATTRIBUTE_NORETURN ChildFunc(int error_fd,
                                               const ProcessLaunchInfo &info) {
-  // First, make sure we disable all logging. If we are logging to stdout, our
-  // logs can be mistaken for inferior output.
-  Log::DisableAllLogChannels();
-
-  // Do not inherit setgid powers.
-  if (setgid(getgid()) != 0)
-    ExitWithError(error_fd, "setgid");
-
   if (info.GetFlags().Test(eLaunchFlagLaunchInSeparateProcessGroup)) {
     if (setpgid(0, 0) != 0)
       ExitWithError(error_fd, "setpgid");
@@ -133,23 +123,26 @@ static void LLVM_ATTRIBUTE_NORETURN ChildFunc(int error_fd,
     ExitWithError(error_fd, "chdir");
 
   DisableASLRIfRequested(error_fd, info);
-  Args env = info.GetEnvironmentEntries();
+  Environment env = info.GetEnvironment();
   FixupEnvironment(env);
-  const char **envp = env.GetConstArgumentVector();
+  Environment::Envp envp = env.getEnvp();
 
-  // Clear the signal mask to prevent the child from being affected by
-  // any masking done by the parent.
+  // Clear the signal mask to prevent the child from being affected by any
+  // masking done by the parent.
   sigset_t set;
   if (sigemptyset(&set) != 0 ||
       pthread_sigmask(SIG_SETMASK, &set, nullptr) != 0)
     ExitWithError(error_fd, "pthread_sigmask");
 
   if (info.GetFlags().Test(eLaunchFlagDebug)) {
+    // Do not inherit setgid powers.
+    if (setgid(getgid()) != 0)
+      ExitWithError(error_fd, "setgid");
+
     // HACK:
     // Close everything besides stdin, stdout, and stderr that has no file
     // action to avoid leaking. Only do this when debugging, as elsewhere we
-    // actually rely on
-    // passing open descriptors to child processes.
+    // actually rely on passing open descriptors to child processes.
     for (int fd = 3; fd < sysconf(_SC_OPEN_MAX); ++fd)
       if (!info.GetFileActionForFD(fd) && fd != error_fd)
         close(fd);
@@ -160,26 +153,20 @@ static void LLVM_ATTRIBUTE_NORETURN ChildFunc(int error_fd,
   }
 
   // Execute.  We should never return...
-  execve(argv[0], const_cast<char *const *>(argv),
-         const_cast<char *const *>(envp));
+  execve(argv[0], const_cast<char *const *>(argv), envp);
 
 #if defined(__linux__)
   if (errno == ETXTBSY) {
-    // On android M and earlier we can get this error because the adb deamon can
-    // hold a write
-    // handle on the executable even after it has finished uploading it. This
-    // state lasts
-    // only a short time and happens only when there are many concurrent adb
-    // commands being
-    // issued, such as when running the test suite. (The file remains open when
-    // someone does
-    // an "adb shell" command in the fork() child before it has had a chance to
-    // exec.) Since
-    // this state should clear up quickly, wait a while and then give it one
-    // more go.
+    // On android M and earlier we can get this error because the adb daemon
+    // can hold a write handle on the executable even after it has finished
+    // uploading it. This state lasts only a short time and happens only when
+    // there are many concurrent adb commands being issued, such as when
+    // running the test suite. (The file remains open when someone does an "adb
+    // shell" command in the fork() child before it has had a chance to exec.)
+    // Since this state should clear up quickly, wait a while and then give it
+    // one more go.
     usleep(50000);
-    execve(argv[0], const_cast<char *const *>(argv),
-           const_cast<char *const *>(envp));
+    execve(argv[0], const_cast<char *const *>(argv), envp);
   }
 #endif
 
@@ -190,7 +177,7 @@ static void LLVM_ATTRIBUTE_NORETURN ChildFunc(int error_fd,
 
 HostProcess
 ProcessLauncherPosixFork::LaunchProcess(const ProcessLaunchInfo &launch_info,
-                                        Error &error) {
+                                        Status &error) {
   char exe_path[PATH_MAX];
   launch_info.GetExecutableFile().GetPath(exe_path, sizeof(exe_path));
 
@@ -204,8 +191,8 @@ ProcessLauncherPosixFork::LaunchProcess(const ProcessLaunchInfo &launch_info,
   ::pid_t pid = ::fork();
   if (pid == -1) {
     // Fork failed
-    error.SetErrorStringWithFormat("Fork failed with error message: %s",
-                                   strerror(errno));
+    error.SetErrorStringWithFormatv("Fork failed with error message: {0}",
+                                    llvm::sys::StrError());
     return HostProcess(LLDB_INVALID_PROCESS_ID);
   }
   if (pid == 0) {
@@ -225,7 +212,7 @@ ProcessLauncherPosixFork::LaunchProcess(const ProcessLaunchInfo &launch_info,
 
   error.SetErrorString(buf);
 
-  waitpid(pid, nullptr, 0);
+  llvm::sys::RetryAfterSignal(-1, waitpid, pid, nullptr, 0);
 
   return HostProcess();
 }

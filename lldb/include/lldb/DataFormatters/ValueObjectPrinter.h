@@ -1,21 +1,15 @@
 //===-- ValueObjectPrinter.h ---------------------------------------*- C++
 //-*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef lldb_ValueObjectPrinter_h_
-#define lldb_ValueObjectPrinter_h_
+#ifndef LLDB_DATAFORMATTERS_VALUEOBJECTPRINTER_H
+#define LLDB_DATAFORMATTERS_VALUEOBJECTPRINTER_H
 
-// C Includes
-// C++ Includes
-
-// Other libraries and framework includes
-// Project includes
 #include "lldb/lldb-private.h"
 #include "lldb/lldb-public.h"
 
@@ -23,10 +17,6 @@
 
 #include "lldb/DataFormatters/DumpValueObjectOptions.h"
 #include "lldb/Symbol/CompilerType.h"
-
-//#include <functional>
-//#include <memory>
-//#include <set>
 
 namespace lldb_private {
 
@@ -47,16 +37,16 @@ protected:
 
   InstancePointersSetSP m_printed_instance_pointers;
 
-  // only this class (and subclasses, if any) should ever be concerned with
-  // the depth mechanism
+  // only this class (and subclasses, if any) should ever be concerned with the
+  // depth mechanism
   ValueObjectPrinter(ValueObject *valobj, Stream *s,
                      const DumpValueObjectOptions &options,
                      const DumpValueObjectOptions::PointerDepth &ptr_depth,
                      uint32_t curr_depth,
                      InstancePointersSetSP printed_instance_pointers);
 
-  // we should actually be using delegating constructors here
-  // but some versions of GCC still have trouble with those
+  // we should actually be using delegating constructors here but some versions
+  // of GCC still have trouble with those
   void Init(ValueObject *valobj, Stream *s,
             const DumpValueObjectOptions &options,
             const DumpValueObjectOptions::PointerDepth &ptr_depth,
@@ -67,11 +57,9 @@ protected:
 
   const char *GetDescriptionForDisplay();
 
-  const char *GetRootNameForDisplay(const char *if_fail = nullptr);
+  const char *GetRootNameForDisplay();
 
   bool ShouldPrintValueObject();
-
-  bool ShouldPrintValidation();
 
   bool IsNil();
 
@@ -84,10 +72,6 @@ protected:
   bool IsInstancePointer();
 
   bool IsAggregate();
-
-  bool PrintValidationMarkerIfNeeded();
-
-  bool PrintValidationErrorIfNeeded();
 
   bool PrintLocationIfNeeded();
 
@@ -154,13 +138,13 @@ private:
   std::string m_summary;
   std::string m_error;
   bool m_val_summary_ok;
-  std::pair<TypeValidatorResult, std::string> m_validation;
 
   friend struct StringSummaryFormat;
 
-  DISALLOW_COPY_AND_ASSIGN(ValueObjectPrinter);
+  ValueObjectPrinter(const ValueObjectPrinter &) = delete;
+  const ValueObjectPrinter &operator=(const ValueObjectPrinter &) = delete;
 };
 
 } // namespace lldb_private
 
-#endif // lldb_ValueObjectPrinter_h_
+#endif // LLDB_DATAFORMATTERS_VALUEOBJECTPRINTER_H

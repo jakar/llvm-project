@@ -1,18 +1,17 @@
 //===- Core/SymbolTable.cpp - Main Symbol Table ---------------------------===//
 //
-//                             The LLVM Linker
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
 #include "lld/Core/SymbolTable.h"
+#include "lld/Common/LLVM.h"
 #include "lld/Core/AbsoluteAtom.h"
 #include "lld/Core/Atom.h"
 #include "lld/Core/DefinedAtom.h"
 #include "lld/Core/File.h"
-#include "lld/Core/LLVM.h"
 #include "lld/Core/LinkingContext.h"
 #include "lld/Core/Resolver.h"
 #include "lld/Core/SharedLibraryAtom.h"
@@ -158,21 +157,15 @@ bool SymbolTable::addByName(const Atom &newAtom) {
         useNew = true;
         break;
       }
-      llvm::errs() << "Size mismatch: "
-                   << existing->name() << " (" << existingSize << ") "
-                   << newAtom.name() << " (" << newSize << ")\n";
-      // fallthrough
+      llvm::errs() << "Size mismatch: " << existing->name() << " ("
+                   << existingSize << ") " << newAtom.name() << " (" << newSize
+                   << ")\n";
+      LLVM_FALLTHROUGH;
     }
     case MCR_Error:
-      llvm::errs() << "Duplicate symbols: "
-                   << existing->name()
-                   << ":"
-                   << existing->file().path()
-                   << " and "
-                   << newAtom.name()
-                   << ":"
-                   << newAtom.file().path()
-                   << "\n";
+      llvm::errs() << "Duplicate symbols: " << existing->name() << ":"
+                   << existing->file().path() << " and " << newAtom.name()
+                   << ":" << newAtom.file().path() << "\n";
       llvm::report_fatal_error("duplicate symbol error");
       break;
     }

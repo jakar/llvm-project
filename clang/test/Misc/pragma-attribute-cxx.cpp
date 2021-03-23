@@ -17,7 +17,7 @@ class testClass2 {
   testClass2 *operator -> ();
 };
 // CHECK-LABEL: CXXRecordDecl{{.*}} testClass2
-// CHECK-NEXT: AnnotateAttr{{.*}} "test"
+// CHECK: AnnotateAttr{{.*}} "test"
 // CHECK: CXXMethodDecl{{.*}} testMethod1
 // CHECK-NEXT: ParmVarDecl{{.*}} param
 // CHECK-NEXT: AnnotateAttr{{.*}} "test"
@@ -76,7 +76,7 @@ void testLambdaMethod() {
 // CHECK-LABEL: FunctionDecl{{.*}} testLambdaMethod
 // CHECK: LambdaExpr
 // CHECK-NEXT: CXXRecordDecl
-// CHECK-NEXT: CXXMethodDecl{{.*}} operator()
+// CHECK: CXXMethodDecl{{.*}} operator()
 // CHECK-NEXT: CompoundStmt
 // CHECK-NEXT: AnnotateAttr{{.*}} "test"
 
@@ -87,14 +87,14 @@ void testLambdaMethod() {
 int testCI1 = 1;
 // CHECK-LABEL: VarDecl{{.*}} testCI1
 // CHECK-NEXT: IntegerLiteral
-// CHECK-NEXT: RequireConstantInitAttr
+// CHECK-NEXT: ConstInitAttr
 
 #pragma clang attribute pop
 
 int testNoCI = 0;
 // CHECK-LABEL: VarDecl{{.*}} testNoCI
 // CHECK-NEXT: IntegerLiteral
-// CHECK-NOT: RequireConstantInitAttr
+// CHECK-NOT: ConstInitAttr
 
 // Check support for CXX11 style attributes
 #pragma clang attribute push ([[noreturn]], apply_to = function)

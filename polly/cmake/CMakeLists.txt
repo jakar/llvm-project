@@ -1,9 +1,4 @@
 # Keep this in sync with llvm/cmake/CMakeLists.txt!
-if (LLVM_INSTALL_ROOT)
-  # this simplifies things down the road, by not requiring to distinguish
-  # between in-tree and out of tree builds
-  set(LLVM_BINARY_DIR ${LLVM_INSTALL_ROOT})
-endif()
 
 set(LLVM_INSTALL_PACKAGE_DIR "lib${LLVM_LIBDIR_SUFFIX}/cmake/llvm")
 set(POLLY_INSTALL_PACKAGE_DIR "lib${LLVM_LIBDIR_SUFFIX}/cmake/polly")
@@ -15,8 +10,8 @@ else()
 endif()
 
 set(POLLY_CONFIG_EXPORTED_TARGETS Polly ${ISL_TARGET})
-if (NOT MSVC)
-  # LLVMPolly is a dummy target on Win
+if (NOT WIN32 AND LLVM_ENABLE_PIC)
+  # LLVMPolly is a dummy target on Win or if PIC code is disabled.
   list(APPEND POLLY_CONFIG_EXPORTED_TARGETS LLVMPolly)
 endif()
 if (POLLY_ENABLE_GPGPU_CODEGEN)
@@ -65,7 +60,7 @@ foreach(tgt IN LISTS POLLY_CONFIG_EXPORTED_TARGETS)
   if (NOT tgt_type STREQUAL "INTERFACE_LIBRARY")
     set(POLLY_EXPORTS
       "set_target_properties(${tgt} PROPERTIES
-              IMPORTED_LOCATION_$<UPPER_CASE:$<CONFIG>> $<TARGET_FILE:${tgt}>)
+              IMPORTED_LOCATION$<$<NOT:$<CONFIG:>>:_$<UPPER_CASE:$<CONFIG>>> $<TARGET_FILE:${tgt}>)
 ${POLLY_EXPORTS}")
   endif()
 endforeach(tgt)
@@ -116,7 +111,7 @@ foreach(tgt IN LISTS POLLY_CONFIG_EXPORTED_TARGETS)
   if (NOT tgt_type STREQUAL "INTERFACE_LIBRARY")
     set(POLLY_EXPORTS
 "set_target_properties(${tgt} PROPERTIES
-        IMPORTED_LOCATION_$<UPPER_CASE:$<CONFIG>> \${CMAKE_CURRENT_LIST_DIR}/${tgt_path})
+        IMPORTED_LOCATION$<$<NOT:$<CONFIG:>>:_$<UPPER_CASE:$<CONFIG>>> \${CMAKE_CURRENT_LIST_DIR}/${tgt_path})
 ${POLLY_EXPORTS}")
   endif()
 endforeach(tgt)

@@ -1,9 +1,8 @@
 //===-- SparcMCTargetDesc.cpp - Sparc Target Descriptions -----------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -12,9 +11,10 @@
 //===----------------------------------------------------------------------===//
 
 #include "SparcMCTargetDesc.h"
-#include "InstPrinter/SparcInstPrinter.h"
+#include "SparcInstPrinter.h"
 #include "SparcMCAsmInfo.h"
 #include "SparcTargetStreamer.h"
+#include "TargetInfo/SparcTargetInfo.h"
 #include "llvm/MC/MCInstrInfo.h"
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCSubtargetInfo.h"
@@ -33,19 +33,21 @@ using namespace llvm;
 #include "SparcGenRegisterInfo.inc"
 
 static MCAsmInfo *createSparcMCAsmInfo(const MCRegisterInfo &MRI,
-                                       const Triple &TT) {
+                                       const Triple &TT,
+                                       const MCTargetOptions &Options) {
   MCAsmInfo *MAI = new SparcELFMCAsmInfo(TT);
   unsigned Reg = MRI.getDwarfRegNum(SP::O6, true);
-  MCCFIInstruction Inst = MCCFIInstruction::createDefCfa(nullptr, Reg, 0);
+  MCCFIInstruction Inst = MCCFIInstruction::cfiDefCfa(nullptr, Reg, 0);
   MAI->addInitialFrameState(Inst);
   return MAI;
 }
 
 static MCAsmInfo *createSparcV9MCAsmInfo(const MCRegisterInfo &MRI,
-                                         const Triple &TT) {
+                                         const Triple &TT,
+                                         const MCTargetOptions &Options) {
   MCAsmInfo *MAI = new SparcELFMCAsmInfo(TT);
   unsigned Reg = MRI.getDwarfRegNum(SP::O6, true);
-  MCCFIInstruction Inst = MCCFIInstruction::createDefCfa(nullptr, Reg, 2047);
+  MCCFIInstruction Inst = MCCFIInstruction::cfiDefCfa(nullptr, Reg, 2047);
   MAI->addInitialFrameState(Inst);
   return MAI;
 }
@@ -66,44 +68,7 @@ static MCSubtargetInfo *
 createSparcMCSubtargetInfo(const Triple &TT, StringRef CPU, StringRef FS) {
   if (CPU.empty())
     CPU = (TT.getArch() == Triple::sparcv9) ? "v9" : "v8";
-  return createSparcMCSubtargetInfoImpl(TT, CPU, FS);
-}
-
-// Code models. Some only make sense for 64-bit code.
-//
-// SunCC  Reloc   CodeModel  Constraints
-// abs32  Static  Small      text+data+bss linked below 2^32 bytes
-// abs44  Static  Medium     text+data+bss linked below 2^44 bytes
-// abs64  Static  Large      text smaller than 2^31 bytes
-// pic13  PIC_    Small      GOT < 2^13 bytes
-// pic32  PIC_    Medium     GOT < 2^32 bytes
-//
-// All code models require that the text segment is smaller than 2GB.
-
-static void adjustCodeGenOpts(const Triple &TT, Reloc::Model RM,
-                              CodeModel::Model &CM) {
-  // The default 32-bit code model is abs32/pic32 and the default 32-bit
-  // code model for JIT is abs32.
-  switch (CM) {
-  default: break;
-  case CodeModel::Default:
-  case CodeModel::JITDefault: CM = CodeModel::Small; break;
-  }
-}
-
-static void adjustCodeGenOptsV9(const Triple &TT, Reloc::Model RM,
-                                CodeModel::Model &CM) {
-  // The default 64-bit code model is abs44/pic32 and the default 64-bit
-  // code model for JIT is abs64.
-  switch (CM) {
-  default:  break;
-  case CodeModel::Default:
-    CM = RM == Reloc::PIC_ ? CodeModel::Small : CodeModel::Medium;
-    break;
-  case CodeModel::JITDefault:
-    CM = CodeModel::Large;
-    break;
-  }
+  return createSparcMCSubtargetInfoImpl(TT, CPU, /*TuneCPU*/ CPU, FS);
 }
 
 static MCTargetStreamer *
@@ -126,7 +91,7 @@ static MCInstPrinter *createSparcMCInstPrinter(const Triple &T,
   return new SparcInstPrinter(MAI, MII, MRI);
 }
 
-extern "C" void LLVMInitializeSparcTargetMC() {
+extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeSparcTargetMC() {
   // Register the MC asm info.
   RegisterMCAsmInfoFn X(getTheSparcTarget(), createSparcMCAsmInfo);
   RegisterMCAsmInfoFn Y(getTheSparcV9Target(), createSparcV9MCAsmInfo);
@@ -159,12 +124,4 @@ extern "C" void LLVMInitializeSparcTargetMC() {
     // Register the MCInstPrinter
     TargetRegistry::RegisterMCInstPrinter(*T, createSparcMCInstPrinter);
   }
-
-  // Register the MC codegen info.
-  TargetRegistry::registerMCAdjustCodeGenOpts(getTheSparcTarget(),
-                                              adjustCodeGenOpts);
-  TargetRegistry::registerMCAdjustCodeGenOpts(getTheSparcV9Target(),
-                                              adjustCodeGenOptsV9);
-  TargetRegistry::registerMCAdjustCodeGenOpts(getTheSparcelTarget(),
-                                              adjustCodeGenOpts);
 }

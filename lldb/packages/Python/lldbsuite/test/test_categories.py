@@ -19,22 +19,30 @@ debug_info_categories = [
 ]
 
 all_categories = {
-    'dataformatters': 'Tests related to the type command and the data formatters subsystem',
-    'dwarf': 'Tests that can be run with DWARF debug information',
-    'dwo': 'Tests that can be run with DWO debug information',
-    'dsym': 'Tests that can be run with DSYM debug information',
-    'gmodules': 'Tests that can be run with -gmodules debug information',
-    'expression': 'Tests related to the expression parser',
-    'libc++': 'Test for libc++ data formatters',
-    'objc': 'Tests related to the Objective-C programming language support',
-    'pyapi': 'Tests related to the Python API',
     'basic_process': 'Basic process execution sniff tests.',
     'cmdline': 'Tests related to the LLDB command-line interface',
+    'darwin-log': 'Darwin log tests',
+    'dataformatters': 'Tests related to the type command and the data formatters subsystem',
+    'debugserver': 'Debugserver tests',
+    'dsym': 'Tests that can be run with DSYM debug information',
+    'dwarf': 'Tests that can be run with DWARF debug information',
+    'dwo': 'Tests that can be run with DWO debug information',
     'dyntype': 'Tests related to dynamic type support',
-    'stresstest': 'Tests related to stressing lldb limits',
+    'expression': 'Tests related to the expression parser',
     'flakey': 'Flakey test cases, i.e. tests that do not reliably pass at each execution',
-    'lldb-mi': 'lldb-mi tests',
-    'darwin-log': 'Darwin log tests'}
+    'gmodules': 'Tests that can be run with -gmodules debug information',
+    'instrumentation-runtime': 'Tests for the instrumentation runtime plugins',
+    'libc++': 'Test for libc++ data formatters',
+    'libstdcxx': 'Test for libstdcxx data formatters',
+    'lldb-server': 'Tests related to lldb-server',
+    'lldb-vscode': 'Visual Studio Code debug adaptor tests',
+    'llgs': 'Tests for the gdb-server functionality of lldb-server',
+    'objc': 'Tests related to the Objective-C programming language support',
+    'pyapi': 'Tests related to the Python API',
+    'std-module': 'Tests related to importing the std module',
+    'stresstest': 'Tests related to stressing lldb limits',
+    'watchpoint': 'Watchpoint-related tests',
+}
 
 
 def unique_string_match(yourentry, list):
@@ -53,10 +61,10 @@ def is_supported_on_platform(category, platform, compiler_path):
         # -gsplit-dwarf is not implemented by clang on Windows.
         return platform in ["linux", "freebsd"]
     elif category == "dsym":
-        return platform in ["darwin", "macosx", "ios"]
+        return platform in ["darwin", "macosx", "ios", "watchos", "tvos", "bridgeos"]
     elif category == "gmodules":
         # First, check to see if the platform can even support gmodules.
-        if platform not in ["linux", "freebsd", "darwin", "macosx", "ios"]:
+        if platform not in ["freebsd", "darwin", "macosx", "ios", "watchos", "tvos", "bridgeos"]:
             return False
         return gmodules.is_compiler_clang_with_gmodules(compiler_path)
     return True

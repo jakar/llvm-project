@@ -1,10 +1,10 @@
-; RUN: llc < %s -march=x86            | FileCheck %s
+; RUN: llc < %s -mtriple=i686--            | FileCheck %s
 ; RUN: llc < %s -mtriple=x86_64-linux | FileCheck %s
 ; CHECK-NOT: lea
 
-@B = external global [1000 x i8], align 32
-@A = external global [1000 x i8], align 32
-@P = external global [1000 x i8], align 32
+@B = external dso_local global [1000 x i8], align 32
+@A = external dso_local global [1000 x i8], align 32
+@P = external dso_local global [1000 x i8], align 32
 
 define void @foo(i32 %m) nounwind {
 entry:

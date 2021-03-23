@@ -1,33 +1,30 @@
 //===-- SIMachineScheduler.h - SI Scheduler Interface -----------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
 /// \file
-/// \brief SI Machine Scheduler interface
+/// SI Machine Scheduler interface
 //
 //===----------------------------------------------------------------------===//
 
 #ifndef LLVM_LIB_TARGET_AMDGPU_SIMACHINESCHEDULER_H
 #define LLVM_LIB_TARGET_AMDGPU_SIMACHINESCHEDULER_H
 
-#include "SIInstrInfo.h"
-#include "llvm/CodeGen/MachineBasicBlock.h"
 #include "llvm/CodeGen/MachineScheduler.h"
 #include "llvm/CodeGen/RegisterPressure.h"
 #include "llvm/CodeGen/ScheduleDAG.h"
-#include <cassert>
 #include <cstdint>
-#include <map>
-#include <memory>
 #include <set>
 #include <vector>
 
 namespace llvm {
+
+class SIInstrInfo;
+class SIRegisterInfo;
 
 enum SIScheduleCandReason {
   NoCand,
@@ -249,7 +246,6 @@ class SIScheduleBlockCreator {
 
 public:
   SIScheduleBlockCreator(SIScheduleDAGMI *DAG);
-  ~SIScheduleBlockCreator();
 
   SIScheduleBlocks
   getBlocks(SISchedulerBlockCreatorVariant BlockVariant);
@@ -301,6 +297,9 @@ private:
   // Put in one group all instructions with no users in this scheduling region
   // (we'd want these groups be at the end).
   void regroupNoUserInstructions();
+
+  // Give Reserved color to export instructions
+  void colorExports();
 
   void createBlocksForVariant(SISchedulerBlockCreatorVariant BlockVariant);
 
@@ -434,9 +433,6 @@ class SIScheduleDAGMI final : public ScheduleDAGMILive {
   std::vector<unsigned> ScheduledSUnits;
   std::vector<unsigned> ScheduledSUnitsInv;
 
-  unsigned VGPRSetID;
-  unsigned SGPRSetID;
-
 public:
   SIScheduleDAGMI(MachineSchedContext *C);
 
@@ -457,7 +453,7 @@ public:
   MachineRegisterInfo *getMRI() { return &MRI; }
   const TargetRegisterInfo *getTRI() { return TRI; }
   ScheduleDAGTopologicalSort *GetTopo() { return &Topo; }
-  SUnit& getEntrySU() { return EntrySU; }
+  SUnit &getEntrySU() { return EntrySU; }
   SUnit& getExitSU() { return ExitSU; }
 
   void restoreSULinksLeft();
@@ -482,9 +478,6 @@ public:
     }
     return OutRegs;
   };
-
-  unsigned getVGPRSetID() const { return VGPRSetID; }
-  unsigned getSGPRSetID() const { return SGPRSetID; }
 
 private:
   void topologicalSort();

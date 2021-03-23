@@ -1,5 +1,6 @@
 ; RUN: opt < %s -licm -S | FileCheck %s
 ; RUN: opt < %s -aa-pipeline=basic-aa -passes='require<opt-remark-emit>,loop(licm)' -S | FileCheck %s
+; RUN: opt < %s -licm -enable-mssa-loop-dependency=true -verify-memoryssa -S | FileCheck %s
 
 @X = global i32 0		; <i32*> [#uses=1]
 
@@ -125,10 +126,32 @@ ifend:                                            ; preds = %tailrecurse
   ret { i32*, i32 } %d
 }
 
-; CHECK: define i32 @hoist_bitreverse(i32)
+; CHECK: define void @test6(float %f)
+; CHECK: fneg
+; CHECK: br label %for.body
+define void @test6(float %f) #2 {
+entry:
+  br label %for.body
+
+for.body:                                         ; preds = %for.body, %entry
+  %i = phi i32 [ 0, %entry ], [ %inc, %for.body ]
+  call void @foo_may_call_exit(i32 0)
+  %neg = fneg float %f
+  call void @use(float %neg)
+  %inc = add nsw i32 %i, 1
+  %cmp = icmp slt i32 %inc, 10000
+  br i1 %cmp, label %for.body, label %for.end
+
+for.end:                                          ; preds = %for.body
+  ret void
+}
+
+declare void @use(float)
+
+; CHECK: define i32 @hoist_bitreverse(i32 %0)
 ; CHECK: bitreverse
 ; CHECK: br label %header
-define i32 @hoist_bitreverse(i32)  {
+define i32 @hoist_bitreverse(i32 %0)  {
   br label %header
 
 header:
@@ -149,6 +172,23 @@ latch:
 return:
   ret i32 %sum
 }
+
+; Can neither sink nor hoist
+define i32 @test_volatile(i1 %c) {
+; CHECK-LABEL: @test_volatile(
+; CHECK-LABEL: Loop:
+; CHECK: load volatile i32, i32* @X
+; CHECK-LABEL: Out:
+  br label %Loop
+
+Loop:
+  %A = load volatile i32, i32* @X
+  br i1 %c, label %Loop, label %Out
+
+Out:
+  ret i32 %A
+}
+
 
 declare {}* @llvm.invariant.start.p0i8(i64, i8* nocapture) nounwind readonly
 declare void @llvm.invariant.end.p0i8({}*, i64, i8* nocapture) nounwind
@@ -307,6 +347,39 @@ loop:
   store atomic i32 5, i32 * %addr.i unordered, align 8
   fence release
   %invst = call {}* @llvm.invariant.start.p0i8(i64 4, i8* %gep)
+  %volload = load atomic i8, i8* %volatile unordered, align 8
+  fence acquire
+  %volchk = icmp eq i8 %volload, 0
+  %addrld = load atomic i32, i32* %addr.i unordered, align 8
+  %sel = select i1 %volchk, i32 0, i32 %addrld
+  %sum.next = add i32 %sel, %sum
+  %indvar.next = add i32 %indvar, 1
+  %cond = icmp slt i32 %indvar.next, %n
+  br i1 %cond, label %loop, label %loopexit
+
+loopexit:
+  ret i32 %sum
+}
+
+; We can't hoist the invariant load out of the loop because
+; the marker is given a variable size (-1).
+define i32 @test_fence5(i8* %addr, i32 %n, i8* %volatile) {
+; CHECK-LABEL: @test_fence5
+; CHECK-LABEL: entry
+; CHECK: invariant.start
+; CHECK-NOT: %addrld = load atomic i32, i32* %addr.i unordered, align 8
+; CHECK: br label %loop
+entry:
+  %gep = getelementptr inbounds i8, i8* %addr, i64 8
+  %addr.i = bitcast i8* %gep to i32 *
+  store atomic i32 5, i32 * %addr.i unordered, align 8
+  fence release
+  %invst = call {}* @llvm.invariant.start.p0i8(i64 -1, i8* %gep)
+  br label %loop
+
+loop:
+  %indvar = phi i32 [ %indvar.next, %loop ], [ 0, %entry ]
+  %sum = phi i32 [ %sum.next, %loop ], [ 0, %entry ]
   %volload = load atomic i8, i8* %volatile unordered, align 8
   fence acquire
   %volchk = icmp eq i8 %volload, 0

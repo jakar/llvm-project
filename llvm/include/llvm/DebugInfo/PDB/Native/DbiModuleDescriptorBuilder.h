@@ -1,19 +1,19 @@
 //===- DbiModuleDescriptorBuilder.h - PDB module information ----*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_DEBUGINFO_PDB_RAW_DBIMODULEDESCRIPTORBUILDER_H
-#define LLVM_DEBUGINFO_PDB_RAW_DBIMODULEDESCRIPTORBUILDER_H
+#ifndef LLVM_DEBUGINFO_PDB_NATIVE_DBIMODULEDESCRIPTORBUILDER_H
+#define LLVM_DEBUGINFO_PDB_NATIVE_DBIMODULEDESCRIPTORBUILDER_H
 
 #include "llvm/ADT/StringRef.h"
-#include "llvm/DebugInfo/CodeView/ModuleDebugFileChecksumFragment.h"
-#include "llvm/DebugInfo/CodeView/ModuleDebugInlineeLinesFragment.h"
-#include "llvm/DebugInfo/CodeView/ModuleDebugLineFragment.h"
+#include "llvm/DebugInfo/CodeView/DebugChecksumsSubsection.h"
+#include "llvm/DebugInfo/CodeView/DebugInlineeLinesSubsection.h"
+#include "llvm/DebugInfo/CodeView/DebugLinesSubsection.h"
+#include "llvm/DebugInfo/CodeView/DebugSubsectionRecord.h"
 #include "llvm/DebugInfo/CodeView/SymbolRecord.h"
 #include "llvm/DebugInfo/PDB/Native/RawTypes.h"
 #include "llvm/Support/Error.h"
@@ -25,7 +25,7 @@ namespace llvm {
 class BinaryStreamWriter;
 
 namespace codeview {
-class ModuleDebugFragmentRecordBuilder;
+class DebugSubsectionRecordBuilder;
 }
 
 namespace msf {
@@ -33,6 +33,34 @@ class MSFBuilder;
 struct MSFLayout;
 }
 namespace pdb {
+
+// Represents merged or unmerged symbols. Merged symbols can be written to the
+// output file as is, but unmerged symbols must be rewritten first. In either
+// case, the size must be known up front.
+struct SymbolListWrapper {
+  explicit SymbolListWrapper(ArrayRef<uint8_t> Syms)
+      : SymPtr(const_cast<uint8_t *>(Syms.data())), SymSize(Syms.size()),
+        NeedsToBeMerged(false) {}
+  explicit SymbolListWrapper(void *SymSrc, uint32_t Length)
+      : SymPtr(SymSrc), SymSize(Length), NeedsToBeMerged(true) {}
+
+  ArrayRef<uint8_t> asArray() const {
+    return ArrayRef<uint8_t>(static_cast<const uint8_t *>(SymPtr), SymSize);
+  }
+
+  uint32_t size() const { return SymSize; }
+
+  void *SymPtr = nullptr;
+  uint32_t SymSize = 0;
+  bool NeedsToBeMerged = false;
+};
+
+/// Represents a string table reference at some offset in the module symbol
+/// stream.
+struct StringTableFixup {
+  uint32_t StrTabOffset = 0;
+  uint32_t SymOffsetOfReference = 0;
+};
 
 class DbiModuleDescriptorBuilder {
   friend class DbiStreamBuilder;
@@ -46,18 +74,41 @@ public:
   DbiModuleDescriptorBuilder &
   operator=(const DbiModuleDescriptorBuilder &) = delete;
 
+  void setPdbFilePathNI(uint32_t NI);
   void setObjFileName(StringRef Name);
-  void addSymbol(codeview::CVSymbol Symbol);
 
-  void addC13Fragment(std::unique_ptr<codeview::ModuleDebugLineFragment> Lines);
-  void addC13Fragment(
-      std::unique_ptr<codeview::ModuleDebugInlineeLineFragment> Inlinees);
-  void setC13FileChecksums(
-      std::unique_ptr<codeview::ModuleDebugFileChecksumFragment> Checksums);
+  // Callback to merge one source of unmerged symbols.
+  using MergeSymbolsCallback = Error (*)(void *Ctx, void *Symbols,
+                                         BinaryStreamWriter &Writer);
+
+  void setMergeSymbolsCallback(void *Ctx, MergeSymbolsCallback Callback) {
+    MergeSymsCtx = Ctx;
+    MergeSymsCallback = Callback;
+  }
+
+  void setStringTableFixups(std::vector<StringTableFixup> &&Fixups) {
+    StringTableFixups = std::move(Fixups);
+  }
+
+  void setFirstSectionContrib(const SectionContrib &SC);
+  void addSymbol(codeview::CVSymbol Symbol);
+  void addSymbolsInBulk(ArrayRef<uint8_t> BulkSymbols);
+
+  // Add symbols of known size which will be merged (rewritten) when committing
+  // the PDB to disk.
+  void addUnmergedSymbols(void *SymSrc, uint32_t SymLength);
+
+  void
+  addDebugSubsection(std::shared_ptr<codeview::DebugSubsection> Subsection);
+
+  void
+  addDebugSubsection(const codeview::DebugSubsectionRecord &SubsectionContents);
 
   uint16_t getStreamIndex() const;
   StringRef getModuleName() const { return ModuleName; }
   StringRef getObjFileName() const { return ObjFileName; }
+
+  unsigned getModuleIndex() const { return Layout.Mod; }
 
   ArrayRef<std::string> source_files() const {
     return makeArrayRef(SourceFiles);
@@ -65,11 +116,21 @@ public:
 
   uint32_t calculateSerializedLength() const;
 
+  /// Return the offset within the module symbol stream of the next symbol
+  /// record passed to addSymbol. Add four to account for the signature.
+  uint32_t getNextSymbolOffset() const { return SymbolByteSize + 4; }
+
   void finalize();
   Error finalizeMsfLayout();
 
-  Error commit(BinaryStreamWriter &ModiWriter, const msf::MSFLayout &MsfLayout,
-               WritableBinaryStreamRef MsfBuffer);
+  /// Commit the DBI descriptor to the DBI stream.
+  Error commit(BinaryStreamWriter &ModiWriter);
+
+  /// Commit the accumulated symbols to the module symbol stream. Safe to call
+  /// in parallel on different DbiModuleDescriptorBuilder objects. Only modifies
+  /// the pre-allocated stream in question.
+  Error commitSymbolStream(const msf::MSFLayout &MsfLayout,
+                           WritableBinaryStreamRef MsfBuffer);
 
 private:
   uint32_t calculateC13DebugInfoSize() const;
@@ -78,18 +139,18 @@ private:
   msf::MSFBuilder &MSF;
 
   uint32_t SymbolByteSize = 0;
+  uint32_t PdbFilePathNI = 0;
   std::string ModuleName;
   std::string ObjFileName;
   std::vector<std::string> SourceFiles;
-  std::vector<codeview::CVSymbol> Symbols;
+  std::vector<SymbolListWrapper> Symbols;
 
-  std::unique_ptr<codeview::ModuleDebugFileChecksumFragment> ChecksumInfo;
-  std::vector<std::unique_ptr<codeview::ModuleDebugLineFragment>> LineInfo;
-  std::vector<std::unique_ptr<codeview::ModuleDebugInlineeLineFragment>>
-      Inlinees;
+  void *MergeSymsCtx = nullptr;
+  MergeSymbolsCallback MergeSymsCallback = nullptr;
 
-  std::vector<std::unique_ptr<codeview::ModuleDebugFragmentRecordBuilder>>
-      C13Builders;
+  std::vector<StringTableFixup> StringTableFixups;
+
+  std::vector<codeview::DebugSubsectionRecordBuilder> C13Builders;
 
   ModuleInfoHeader Layout;
 };
@@ -98,4 +159,4 @@ private:
 
 } // end namespace llvm
 
-#endif // LLVM_DEBUGINFO_PDB_RAW_DBIMODULEDESCRIPTORBUILDER_H
+#endif // LLVM_DEBUGINFO_PDB_NATIVE_DBIMODULEDESCRIPTORBUILDER_H

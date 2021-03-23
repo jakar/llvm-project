@@ -1,9 +1,8 @@
 //===-- DOTGraphTraitsPass.h - Print/View dotty graphs-----------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -15,12 +14,10 @@
 #define LLVM_ANALYSIS_DOTGRAPHTRAITSPASS_H
 
 #include "llvm/Analysis/CFGPrinter.h"
-#include "llvm/Pass.h"
-#include "llvm/Support/FileSystem.h"
 
 namespace llvm {
 
-/// \brief Default traits class for extracting a graph from an analysis pass.
+/// Default traits class for extracting a graph from an analysis pass.
 ///
 /// This assumes that 'GraphT' is 'AnalysisT *' and so just passes it through.
 template <typename AnalysisT, typename GraphT = AnalysisT *>
@@ -30,13 +27,13 @@ struct DefaultAnalysisGraphTraits {
 
 template <
     typename AnalysisT, bool IsSimple, typename GraphT = AnalysisT *,
-    typename AnalysisGraphTraitsT = DefaultAnalysisGraphTraits<AnalysisT> >
+    typename AnalysisGraphTraitsT = DefaultAnalysisGraphTraits<AnalysisT, GraphT> >
 class DOTGraphTraitsViewer : public FunctionPass {
 public:
   DOTGraphTraitsViewer(StringRef GraphName, char &ID)
       : FunctionPass(ID), Name(GraphName) {}
 
-  /// @brief Return true if this function should be processed.
+  /// Return true if this function should be processed.
   ///
   /// An implementation of this class my override this function to indicate that
   /// only certain functions should be viewed.
@@ -72,13 +69,13 @@ private:
 
 template <
     typename AnalysisT, bool IsSimple, typename GraphT = AnalysisT *,
-    typename AnalysisGraphTraitsT = DefaultAnalysisGraphTraits<AnalysisT> >
+    typename AnalysisGraphTraitsT = DefaultAnalysisGraphTraits<AnalysisT, GraphT> >
 class DOTGraphTraitsPrinter : public FunctionPass {
 public:
   DOTGraphTraitsPrinter(StringRef GraphName, char &ID)
       : FunctionPass(ID), Name(GraphName) {}
 
-  /// @brief Return true if this function should be processed.
+  /// Return true if this function should be processed.
   ///
   /// An implementation of this class my override this function to indicate that
   /// only certain functions should be printed.
@@ -100,7 +97,7 @@ public:
 
     errs() << "Writing '" << Filename << "'...";
 
-    raw_fd_ostream File(Filename, EC, sys::fs::F_Text);
+    raw_fd_ostream File(Filename, EC, sys::fs::OF_Text);
     std::string GraphName = DOTGraphTraits<GraphT>::getGraphName(Graph);
     std::string Title = GraphName + " for '" + F.getName().str() + "' function";
 
@@ -124,7 +121,7 @@ private:
 
 template <
     typename AnalysisT, bool IsSimple, typename GraphT = AnalysisT *,
-    typename AnalysisGraphTraitsT = DefaultAnalysisGraphTraits<AnalysisT> >
+    typename AnalysisGraphTraitsT = DefaultAnalysisGraphTraits<AnalysisT, GraphT> >
 class DOTGraphTraitsModuleViewer : public ModulePass {
 public:
   DOTGraphTraitsModuleViewer(StringRef GraphName, char &ID)
@@ -150,7 +147,7 @@ private:
 
 template <
     typename AnalysisT, bool IsSimple, typename GraphT = AnalysisT *,
-    typename AnalysisGraphTraitsT = DefaultAnalysisGraphTraits<AnalysisT> >
+    typename AnalysisGraphTraitsT = DefaultAnalysisGraphTraits<AnalysisT, GraphT> >
 class DOTGraphTraitsModulePrinter : public ModulePass {
 public:
   DOTGraphTraitsModulePrinter(StringRef GraphName, char &ID)
@@ -163,7 +160,7 @@ public:
 
     errs() << "Writing '" << Filename << "'...";
 
-    raw_fd_ostream File(Filename, EC, sys::fs::F_Text);
+    raw_fd_ostream File(Filename, EC, sys::fs::OF_Text);
     std::string Title = DOTGraphTraits<GraphT>::getGraphName(Graph);
 
     if (!EC)

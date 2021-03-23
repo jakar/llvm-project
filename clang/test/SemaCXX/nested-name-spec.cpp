@@ -169,6 +169,13 @@ void N::f() { } // okay
 struct Y;  // expected-note{{forward declaration of 'Y'}}
 Y::foo y; // expected-error{{incomplete type 'Y' named in nested name specifier}}
 
+namespace PR25156 {
+struct Y;  // expected-note{{forward declaration of 'PR25156::Y'}}
+void foo() {
+  Y::~Y(); // expected-error{{incomplete type 'PR25156::Y' named in nested name specifier}}
+}
+}
+
 X::X() : a(5) { } // expected-error{{use of undeclared identifier 'X'}}
 
 struct foo_S {
@@ -452,4 +459,17 @@ class B {
   // expected-error@-1{{'PR30619::A::B::D' (aka 'int') is not a class, namespace, or enumeration}}
 };
 }
+}
+
+namespace DependentTemplateInTrivialNNSLoc {
+  // This testcase causes us to create trivial type source info when doing
+  // substitution into T::template g<>. That trivial type source info contained
+  // a NestedNameSpecifierLoc with no location information.
+  //
+  // Previously, creating a CXXScopeSpec from that resulted in an invalid scope
+  // spec, leading to crashes. Ensure we don't crash here.
+  template <typename T> void f(T &x) {
+    for (typename T::template g<> i : x) {} // expected-warning 0-1{{extension}}
+    x: goto x;
+  }
 }

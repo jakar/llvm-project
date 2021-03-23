@@ -1,18 +1,3 @@
-/* ===-- endianness.h - configuration header for libgcc replacement --------===
- *
- *		       The LLVM Compiler Infrastructure
- *
- * This file is dual licensed under the MIT and the University of Illinois Open
- * Source Licenses. See LICENSE.TXT for details.
- *
- * ===----------------------------------------------------------------------===
- *
- * This file is a configuration header for libgcc replacement.
- * This file is not part of the interface of this library.
- *
- * ===----------------------------------------------------------------------===
- */
-
 #ifndef ENDIANNESS_H
 #define ENDIANNESS_H
 
@@ -51,7 +36,7 @@
 
 /* .. */
 
-#if defined(__OpenBSD__) || defined(__Bitrig__)
+#if defined(__OpenBSD__)
 #include <machine/endian.h>
 
 #if _BYTE_ORDER == _BIG_ENDIAN
@@ -62,7 +47,7 @@
 #define _YUGA_BIG_ENDIAN    0
 #endif /* _BYTE_ORDER */
 
-#endif /* OpenBSD and Bitrig. */
+#endif /* OpenBSD */
 
 /* .. */
 

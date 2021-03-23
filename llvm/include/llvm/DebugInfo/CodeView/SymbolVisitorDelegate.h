@@ -1,9 +1,8 @@
 //===-- SymbolVisitorDelegate.h ---------------------------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -19,7 +18,7 @@ class BinaryStreamReader;
 
 namespace codeview {
 
-class StringTableRef;
+class DebugStringTableSubsectionRef;
 
 class SymbolVisitorDelegate {
 public:
@@ -27,7 +26,7 @@ public:
 
   virtual uint32_t getRecordOffset(BinaryStreamReader Reader) = 0;
   virtual StringRef getFileNameForFileOffset(uint32_t FileOffset) = 0;
-  virtual StringTableRef getStringTable() = 0;
+  virtual DebugStringTableSubsectionRef getStringTable() = 0;
 };
 
 } // end namespace codeview

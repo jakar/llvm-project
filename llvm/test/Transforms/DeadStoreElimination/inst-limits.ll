@@ -1,10 +1,9 @@
 ; RUN: opt -S -dse < %s | FileCheck %s
 target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"
 
-; If there are two stores to the same location, DSE should be able to remove
-; the first store if the two stores are separated by no more than 98
-; instructions. The existence of debug intrinsics between the stores should
-; not affect this instruction limit.
+; This test is not relevant for DSE with MemorySSA. Non-memory instructions
+; are ignored anyways. The limits for the MemorySSA traversal are tested in
+; llvm/test/Transforms/DeadStoreElimination/MSSA/memoryssa-scan-limit.ll
 
 @x = global i32 0, align 4
 
@@ -118,7 +117,7 @@ entry:
 
   ; Insert a meaningless dbg.value intrinsic; it should have no
   ; effect on the working of DSE in any way.
-  call void @llvm.dbg.value(metadata i32 undef, i64 0, metadata !10, metadata !DIExpression()), !dbg !DILocation(scope: !4)
+  call void @llvm.dbg.value(metadata i32 undef, metadata !10, metadata !DIExpression()), !dbg !DILocation(scope: !4)
 
   ; CHECK:  store i32 -1, i32* @x, align 4
   store i32 -1, i32* @x, align 4
@@ -129,7 +128,7 @@ entry:
 define i32 @test_outside_limit() {
 entry:
   ; The first store; later there is a second store to the same location
-  ; CHECK: store i32 1, i32* @x, align 4
+  ; CHECK-NOT: store i32 1, i32* @x, align 4
   store i32 1, i32* @x, align 4
 
   ; Insert 99 dummy instructions between the two stores; this is
@@ -240,7 +239,7 @@ entry:
 }
 
 ; Function Attrs: nounwind readnone
-declare void @llvm.dbg.value(metadata, i64, metadata, metadata)
+declare void @llvm.dbg.value(metadata, metadata, metadata)
 
 !llvm.dbg.cu = !{!0}
 !llvm.module.flags = !{!11, !13}
@@ -248,7 +247,7 @@ declare void @llvm.dbg.value(metadata, i64, metadata, metadata)
 !0 = distinct !DICompileUnit(language: DW_LANG_C_plus_plus, producer: "clang version 3.4", isOptimized: true, emissionKind: FullDebug, file: !1, enums: !2, retainedTypes: !2, globals: !2, imports: !2)
 !1 = !DIFile(filename: "test.c", directory: "/home/tmp")
 !2 = !{}
-!4 = distinct !DISubprogram(name: "test_within_limit", line: 3, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, unit: !0, scopeLine: 4, file: !1, scope: !5, type: !6, variables: !2)
+!4 = distinct !DISubprogram(name: "test_within_limit", line: 3, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, unit: !0, scopeLine: 4, file: !1, scope: !5, type: !6, retainedNodes: !2)
 !5 = !DIFile(filename: "test.c", directory: "/home/tmp")
 !6 = !DISubroutineType(types: !7)
 !7 = !{!8}

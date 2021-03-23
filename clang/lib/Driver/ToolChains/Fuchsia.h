@@ -1,9 +1,8 @@
 //===--- Fuchsia.h - Fuchsia ToolChain Implementations ----------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -11,6 +10,7 @@
 #define LLVM_CLANG_LIB_DRIVER_TOOLCHAINS_FUCHSIA_H
 
 #include "Gnu.h"
+#include "clang/Basic/LangOptions.h"
 #include "clang/Driver/Tool.h"
 #include "clang/Driver/ToolChain.h"
 
@@ -18,9 +18,9 @@ namespace clang {
 namespace driver {
 namespace tools {
 namespace fuchsia {
-class LLVM_LIBRARY_VISIBILITY Linker : public GnuTool {
+class LLVM_LIBRARY_VISIBILITY Linker : public Tool {
 public:
-  Linker(const ToolChain &TC) : GnuTool("fuchsia::Linker", "ld.lld", TC) {}
+  Linker(const ToolChain &TC) : Tool("fuchsia::Linker", "ld.lld", TC) {}
 
   bool hasIntegratedCPP() const override { return false; }
   bool isLinkJob() const override { return true; }
@@ -35,19 +35,44 @@ public:
 
 namespace toolchains {
 
-class LLVM_LIBRARY_VISIBILITY Fuchsia : public Generic_ELF {
+class LLVM_LIBRARY_VISIBILITY Fuchsia : public ToolChain {
 public:
   Fuchsia(const Driver &D, const llvm::Triple &Triple,
           const llvm::opt::ArgList &Args);
 
-  bool isPIEDefault() const override { return true; }
   bool HasNativeLLVMSupport() const override { return true; }
   bool IsIntegratedAssemblerDefault() const override { return true; }
+  bool IsMathErrnoDefault() const override { return false; }
+  bool useRelaxRelocations() const override { return true; };
+  RuntimeLibType GetDefaultRuntimeLibType() const override {
+    return ToolChain::RLT_CompilerRT;
+  }
+  CXXStdlibType GetDefaultCXXStdlibType() const override {
+    return ToolChain::CST_Libcxx;
+  }
+  bool IsUnwindTablesDefault(const llvm::opt::ArgList &Args) const override {
+    return true;
+  }
+  bool isPICDefault() const override { return false; }
+  bool isPIEDefault() const override { return true; }
+  bool isPICDefaultForced() const override { return false; }
   llvm::DebuggerKind getDefaultDebuggerTuning() const override {
     return llvm::DebuggerKind::GDB;
   }
 
+  LangOptions::StackProtectorMode
+  GetDefaultStackProtectorLevel(bool KernelOrKext) const override {
+    return LangOptions::SSPStrong;
+  }
+
+  std::string ComputeEffectiveClangTriple(const llvm::opt::ArgList &Args,
+                                          types::ID InputType) const override;
+
   SanitizerMask getSupportedSanitizers() const override;
+  SanitizerMask getDefaultSanitizers() const override;
+
+  void addProfileRTLibs(const llvm::opt::ArgList &Args,
+                        llvm::opt::ArgStringList &CmdArgs) const override;
 
   RuntimeLibType
   GetRuntimeLibType(const llvm::opt::ArgList &Args) const override;
@@ -55,20 +80,22 @@ public:
   GetCXXStdlibType(const llvm::opt::ArgList &Args) const override;
 
   void addClangTargetOptions(const llvm::opt::ArgList &DriverArgs,
-                             llvm::opt::ArgStringList &CC1Args) const override;
+                             llvm::opt::ArgStringList &CC1Args,
+                             Action::OffloadKind DeviceOffloadKind) const override;
   void
   AddClangSystemIncludeArgs(const llvm::opt::ArgList &DriverArgs,
                             llvm::opt::ArgStringList &CC1Args) const override;
-  std::string findLibCxxIncludePath() const override;
+  void
+  AddClangCXXStdlibIncludeArgs(const llvm::opt::ArgList &DriverArgs,
+                               llvm::opt::ArgStringList &CC1Args) const override;
   void AddCXXStdlibLibArgs(const llvm::opt::ArgList &Args,
                            llvm::opt::ArgStringList &CmdArgs) const override;
 
   const char *getDefaultLinker() const override {
-    return "lld";
+    return "ld.lld";
   }
 
 protected:
-  Tool *buildAssembler() const override;
   Tool *buildLinker() const override;
 };
 

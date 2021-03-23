@@ -1,9 +1,8 @@
 //===- llvm/Support/DiagnosticInfo.cpp - Diagnostic Definitions -*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -16,76 +15,34 @@
 #include "LLVMContextImpl.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/Twine.h"
+#include "llvm/ADT/iterator_range.h"
+#include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/Constants.h"
-#include "llvm/IR/DebugInfo.h"
+#include "llvm/IR/DebugInfoMetadata.h"
+#include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/DiagnosticPrinter.h"
 #include "llvm/IR/Function.h"
+#include "llvm/IR/GlobalValue.h"
 #include "llvm/IR/Instruction.h"
+#include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Metadata.h"
 #include "llvm/IR/Module.h"
+#include "llvm/IR/Type.h"
+#include "llvm/IR/Value.h"
+#include "llvm/Support/Casting.h"
 #include "llvm/Support/CommandLine.h"
+#include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/InstructionCost.h"
+#include "llvm/Support/Path.h"
 #include "llvm/Support/Regex.h"
+#include "llvm/Support/ScopedPrinter.h"
+#include "llvm/Support/raw_ostream.h"
 #include <atomic>
+#include <cassert>
+#include <memory>
 #include <string>
 
 using namespace llvm;
-
-namespace {
-
-/// \brief Regular expression corresponding to the value given in one of the
-/// -pass-remarks* command line flags. Passes whose name matches this regexp
-/// will emit a diagnostic when calling the associated diagnostic function
-/// (emitOptimizationRemark, emitOptimizationRemarkMissed or
-/// emitOptimizationRemarkAnalysis).
-struct PassRemarksOpt {
-  std::shared_ptr<Regex> Pattern;
-
-  void operator=(const std::string &Val) {
-    // Create a regexp object to match pass names for emitOptimizationRemark.
-    if (!Val.empty()) {
-      Pattern = std::make_shared<Regex>(Val);
-      std::string RegexError;
-      if (!Pattern->isValid(RegexError))
-        report_fatal_error("Invalid regular expression '" + Val +
-                               "' in -pass-remarks: " + RegexError,
-                           false);
-    }
-  }
-};
-
-static PassRemarksOpt PassRemarksOptLoc;
-static PassRemarksOpt PassRemarksMissedOptLoc;
-static PassRemarksOpt PassRemarksAnalysisOptLoc;
-
-// -pass-remarks
-//    Command line flag to enable emitOptimizationRemark()
-static cl::opt<PassRemarksOpt, true, cl::parser<std::string>>
-PassRemarks("pass-remarks", cl::value_desc("pattern"),
-            cl::desc("Enable optimization remarks from passes whose name match "
-                     "the given regular expression"),
-            cl::Hidden, cl::location(PassRemarksOptLoc), cl::ValueRequired,
-            cl::ZeroOrMore);
-
-// -pass-remarks-missed
-//    Command line flag to enable emitOptimizationRemarkMissed()
-static cl::opt<PassRemarksOpt, true, cl::parser<std::string>> PassRemarksMissed(
-    "pass-remarks-missed", cl::value_desc("pattern"),
-    cl::desc("Enable missed optimization remarks from passes whose name match "
-             "the given regular expression"),
-    cl::Hidden, cl::location(PassRemarksMissedOptLoc), cl::ValueRequired,
-    cl::ZeroOrMore);
-
-// -pass-remarks-analysis
-//    Command line flag to enable emitOptimizationRemarkAnalysis()
-static cl::opt<PassRemarksOpt, true, cl::parser<std::string>>
-PassRemarksAnalysis(
-    "pass-remarks-analysis", cl::value_desc("pattern"),
-    cl::desc(
-        "Enable optimization analysis remarks from passes whose name match "
-        "the given regular expression"),
-    cl::Hidden, cl::location(PassRemarksAnalysisOptLoc), cl::ValueRequired,
-    cl::ZeroOrMore);
-}
 
 int llvm::getNextAvailablePluginDiagnosticKind() {
   static std::atomic<int> PluginKindID(DK_FirstPluginKind);
@@ -97,8 +54,7 @@ const char *OptimizationRemarkAnalysis::AlwaysPrint = "";
 DiagnosticInfoInlineAsm::DiagnosticInfoInlineAsm(const Instruction &I,
                                                  const Twine &MsgStr,
                                                  DiagnosticSeverity Severity)
-    : DiagnosticInfo(DK_InlineAsm, Severity), LocCookie(0), MsgStr(MsgStr),
-      Instr(&I) {
+    : DiagnosticInfo(DK_InlineAsm, Severity), MsgStr(MsgStr), Instr(&I) {
   if (const MDNode *SrcLoc = I.getMetadata("srcloc")) {
     if (SrcLoc->getNumOperands() != 0)
       if (const auto *CI =
@@ -148,10 +104,15 @@ void DiagnosticInfoPGOProfile::print(DiagnosticPrinter &DP) const {
   DP << getMsg();
 }
 
+void DiagnosticInfo::anchor() {}
+void DiagnosticInfoStackSize::anchor() {}
+void DiagnosticInfoWithLocationBase::anchor() {}
+void DiagnosticInfoIROptimization::anchor() {}
+
 DiagnosticLocation::DiagnosticLocation(const DebugLoc &DL) {
   if (!DL)
     return;
-  Filename = DL->getFilename();
+  File = DL->getFile();
   Line = DL->getLine();
   Column = DL->getColumn();
 }
@@ -159,30 +120,50 @@ DiagnosticLocation::DiagnosticLocation(const DebugLoc &DL) {
 DiagnosticLocation::DiagnosticLocation(const DISubprogram *SP) {
   if (!SP)
     return;
-  Filename = SP->getFilename();
+
+  File = SP->getFile();
   Line = SP->getScopeLine();
   Column = 0;
 }
 
-void DiagnosticInfoWithLocationBase::getLocation(StringRef *Filename,
-                                                 unsigned *Line,
-                                                 unsigned *Column) const {
-  *Filename = Loc.getFilename();
-  *Line = Loc.getLine();
-  *Column = Loc.getColumn();
+StringRef DiagnosticLocation::getRelativePath() const {
+  return File->getFilename();
 }
 
-const std::string DiagnosticInfoWithLocationBase::getLocationStr() const {
+std::string DiagnosticLocation::getAbsolutePath() const {
+  StringRef Name = File->getFilename();
+  if (sys::path::is_absolute(Name))
+    return std::string(Name);
+
+  SmallString<128> Path;
+  sys::path::append(Path, File->getDirectory(), Name);
+  return sys::path::remove_leading_dotslash(Path).str();
+}
+
+std::string DiagnosticInfoWithLocationBase::getAbsolutePath() const {
+  return Loc.getAbsolutePath();
+}
+
+void DiagnosticInfoWithLocationBase::getLocation(StringRef &RelativePath,
+                                                 unsigned &Line,
+                                                 unsigned &Column) const {
+  RelativePath = Loc.getRelativePath();
+  Line = Loc.getLine();
+  Column = Loc.getColumn();
+}
+
+std::string DiagnosticInfoWithLocationBase::getLocationStr() const {
   StringRef Filename("<unknown>");
   unsigned Line = 0;
   unsigned Column = 0;
   if (isLocationAvailable())
-    getLocation(&Filename, &Line, &Column);
+    getLocation(Filename, Line, Column);
   return (Filename + ":" + Twine(Line) + ":" + Twine(Column)).str();
 }
 
-DiagnosticInfoOptimizationBase::Argument::Argument(StringRef Key, const Value *V)
-    : Key(Key) {
+DiagnosticInfoOptimizationBase::Argument::Argument(StringRef Key,
+                                                   const Value *V)
+    : Key(std::string(Key)) {
   if (auto *F = dyn_cast<Function>(V)) {
     if (DISubprogram *SP = F->getSubprogram())
       Loc = SP;
@@ -190,10 +171,10 @@ DiagnosticInfoOptimizationBase::Argument::Argument(StringRef Key, const Value *V
   else if (auto *I = dyn_cast<Instruction>(V))
     Loc = I->getDebugLoc();
 
-  // Only include names that correspond to user variables.  FIXME: we should use
+  // Only include names that correspond to user variables.  FIXME: We should use
   // debug info if available to get the name of the user variable.
   if (isa<llvm::Argument>(V) || isa<GlobalValue>(V))
-    Val = GlobalValue::getRealLinkageName(V->getName());
+    Val = std::string(GlobalValue::dropLLVMManglingEscape(V->getName()));
   else if (isa<Constant>(V)) {
     raw_string_ostream OS(Val);
     V->printAsOperand(OS, /*PrintType=*/false);
@@ -202,16 +183,60 @@ DiagnosticInfoOptimizationBase::Argument::Argument(StringRef Key, const Value *V
 }
 
 DiagnosticInfoOptimizationBase::Argument::Argument(StringRef Key, const Type *T)
-    : Key(Key) {
+    : Key(std::string(Key)) {
   raw_string_ostream OS(Val);
   OS << *T;
 }
 
+DiagnosticInfoOptimizationBase::Argument::Argument(StringRef Key, StringRef S)
+    : Key(std::string(Key)), Val(S.str()) {}
+
 DiagnosticInfoOptimizationBase::Argument::Argument(StringRef Key, int N)
-    : Key(Key), Val(itostr(N)) {}
+    : Key(std::string(Key)), Val(itostr(N)) {}
+
+DiagnosticInfoOptimizationBase::Argument::Argument(StringRef Key, float N)
+    : Key(std::string(Key)), Val(llvm::to_string(N)) {}
+
+DiagnosticInfoOptimizationBase::Argument::Argument(StringRef Key, long N)
+    : Key(std::string(Key)), Val(itostr(N)) {}
+
+DiagnosticInfoOptimizationBase::Argument::Argument(StringRef Key, long long N)
+    : Key(std::string(Key)), Val(itostr(N)) {}
 
 DiagnosticInfoOptimizationBase::Argument::Argument(StringRef Key, unsigned N)
-    : Key(Key), Val(utostr(N)) {}
+    : Key(std::string(Key)), Val(utostr(N)) {}
+
+DiagnosticInfoOptimizationBase::Argument::Argument(StringRef Key,
+                                                   unsigned long N)
+    : Key(std::string(Key)), Val(utostr(N)) {}
+
+DiagnosticInfoOptimizationBase::Argument::Argument(StringRef Key,
+                                                   unsigned long long N)
+    : Key(std::string(Key)), Val(utostr(N)) {}
+
+DiagnosticInfoOptimizationBase::Argument::Argument(StringRef Key,
+                                                   ElementCount EC)
+    : Key(std::string(Key)) {
+  raw_string_ostream OS(Val);
+  EC.print(OS);
+}
+
+DiagnosticInfoOptimizationBase::Argument::Argument(StringRef Key,
+                                                   InstructionCost C)
+    : Key(std::string(Key)) {
+  raw_string_ostream OS(Val);
+  C.print(OS);
+}
+
+DiagnosticInfoOptimizationBase::Argument::Argument(StringRef Key, DebugLoc Loc)
+    : Key(std::string(Key)), Loc(Loc) {
+  if (Loc) {
+    Val = (Loc->getFilename() + ":" + Twine(Loc.getLine()) + ":" +
+           Twine(Loc.getCol())).str();
+  } else {
+    Val = "<UNKNOWN LOCATION>";
+  }
+}
 
 void DiagnosticInfoOptimizationBase::print(DiagnosticPrinter &DP) const {
   DP << getLocationStr() << ": " << getMsg();
@@ -234,11 +259,8 @@ OptimizationRemark::OptimizationRemark(const char *PassName,
                                    RemarkName, *Inst->getParent()->getParent(),
                                    Inst->getDebugLoc(), Inst->getParent()) {}
 
-// Helper to allow for an assert before attempting to return an invalid
-// reference.
-static const BasicBlock &getFirstFunctionBlock(const Function *Func) {
-  assert(!Func->empty() && "Function does not have a body");
-  return Func->front();
+static const BasicBlock *getFirstFunctionBlock(const Function *Func) {
+  return Func->empty() ? nullptr : &Func->front();
 }
 
 OptimizationRemark::OptimizationRemark(const char *PassName,
@@ -246,11 +268,12 @@ OptimizationRemark::OptimizationRemark(const char *PassName,
                                        const Function *Func)
     : DiagnosticInfoIROptimization(DK_OptimizationRemark, DS_Remark, PassName,
                                    RemarkName, *Func, Func->getSubprogram(),
-                                   &getFirstFunctionBlock(Func)) {}
+                                   getFirstFunctionBlock(Func)) {}
 
-bool OptimizationRemark::isEnabled(StringRef PassName) {
-  return PassRemarksOptLoc.Pattern &&
-         PassRemarksOptLoc.Pattern->match(PassName);
+bool OptimizationRemark::isEnabled() const {
+  const Function &Fn = getFunction();
+  LLVMContext &Ctx = Fn.getContext();
+  return Ctx.getDiagHandlerPtr()->isPassedOptRemarkEnabled(getPassName());
 }
 
 OptimizationRemarkMissed::OptimizationRemarkMissed(
@@ -268,9 +291,10 @@ OptimizationRemarkMissed::OptimizationRemarkMissed(const char *PassName,
                                    *Inst->getParent()->getParent(),
                                    Inst->getDebugLoc(), Inst->getParent()) {}
 
-bool OptimizationRemarkMissed::isEnabled(StringRef PassName) {
-  return PassRemarksMissedOptLoc.Pattern &&
-         PassRemarksMissedOptLoc.Pattern->match(PassName);
+bool OptimizationRemarkMissed::isEnabled() const {
+  const Function &Fn = getFunction();
+  LLVMContext &Ctx = Fn.getContext();
+  return Ctx.getDiagHandlerPtr()->isMissedOptRemarkEnabled(getPassName());
 }
 
 OptimizationRemarkAnalysis::OptimizationRemarkAnalysis(
@@ -295,49 +319,19 @@ OptimizationRemarkAnalysis::OptimizationRemarkAnalysis(
                                    *cast<BasicBlock>(CodeRegion)->getParent(),
                                    Loc, CodeRegion) {}
 
-bool OptimizationRemarkAnalysis::isEnabled(StringRef PassName) {
-  return PassRemarksAnalysisOptLoc.Pattern &&
-         PassRemarksAnalysisOptLoc.Pattern->match(PassName);
+bool OptimizationRemarkAnalysis::isEnabled() const {
+  const Function &Fn = getFunction();
+  LLVMContext &Ctx = Fn.getContext();
+  return Ctx.getDiagHandlerPtr()->isAnalysisRemarkEnabled(getPassName()) ||
+         shouldAlwaysPrint();
 }
 
 void DiagnosticInfoMIRParser::print(DiagnosticPrinter &DP) const {
   DP << Diagnostic;
 }
 
-void llvm::emitOptimizationRemark(LLVMContext &Ctx, const char *PassName,
-                                  const Function &Fn,
-                                  const DiagnosticLocation &Loc,
-                                  const Twine &Msg) {
-  Ctx.diagnose(OptimizationRemark(PassName, Fn, Loc, Msg));
-}
-
-void llvm::emitOptimizationRemarkMissed(LLVMContext &Ctx, const char *PassName,
-                                        const Function &Fn,
-                                        const DiagnosticLocation &Loc,
-                                        const Twine &Msg) {
-  Ctx.diagnose(OptimizationRemarkMissed(PassName, Fn, Loc, Msg));
-}
-
-void llvm::emitOptimizationRemarkAnalysis(LLVMContext &Ctx,
-                                          const char *PassName,
-                                          const Function &Fn,
-                                          const DiagnosticLocation &Loc,
-                                          const Twine &Msg) {
-  Ctx.diagnose(OptimizationRemarkAnalysis(PassName, Fn, Loc, Msg));
-}
-
-void llvm::emitOptimizationRemarkAnalysisFPCommute(
-    LLVMContext &Ctx, const char *PassName, const Function &Fn,
-    const DiagnosticLocation &Loc, const Twine &Msg) {
-  Ctx.diagnose(OptimizationRemarkAnalysisFPCommute(PassName, Fn, Loc, Msg));
-}
-
-void llvm::emitOptimizationRemarkAnalysisAliasing(LLVMContext &Ctx,
-                                                  const char *PassName,
-                                                  const Function &Fn,
-                                                  const DiagnosticLocation &Loc,
-                                                  const Twine &Msg) {
-  Ctx.diagnose(OptimizationRemarkAnalysisAliasing(PassName, Fn, Loc, Msg));
+void DiagnosticInfoSrcMgr::print(DiagnosticPrinter &DP) const {
+  DP << Diagnostic;
 }
 
 DiagnosticInfoOptimizationFailure::DiagnosticInfoOptimizationFailure(
@@ -366,28 +360,20 @@ void DiagnosticInfoISelFallback::print(DiagnosticPrinter &DP) const {
   DP << "Instruction selection used fallback path for " << getFunction();
 }
 
-DiagnosticInfoOptimizationBase &DiagnosticInfoOptimizationBase::
-operator<<(StringRef S) {
+void DiagnosticInfoOptimizationBase::insert(StringRef S) {
   Args.emplace_back(S);
-  return *this;
 }
 
-DiagnosticInfoOptimizationBase &DiagnosticInfoOptimizationBase::
-operator<<(Argument A) {
+void DiagnosticInfoOptimizationBase::insert(Argument A) {
   Args.push_back(std::move(A));
-  return *this;
 }
 
-DiagnosticInfoOptimizationBase &DiagnosticInfoOptimizationBase::
-operator<<(setIsVerbose V) {
+void DiagnosticInfoOptimizationBase::insert(setIsVerbose V) {
   IsVerbose = true;
-  return *this;
 }
 
-DiagnosticInfoOptimizationBase &DiagnosticInfoOptimizationBase::
-operator<<(setExtraArgs EA) {
+void DiagnosticInfoOptimizationBase::insert(setExtraArgs EA) {
   FirstExtraArgIndex = Args.size();
-  return *this;
 }
 
 std::string DiagnosticInfoOptimizationBase::getMsg() const {
@@ -400,3 +386,6 @@ std::string DiagnosticInfoOptimizationBase::getMsg() const {
     OS << Arg.Val;
   return OS.str();
 }
+
+void OptimizationRemarkAnalysisFPCommute::anchor() {}
+void OptimizationRemarkAnalysisAliasing::anchor() {}

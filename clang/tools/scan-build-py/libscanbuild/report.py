@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
-#                     The LLVM Compiler Infrastructure
-#
-# This file is distributed under the University of Illinois Open Source
-# License. See LICENSE.TXT for details.
+# Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+# See https://llvm.org/LICENSE.txt for license information.
+# SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 """ This module is responsible to generate 'index.html' for the report.
 
 The input for this step is the output directory, where individual reports
@@ -13,7 +12,6 @@ import os
 import os.path
 import sys
 import shutil
-import itertools
 import plistlib
 import glob
 import json
@@ -28,7 +26,8 @@ __all__ = ['document']
 def document(args):
     """ Generates cover report and returns the number of bugs/crashes. """
 
-    html_reports_available = args.output_format in {'html', 'plist-html'}
+    html_reports_available = args.output_format in {'html', 'plist-html', 'sarif-html'}
+    sarif_reports_available = args.output_format in {'sarif', 'sarif-html'}
 
     logging.debug('count crashes and bugs')
     crash_count = sum(1 for _ in read_crashes(args.output))
@@ -59,6 +58,11 @@ def document(args):
         finally:
             for fragment in fragments:
                 os.remove(fragment)
+
+    if sarif_reports_available:
+        logging.debug('merging sarif files')
+        merge_sarif_files(args.output)
+
     return result
 
 
@@ -255,24 +259,121 @@ def read_crashes(output_dir):
 
 
 def read_bugs(output_dir, html):
+    # type: (str, bool) -> Generator[Dict[str, Any], None, None]
     """ Generate a unique sequence of bugs from given output directory.
 
     Duplicates can be in a project if the same module was compiled multiple
     times with different compiler options. These would be better to show in
     the final report (cover) only once. """
 
-    parser = parse_bug_html if html else parse_bug_plist
-    pattern = '*.html' if html else '*.plist'
+    def empty(file_name):
+        return os.stat(file_name).st_size == 0
 
     duplicate = duplicate_check(
         lambda bug: '{bug_line}.{bug_path_length}:{bug_file}'.format(**bug))
 
-    bugs = itertools.chain.from_iterable(
-        # parser creates a bug generator not the bug itself
-        parser(filename)
-        for filename in glob.iglob(os.path.join(output_dir, pattern)))
+    # get the right parser for the job.
+    parser = parse_bug_html if html else parse_bug_plist
+    # get the input files, which are not empty.
+    pattern = os.path.join(output_dir, '*.html' if html else '*.plist')
+    bug_files = (file for file in glob.iglob(pattern) if not empty(file))
 
-    return (bug for bug in bugs if not duplicate(bug))
+    for bug_file in bug_files:
+        for bug in parser(bug_file):
+            if not duplicate(bug):
+                yield bug
+
+def merge_sarif_files(output_dir, sort_files=False):
+    """ Reads and merges all .sarif files in the given output directory.
+
+    Each sarif file in the output directory is understood as a single run
+    and thus appear separate in the top level runs array. This requires
+    modifying the run index of any embedded links in messages.
+    """
+
+    def empty(file_name):
+        return os.stat(file_name).st_size == 0
+
+    def update_sarif_object(sarif_object, runs_count_offset):
+        """
+            Given a SARIF object, checks its dictionary entries for a 'message' property.
+            If it exists, updates the message index of embedded links in the run index.
+
+            Recursively looks through entries in the dictionary.
+        """
+        if not isinstance(sarif_object, dict):
+            return sarif_object
+
+        if 'message' in sarif_object:
+            sarif_object['message'] = match_and_update_run(sarif_object['message'], runs_count_offset)
+
+        for key in sarif_object:
+            if isinstance(sarif_object[key], list):
+                # iterate through subobjects and update it.
+                arr = [update_sarif_object(entry, runs_count_offset) for entry in sarif_object[key]]
+                sarif_object[key] = arr
+            elif isinstance(sarif_object[key], dict):
+                sarif_object[key] = update_sarif_object(sarif_object[key], runs_count_offset)
+            else:
+                # do nothing
+                pass
+
+        return sarif_object
+
+
+    def match_and_update_run(message, runs_count_offset):
+        """
+            Given a SARIF message object, checks if the text property contains an embedded link and
+            updates the run index if necessary.
+        """
+        if 'text' not in message:
+            return message
+
+        # we only merge runs, so we only need to update the run index
+        pattern = re.compile(r'sarif:/runs/(\d+)')
+
+        text = message['text']
+        matches = re.finditer(pattern, text)
+        matches_list = list(matches)
+
+        # update matches from right to left to make increasing character length (9->10) smoother
+        for idx in range(len(matches_list) - 1, -1, -1):
+            match = matches_list[idx]
+            new_run_count = str(runs_count_offset + int(match.group(1)))
+            text = text[0:match.start(1)] + new_run_count + text[match.end(1):]
+
+        message['text'] = text
+        return message
+
+
+
+    sarif_files = (file for file in glob.iglob(os.path.join(output_dir, '*.sarif')) if not empty(file))
+    # exposed for testing since the order of files returned by glob is not guaranteed to be sorted
+    if sort_files:
+        sarif_files = list(sarif_files)
+        sarif_files.sort()
+
+    runs_count = 0
+    merged = {}
+    for sarif_file in sarif_files:
+        with open(sarif_file) as fp:
+            sarif = json.load(fp)
+            if 'runs' not in sarif:
+                continue
+
+            # start with the first file
+            if not merged:
+                merged = sarif
+            else:
+                # extract the run and append it to the merged output
+                for run in sarif['runs']:
+                    new_run = update_sarif_object(run, runs_count)
+                    merged['runs'].append(new_run)
+
+            runs_count += len(sarif['runs'])
+
+    with open(os.path.join(output_dir, 'results-merged.sarif'), 'w') as out:
+        json.dump(merged, out, indent=4, sort_keys=True)
 
 
 def parse_bug_plist(filename):

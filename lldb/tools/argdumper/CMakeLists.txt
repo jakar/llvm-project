@@ -1,10 +1,8 @@
-include(${LLDB_PROJECT_ROOT}/cmake/LLDBDependencies.cmake)
-
-add_lldb_tool(lldb-argdumper INCLUDE_IN_FRAMEWORK
+add_lldb_tool(lldb-argdumper ADD_TO_FRAMEWORK
   argdumper.cpp
 
-  LINK_LIBS
-    lldbCore
-    lldbUtility
-  )
+  LINK_COMPONENTS
+    Support
+)
 
+add_dependencies(liblldb lldb-argdumper)

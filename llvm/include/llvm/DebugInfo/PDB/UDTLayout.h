@@ -1,39 +1,34 @@
 //===- UDTLayout.h - UDT layout info ----------------------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
 #ifndef LLVM_DEBUGINFO_PDB_UDTLAYOUT_H
 #define LLVM_DEBUGINFO_PDB_UDTLAYOUT_H
 
-#include "PDBSymbol.h"
-#include "PDBTypes.h"
-
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/BitVector.h"
-#include "llvm/ADT/DenseMap.h"
-
-#include <list>
+#include "llvm/ADT/StringRef.h"
+#include "llvm/DebugInfo/PDB/PDBSymbol.h"
+#include "llvm/DebugInfo/PDB/PDBSymbolData.h"
+#include "llvm/DebugInfo/PDB/PDBSymbolTypeBaseClass.h"
+#include "llvm/DebugInfo/PDB/PDBSymbolTypeBuiltin.h"
+#include "llvm/DebugInfo/PDB/PDBSymbolTypeUDT.h"
+#include "llvm/DebugInfo/PDB/PDBSymbolTypeVTable.h"
+#include "llvm/DebugInfo/PDB/PDBTypes.h"
+#include <cstdint>
 #include <memory>
+#include <string>
+#include <vector>
 
 namespace llvm {
-
-class raw_ostream;
-
 namespace pdb {
 
-class PDBSymTypeBaseClass;
-class PDBSymbolData;
-class PDBSymbolTypeUDT;
-class PDBSymbolTypeVTable;
-
-class ClassLayout;
 class BaseClassLayout;
-class LayoutItemBase;
+class ClassLayout;
 class UDTLayoutBase;
 
 class LayoutItemBase {
@@ -41,7 +36,7 @@ public:
   LayoutItemBase(const UDTLayoutBase *Parent, const PDBSymbol *Symbol,
                  const std::string &Name, uint32_t OffsetInParent,
                  uint32_t Size, bool IsElided);
-  virtual ~LayoutItemBase() {}
+  virtual ~LayoutItemBase() = default;
 
   uint32_t deepPaddingSize() const;
   virtual uint32_t immediatePadding() const { return 0; }
@@ -79,7 +74,8 @@ public:
   VBPtrLayoutItem(const UDTLayoutBase &Parent,
                   std::unique_ptr<PDBSymbolTypeBuiltin> Sym, uint32_t Offset,
                   uint32_t Size);
-  virtual bool isVBPtr() const { return true; }
+
+  bool isVBPtr() const override { return true; }
 
 private:
   std::unique_ptr<PDBSymbolTypeBuiltin> Type;
@@ -120,17 +116,12 @@ public:
                 bool IsElided);
 
   uint32_t tailPadding() const override;
-
   ArrayRef<LayoutItemBase *> layout_items() const { return LayoutItems; }
-
   ArrayRef<BaseClassLayout *> bases() const { return AllBases; }
   ArrayRef<BaseClassLayout *> regular_bases() const { return NonVirtualBases; }
   ArrayRef<BaseClassLayout *> virtual_bases() const { return VirtualBases; }
-
   uint32_t directVirtualBaseCount() const { return DirectVBaseCount; }
-
   ArrayRef<std::unique_ptr<PDBSymbolFunc>> funcs() const { return Funcs; }
-
   ArrayRef<std::unique_ptr<PDBSymbol>> other_items() const { return Other; }
 
 protected:
@@ -183,7 +174,8 @@ private:
   std::unique_ptr<PDBSymbolTypeUDT> OwnedStorage;
   const PDBSymbolTypeUDT &UDT;
 };
-}
-} // namespace llvm
+
+} // end namespace pdb
+} // end namespace llvm
 
 #endif // LLVM_DEBUGINFO_PDB_UDTLAYOUT_H

@@ -1,7 +1,7 @@
-; RUN: llc -filetype=asm -o - -mtriple=x86_64-unknown-linux-gnu < %s | FileCheck %s
-; RUN: llc -filetype=asm -o - -mtriple=x86_64-darwin-unknown    < %s | FileCheck %s
+; RUN: llc -verify-machineinstrs -filetype=asm -o - -mtriple=x86_64-unknown-linux-gnu < %s | FileCheck %s
+; RUN: llc -verify-machineinstrs -filetype=asm -o - -mtriple=x86_64-darwin-unknown    < %s | FileCheck %s
 
-define i32 @foo(i32 %i) nounwind noinline uwtable "xray-instruction-threshold"="1" {
+define i32 @foo(i32 %i) nounwind noinline uwtable "xray-instruction-threshold"="10" {
 entry:
   br label %Test
 Test:
@@ -19,5 +19,4 @@ Exit:
 ; CHECK-LABEL: xray_sled_0:
 ; CHECK-NEXT:  .ascii "\353\t"
 ; CHECK-NEXT:  nopw 512(%rax,%rax)
-; CHECK-LABEL: Ltmp0:
 

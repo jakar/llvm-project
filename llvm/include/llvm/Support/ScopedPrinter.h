@@ -1,9 +1,8 @@
-//===-- ScopedPrinter.h ---------------------------------------------------===//
+//===-- ScopedPrinter.h ----------------------------------------*- C++ -*--===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -13,6 +12,7 @@
 #include "llvm/ADT/APSInt.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/SmallVector.h"
+#include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/DataTypes.h"
 #include "llvm/Support/Endian.h"
@@ -57,9 +57,9 @@ struct HexNumber {
 };
 
 raw_ostream &operator<<(raw_ostream &OS, const HexNumber &Value);
-const std::string to_hexString(uint64_t Value, bool UpperCase = true);
+std::string to_hexString(uint64_t Value, bool UpperCase = true);
 
-template <class T> const std::string to_string(const T &Value) {
+template <class T> std::string to_string(const T &Value) {
   std::string number;
   llvm::raw_string_ostream stream(number);
   stream << Value;
@@ -79,6 +79,8 @@ public:
   }
 
   void resetIndent() { IndentLevel = 0; }
+
+  int getIndentLevel() { return IndentLevel; }
 
   void setPrefix(StringRef P) { Prefix = P; }
 
@@ -136,7 +138,7 @@ public:
       }
     }
 
-    std::sort(SetFlags.begin(), SetFlags.end(), &flagName<TFlag>);
+    llvm::sort(SetFlags, &flagName<TFlag>);
 
     startLine() << Label << " [ (" << hex(Value) << ")\n";
     for (const auto &Flag : SetFlags) {
@@ -206,38 +208,28 @@ public:
 
   template <typename T> void printList(StringRef Label, const T &List) {
     startLine() << Label << ": [";
-    bool Comma = false;
-    for (const auto &Item : List) {
-      if (Comma)
-        OS << ", ";
-      OS << Item;
-      Comma = true;
-    }
+    ListSeparator LS;
+    for (const auto &Item : List)
+      OS << LS << Item;
     OS << "]\n";
   }
 
   template <typename T, typename U>
   void printList(StringRef Label, const T &List, const U &Printer) {
     startLine() << Label << ": [";
-    bool Comma = false;
+    ListSeparator LS;
     for (const auto &Item : List) {
-      if (Comma)
-        OS << ", ";
+      OS << LS;
       Printer(OS, Item);
-      Comma = true;
     }
     OS << "]\n";
   }
 
   template <typename T> void printHexList(StringRef Label, const T &List) {
     startLine() << Label << ": [";
-    bool Comma = false;
-    for (const auto &Item : List) {
-      if (Comma)
-        OS << ", ";
-      OS << hex(Item);
-      Comma = true;
-    }
+    ListSeparator LS;
+    for (const auto &Item : List)
+      OS << LS << hex(Item);
     OS << "]\n";
   }
 
@@ -261,7 +253,11 @@ public:
   }
 
   void printString(StringRef Label, const std::string &Value) {
-    startLine() << Label << ": " << Value << "\n";
+    printString(Label, StringRef(Value));
+  }
+
+  void printString(StringRef Label, const char* Value) {
+    printString(Label, StringRef(Value));
   }
 
   template <typename T>

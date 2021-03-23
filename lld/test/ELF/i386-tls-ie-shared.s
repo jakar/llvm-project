@@ -1,66 +1,67 @@
+// REQUIRES: x86
 // RUN: llvm-mc -filetype=obj -triple=i686-pc-linux %s -o %t.o
 // RUN: llvm-mc -filetype=obj -triple=i686-pc-linux %p/Inputs/tls-opt-iele-i686-nopic.s -o %tso.o
-// RUN: ld.lld -shared %tso.o -o %tso
+// RUN: ld.lld -shared -soname=t.so %tso.o -o %tso
 // RUN: ld.lld -shared %t.o %tso -o %t1
-// RUN: llvm-readobj -s -r -d %t1 | FileCheck --check-prefix=GOTRELSHARED %s
-// RUN: llvm-objdump -d %t1 | FileCheck --check-prefix=DISASMSHARED %s
+// RUN: llvm-readobj -S -r -d %t1 | FileCheck --check-prefix=GOTRELSHARED %s
+// RUN: llvm-objdump -d --no-show-raw-insn %t1 | FileCheck --check-prefix=DISASMSHARED %s
 
 // GOTRELSHARED:     Section {
-// GOTRELSHARED:      Index: 8
 // GOTRELSHARED:      Name: .got
 // GOTRELSHARED-NEXT:   Type: SHT_PROGBITS
 // GOTRELSHARED-NEXT:   Flags [
 // GOTRELSHARED-NEXT:     SHF_ALLOC
 // GOTRELSHARED-NEXT:     SHF_WRITE
 // GOTRELSHARED-NEXT:   ]
-// GOTRELSHARED-NEXT:   Address: 0x1060
-// GOTRELSHARED-NEXT:   Offset: 0x1060
+// GOTRELSHARED-NEXT:   Address: 0x3388
+// GOTRELSHARED-NEXT:   Offset: 0x388
 // GOTRELSHARED-NEXT:   Size: 16
 // GOTRELSHARED-NEXT:   Link: 0
 // GOTRELSHARED-NEXT:   Info: 0
 // GOTRELSHARED-NEXT:   AddressAlignment: 4
 // GOTRELSHARED-NEXT:   EntrySize: 0
 // GOTRELSHARED-NEXT: }
+// GOTRELSHARED:      0x6FFFFFFA RELCOUNT             8
 // GOTRELSHARED:      Relocations [
 // GOTRELSHARED-NEXT:   Section ({{.*}}) .rel.dyn {
-// GOTRELSHARED-NEXT:     0x2002 R_386_RELATIVE - 0x0
-// GOTRELSHARED-NEXT:     0x200A R_386_RELATIVE - 0x0
-// GOTRELSHARED-NEXT:     0x2013 R_386_RELATIVE - 0x0
-// GOTRELSHARED-NEXT:     0x201C R_386_RELATIVE - 0x0
-// GOTRELSHARED-NEXT:     0x2024 R_386_RELATIVE - 0x0
-// GOTRELSHARED-NEXT:     0x202D R_386_RELATIVE - 0x0
-// GOTRELSHARED-NEXT:     0x2036 R_386_RELATIVE - 0x0
-// GOTRELSHARED-NEXT:     0x203F R_386_RELATIVE - 0x0
-// GOTRELSHARED-NEXT:     0x1060 R_386_TLS_TPOFF tlslocal0 0x0
-// GOTRELSHARED-NEXT:     0x1064 R_386_TLS_TPOFF tlslocal1 0x0
-// GOTRELSHARED-NEXT:     0x1068 R_386_TLS_TPOFF tlsshared0 0x0
-// GOTRELSHARED-NEXT:     0x106C R_386_TLS_TPOFF tlsshared1 0x0
+// GOTRELSHARED-NEXT:     0x22DA R_386_RELATIVE -
+// GOTRELSHARED-NEXT:     0x22E2 R_386_RELATIVE -
+// GOTRELSHARED-NEXT:     0x22EB R_386_RELATIVE -
+// GOTRELSHARED-NEXT:     0x22F4 R_386_RELATIVE -
+// GOTRELSHARED-NEXT:     0x22FC R_386_RELATIVE -
+// GOTRELSHARED-NEXT:     0x2305 R_386_RELATIVE -
+// GOTRELSHARED-NEXT:     0x230E R_386_RELATIVE -
+// GOTRELSHARED-NEXT:     0x2317 R_386_RELATIVE -
+// GOTRELSHARED-NEXT:     0x3390 R_386_TLS_TPOFF tlsshared0
+// GOTRELSHARED-NEXT:     0x3394 R_386_TLS_TPOFF tlsshared1
+// GOTRELSHARED-NEXT:     0x3388 R_386_TLS_TPOFF tlslocal0
+// GOTRELSHARED-NEXT:     0x338C R_386_TLS_TPOFF tlslocal1
 // GOTRELSHARED-NEXT:   }
 // GOTRELSHARED-NEXT: ]
-// GOTRELSHARED:      0x6FFFFFFA RELCOUNT             8
 
 // DISASMSHARED:       Disassembly of section test:
-// DISASMSHARED-NEXT:  _start:
-// (.got)[0] = 0x1060 = 4192
-// (.got)[1] = 0x1064 = 4196
-// (.got)[2] = 0x1068 = 4200
-// (.got)[3] = 0x106C = 4204
-// DISASMSHARED-NEXT:  2000: {{.*}}  movl  4192, %ecx
-// DISASMSHARED-NEXT:  2006: {{.*}}  movl  %gs:(%ecx), %eax
-// DISASMSHARED-NEXT:  2009: {{.*}}  movl  4192, %eax
-// DISASMSHARED-NEXT:  200e: {{.*}}  movl  %gs:(%eax), %eax
-// DISASMSHARED-NEXT:  2011: {{.*}}  addl  4192, %ecx
-// DISASMSHARED-NEXT:  2017: {{.*}}  movl  %gs:(%ecx), %eax
-// DISASMSHARED-NEXT:  201a: {{.*}}  movl  4196, %ecx
-// DISASMSHARED-NEXT:  2020: {{.*}}  movl  %gs:(%ecx), %eax
-// DISASMSHARED-NEXT:  2023: {{.*}}  movl  4196, %eax
-// DISASMSHARED-NEXT:  2028: {{.*}}  movl  %gs:(%eax), %eax
-// DISASMSHARED-NEXT:  202b: {{.*}}  addl  4196, %ecx
-// DISASMSHARED-NEXT:  2031: {{.*}}  movl  %gs:(%ecx), %eax
-// DISASMSHARED-NEXT:  2034: {{.*}}  movl  4200, %ecx
-// DISASMSHARED-NEXT:  203a: {{.*}}  movl  %gs:(%ecx), %eax
-// DISASMSHARED-NEXT:  203d: {{.*}}  addl  4204, %ecx
-// DISASMSHARED-NEXT:  2043: {{.*}}  movl  %gs:(%ecx), %eax
+// DISASMSHARED-EMPTY:
+// DISASMSHARED-NEXT:  <_start>:
+// (.got)[0] = 0x3388 = 13192
+// (.got)[1] = 13196
+// (.got)[2] = 13200
+// (.got)[3] = 13204
+// DISASMSHARED-NEXT:  22d8:       movl  13192, %ecx
+// DISASMSHARED-NEXT:  22de:       movl  %gs:(%ecx), %eax
+// DISASMSHARED-NEXT:  22e1:       movl  13192, %eax
+// DISASMSHARED-NEXT:  22e6:       movl  %gs:(%eax), %eax
+// DISASMSHARED-NEXT:  22e9:       addl  13192, %ecx
+// DISASMSHARED-NEXT:  22ef:       movl  %gs:(%ecx), %eax
+// DISASMSHARED-NEXT:  22f2:       movl  13196, %ecx
+// DISASMSHARED-NEXT:  22f8:       movl  %gs:(%ecx), %eax
+// DISASMSHARED-NEXT:  22fb:       movl  13196, %eax
+// DISASMSHARED-NEXT:  2300:       movl  %gs:(%eax), %eax
+// DISASMSHARED-NEXT:  2303:       addl  13196, %ecx
+// DISASMSHARED-NEXT:  2309:       movl  %gs:(%ecx), %eax
+// DISASMSHARED-NEXT:  230c:       movl  13200, %ecx
+// DISASMSHARED-NEXT:  2312:       movl  %gs:(%ecx), %eax
+// DISASMSHARED-NEXT:  2315:       addl  13204, %ecx
+// DISASMSHARED-NEXT:  231b:       movl  %gs:(%ecx), %eax
 
 .type tlslocal0,@object
 .section .tbss,"awT",@nobits

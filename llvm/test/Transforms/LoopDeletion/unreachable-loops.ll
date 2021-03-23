@@ -1,4 +1,5 @@
-; RUN: opt < %s -loop-deletion -verify-dom-info -S | FileCheck %s
+; RUN: opt < %s -loop-deletion -verify-dom-info --pass-remarks-output=%t --pass-remarks-filter=loop-delete -S | FileCheck %s
+; RUN: cat %t | FileCheck %s --check-prefix=REMARKS
 
 ; Checking that we can delete loops that are never executed.
 ; We do not change the constant conditional branch statement (where the not-taken target
@@ -10,6 +11,8 @@ define void @test1(i64 %n, i64 %m) nounwind {
 ; CHECK-LABEL: entry:
 ; CHECK-NEXT: br i1 true, label %return, label %bb.preheader
 ; CHECK-NOT: bb:
+; REMARKS-LABEL: Function: test1
+; REMARKS: Loop deleted because it never executes
 entry:
   br i1 true, label %return, label %bb
 
@@ -63,6 +66,8 @@ define i64 @test3(i64 %n, i64 %m, i64 %maybe_zero) nounwind {
 ; CHECK-LABEL: return:
 ; CHECK-NEXT: %x.lcssa = phi i64 [ 20, %entry ], [ %x.lcssa.ph, %return.loopexit ]
 ; CHECK-NEXT: ret i64 %x.lcssa
+; REMARKS-LABEL: Function: test3
+; REMARKS: Loop deleted because it never executes
 entry:
   br i1 false, label %bb, label %return
 
@@ -121,6 +126,8 @@ define void @test5(i64 %n, i64 %m, i1 %cond) nounwind {
 ; CHECK-LABEL: looppred2:
 ; CHECK-NEXT: br i1 true, label %return, label %bb.preheader
 ; CHECK-NOT: bb:
+; REMARKS-LABEL: Function: test5
+; REMARKS: Loop deleted because it never executes
 entry:
   br i1 %cond, label %looppred1, label %looppred2
 
@@ -179,6 +186,8 @@ define i64 @test7(i64 %n) {
 ; CHECK-LABEL: L1Latch:
 ; CHECK-NEXT: %y = phi i64 [ %y.next, %L1 ], [ %y.L2.lcssa, %L1Latch.loopexit ]
 ; CHECK: br i1 %cond2, label %exit, label %L1
+; REMARKS-LABEL: Function: test7
+; REMARKS: Loop deleted because it never executes
 entry: 
   br label %L1
 
@@ -213,6 +222,8 @@ define void @test8(i64 %n) {
 ; CHECK-NEXT: br label %exit
 ; CHECK-LABEL: exit:
 ; CHECK-NEXT: ret void
+; REMARKS-LABEL: Function: test8
+; REMARKS: Loop deleted because it never executes
 entry: 
   br label %L1
 
@@ -233,20 +244,15 @@ exit:
 
 ; Delete a loop (L2) which has subloop (L3).
 ; Here we delete loop L2, but leave L3 as is.
-; FIXME: Can delete L3 as well, by iteratively going backward through the single
-; predecessor of L3 until we reach L1's block that guarantees L3 is never
-; executed.
 define void @test9(i64 %n) {
 ; CHECK-LABEL: test9
-; CHECK-LABEL: L2.preheader:
-; CHECK-NEXT: br label %L3.preheader
-; CHECK-NOT: L2:
-; CHECK-LABEL: L3.preheader:
-; CHECK-NEXT: %y.L2.lcssa = phi i64 [ undef, %L2.preheader ]
-; CHECK-NEXT: br label %L3
-; CHECK-LABEL: L3:
-; CHECK: br i1 %cond2, label %L3, label %L1.loopexit
-entry: 
+; CHECK-LABEL: entry:
+; CHECK-NEXT:    br label %exit
+; CHECK-LABEL: exit:
+; CHECK-NEXT:    ret  void
+; REMARKS-LABEL: Function: test9
+; REMARKS: Loop deleted because it never executes
+entry:
   br label %L1
 
 L1:
@@ -270,12 +276,12 @@ exit:
 ; We cannot delete L3 because of call within it.
 ; Since L3 is not deleted, and entirely contained within L2, L2 is also not
 ; deleted.
-; FIXME: We can delete unexecutable loops having
-; subloops contained entirely within them.
 define void @test10(i64 %n) {
 ; CHECK-LABEL: test10
-; CHECK: L2:
-; CHECK: L3:
+; CHECK-LABEL: entry:
+; CHECK-NEXT:   br label %exit
+; CHECK-LABEL: exit:
+; CHECK-NEXT:    ret void
 entry: 
   br label %L1
 
@@ -311,6 +317,12 @@ define void @test11(i64 %n) {
 ; CHECK-NEXT: br label %exit
 ; CHECK-LABEL: exit:
 ; CHECK-NEXT: ret void
+; REMARKS-LABEL: Function: test11
+; REMARKS: Loop deleted because it is invariant
+; REMARKS-LABEL: Function: test11
+; REMARKS: Loop deleted because it never executes
+; REMARKS-LABEL: Function: test11
+; REMARKS: Loop deleted because it is invariant
 entry: 
   br label %L1
 
@@ -334,3 +346,83 @@ exit:
  ret void
 }
 
+
+; 2 edges from a single exiting block to the exit block.
+define i64 @test12(i64 %n){
+;CHECK-LABEL: @test12
+; CHECK-NOT: L1:
+; CHECK-NOT: L1Latch:
+; CHECK-LABEL: L1.preheader:
+; CHECK-NEXT:    br label %exit
+; CHECK-LABEL: exit:
+; CHECK-NEXT:    %y.phi = phi i64 [ undef, %L1.preheader ]
+; CHECK-NEXT:    ret i64 %y.phi
+; REMARKS-LABEL: Function: test12
+; REMARKS: Loop deleted because it never executes
+
+entry:
+  br i1 true, label %exit1, label %L1
+
+exit1:
+  ret i64 42
+
+L1:                                               ; preds = %L1Latch, %entry
+  %y.next = phi i64 [ 0, %entry ], [ %y.add, %L1Latch ]
+  br i1 true, label %L1Latch, label %exit
+
+L1Latch:                                          ; preds = %L1
+  %y = phi i64 [ %y.next, %L1 ]
+  %y.add = add i64 %y, %n
+  %cond2 = icmp eq i64 %y.add, 42
+  switch i64 %n, label %L1 [
+    i64 10, label %exit
+    i64 20, label %exit
+  ]
+
+exit:                                             ; preds = %L1Latch, %L1Latch
+  %y.phi = phi i64 [ 10, %L1Latch ], [ 10, %L1Latch ], [ %y.next, %L1]
+  ret i64 %y.phi
+}
+
+; multiple edges to exit block from the same exiting blocks
+define i64 @test13(i64 %n) {
+; CHECK-LABEL: @test13
+; CHECK-NOT: L1:
+; CHECK-NOT: L1Latch:
+; CHECK-LABEL: L1.preheader:
+; CHECK-NEXT:    br label %exit
+; CHECK-LABEL: exit:
+; CHECK-NEXT:    %y.phi = phi i64 [ undef, %L1.preheader ]
+; CHECK-NEXT:    ret i64 %y.phi
+; REMARKS-LABEL: Function: test13
+; REMARKS: Loop deleted because it never executes
+
+entry:
+  br i1 true, label %exit1, label %L1
+
+exit1:
+  ret i64 42
+
+L1:                                               ; preds = %L1Latch, %entry
+  %y.next = phi i64 [ 0, %entry ], [ %y.add, %L1Latch ]
+  br i1 true, label %L1Block, label %exit
+
+L1Block:                                          ; preds = %L1
+  %y = phi i64 [ %y.next, %L1 ]
+  %y.add = add i64 %y, %n
+  %cond2 = icmp eq i64 %y.add, 42
+  switch i64 %n, label %L1Latch [
+    i64 10, label %exit
+    i64 20, label %exit
+  ]
+
+L1Latch:
+  switch i64 %n, label %L1 [
+    i64 30, label %exit
+    i64 40, label %exit
+  ]
+
+exit:                                             ; preds = %L1Block, %L1, %L1Latch
+  %y.phi = phi i64 [ 10, %L1Block ], [ 10, %L1Block ], [ %y.next, %L1 ], [ 30, %L1Latch ], [ 30, %L1Latch ]
+  ret i64 %y.phi
+}

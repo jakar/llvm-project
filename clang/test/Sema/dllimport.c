@@ -1,21 +1,26 @@
-// RUN: %clang_cc1 -triple i686-win32     -fsyntax-only -fms-extensions -verify -std=c99 -DMS %s
-// RUN: %clang_cc1 -triple x86_64-win32   -fsyntax-only -fms-extensions -verify -std=c11 -DMS %s
-// RUN: %clang_cc1 -triple i686-mingw32   -fsyntax-only -fms-extensions -verify -std=c11 -DGNU %s
-// RUN: %clang_cc1 -triple x86_64-mingw32 -fsyntax-only -fms-extensions -verify -std=c99 -DGNU %s
+// RUN: %clang_cc1 -triple i686-win32             -fsyntax-only -fms-extensions -verify -std=c99 -DMS %s
+// RUN: %clang_cc1 -triple x86_64-win32           -fsyntax-only -fms-extensions -verify -std=c11 -DMS %s
+// RUN: %clang_cc1 -triple i686-mingw32           -fsyntax-only -fms-extensions -verify -std=c11 -DGNU %s
+// RUN: %clang_cc1 -triple x86_64-mingw32         -fsyntax-only -fms-extensions -verify -std=c99 -DGNU %s
+// RUN: %clang_cc1 -triple aarch64-win32          -fsyntax-only -fms-extensions -verify -std=c99 -DMS %s
+// RUN: %clang_cc1 -triple i686-windows-itanium   -fsyntax-only -fms-extensions -verify -std=c99 -DWI %s
+// RUN: %clang_cc1 -triple x86_64-windows-itanium -fsyntax-only -fms-extensions -verify -std=c11 -DWI %s
+// RUN: %clang_cc1 -triple x86_64-scei-ps4        -fsyntax-only -fms-extensions -verify -std=c11 -DWI %s
+// RUN: %clang_cc1 -triple x86_64-scei-ps4        -fsyntax-only -fms-extensions -verify -std=c99 -DWI %s
 
 // Invalid usage.
 __declspec(dllimport) typedef int typedef1;
-// expected-warning@-1{{'dllimport' attribute only applies to variables and functions}}
+// expected-warning@-1{{'dllimport' attribute only applies to functions, variables, classes, and Objective-C interfaces}}
 typedef __declspec(dllimport) int typedef2;
-// expected-warning@-1{{'dllimport' attribute only applies to variables and functions}}
+// expected-warning@-1{{'dllimport' attribute only applies to}}
 typedef int __declspec(dllimport) typedef3;
-// expected-warning@-1{{'dllimport' attribute only applies to variables and functions}}
+// expected-warning@-1{{'dllimport' attribute only applies to}}
 typedef __declspec(dllimport) void (*FunTy)();
-// expected-warning@-1{{'dllimport' attribute only applies to variables and functions}}
+// expected-warning@-1{{'dllimport' attribute only applies to}}
 enum __declspec(dllimport) Enum { EnumVal };
-// expected-warning@-1{{'dllimport' attribute only applies to variables and functions}}
+// expected-warning@-1{{'dllimport' attribute only applies to}}
 struct __declspec(dllimport) Record {};
-// expected-warning@-1{{'dllimport' attribute only applies to variables and functions}}
+// expected-warning@-1{{'dllimport' attribute only applies to}}
 
 
 
@@ -44,7 +49,7 @@ int __declspec(dllimport) GlobalInit2 = 1; // expected-error{{definition of dlli
 // expected-note@+2{{previous attribute is here}}
 #endif
 __declspec(dllimport) extern int ExternGlobalDeclInit; // expected-note{{previous declaration is here}}
-#ifdef MS
+#if defined(MS) || defined(WI)
 // expected-warning@+4{{'ExternGlobalDeclInit' redeclared without 'dllimport' attribute: 'dllexport' attribute added}}
 #else
 // expected-warning@+2{{'ExternGlobalDeclInit' redeclared without 'dllimport' attribute: previous 'dllimport' ignored}}
@@ -55,7 +60,7 @@ int ExternGlobalDeclInit = 1;
 // expected-note@+2{{previous attribute is here}}
 #endif
 __declspec(dllimport) int GlobalDeclInit; // expected-note{{previous declaration is here}}
-#ifdef MS
+#if defined(MS) || defined(WI)
 // expected-warning@+4{{'GlobalDeclInit' redeclared without 'dllimport' attribute: 'dllexport' attribute added}}
 #else
 // expected-warning@+2{{'GlobalDeclInit' redeclared without 'dllimport' attribute: previous 'dllimport' ignored}}
@@ -66,7 +71,7 @@ int GlobalDeclInit = 1;
 // expected-note@+2{{previous attribute is here}}
 #endif
 int *__attribute__((dllimport)) GlobalDeclChunkAttrInit; // expected-note{{previous declaration is here}}
-#ifdef MS
+#if defined(MS) || defined(WI)
 // expected-warning@+4{{'GlobalDeclChunkAttrInit' redeclared without 'dllimport' attribute: 'dllexport' attribute added}}
 #else
 // expected-warning@+2{{'GlobalDeclChunkAttrInit' redeclared without 'dllimport' attribute: previous 'dllimport' ignored}}
@@ -77,7 +82,7 @@ int *GlobalDeclChunkAttrInit = 0;
 // expected-note@+2{{previous attribute is here}}
 #endif
 int GlobalDeclAttrInit __attribute__((dllimport)); // expected-note{{previous declaration is here}}
-#ifdef MS
+#if defined(MS) || defined(WI)
 // expected-warning@+4{{'GlobalDeclAttrInit' redeclared without 'dllimport' attribute: 'dllexport' attribute added}}
 #else
 // expected-warning@+2{{'GlobalDeclAttrInit' redeclared without 'dllimport' attribute: previous 'dllimport' ignored}}
@@ -178,7 +183,7 @@ __declspec(dllimport) void redecl2(); // expected-note{{previous declaration is 
 #endif
                       __declspec(dllimport) void redecl3(); // expected-note{{previous declaration is here}}
                       // NB: Both MSVC and Clang issue a warning and make redecl3 dllexport.
-#ifdef MS
+#if defined(MS) || defined(WI)
                       // expected-warning@+4{{'redecl3' redeclared without 'dllimport' attribute: 'dllexport' attribute added}}
 #else
                       // expected-warning@+2{{'redecl3' redeclared without 'dllimport' attribute: previous 'dllimport' ignored}}
@@ -201,7 +206,7 @@ __declspec(dllimport) void redecl5(); // expected-warning{{redeclaration of 'red
 __declspec(dllimport) void redecl6();
                       inline void redecl6() {}
 
-#ifdef MS
+#if defined(MS) || defined (WI)
 // expected-note@+5{{previous declaration is here}}
 // expected-warning@+5{{redeclaration of 'redecl7' should not add 'dllimport' attribute}}
 #else
@@ -210,9 +215,14 @@ __declspec(dllimport) void redecl6();
                       void redecl7();
 __declspec(dllimport) inline void redecl7() {}
 
-// PR31069: Don't crash trying to merge attributes for redeclaration of invalid decl.
+// PR31069: Don't crash trying to merge attributes for redeclaration of invalid
+// decl.
 void __declspec(dllimport) redecl8(unknowntype X); // expected-error{{unknown type name 'unknowntype'}}
 void redecl8(unknowntype X) { } // expected-error{{unknown type name 'unknowntype'}}
+// PR32021: Similarly, don't crash trying to merge attributes from a valid
+// decl to an invalid redeclaration.
+void __declspec(dllimport) redecl9(void); // expected-note{{previous declaration is here}}
+int redecl9(void) {} // expected-error{{conflicting types for 'redecl9'}}
 
 // External linkage is required.
 __declspec(dllimport) static int staticFunc(); // expected-error{{'staticFunc' must have external linkage when declared 'dllimport'}}

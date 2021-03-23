@@ -4,9 +4,9 @@
 
 class X {
 public:
-  explicit X(const X&); // expected-note {{candidate constructor}}
+  explicit X(const X&); // expected-note 2{{not a candidate}}
   X(int*); // expected-note 3{{candidate constructor}}
-  explicit X(float*); // expected-note {{candidate constructor}}
+  explicit X(float*); // expected-note {{candidate constructor}} expected-note 2{{not a candidate}}
 };
 
 class Y : public X { };
@@ -26,7 +26,7 @@ struct foo {
 };
 
 // PR3600
-void test(const foo *P) { P->bar(); } // expected-error{{'bar' not viable: 'this' argument has type 'const foo', but function is not marked const}}
+void test(const foo *P) { P->bar(); } // expected-error{{'this' argument to member function 'bar' has type 'const foo', but function is not marked const}}
 
 namespace PR6757 {
   struct Foo {

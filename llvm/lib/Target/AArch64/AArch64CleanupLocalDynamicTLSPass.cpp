@@ -1,9 +1,8 @@
 //===-- AArch64CleanupLocalDynamicTLSPass.cpp ---------------------*- C++ -*-=//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -25,7 +24,6 @@
 #include "AArch64.h"
 #include "AArch64InstrInfo.h"
 #include "AArch64MachineFunctionInfo.h"
-#include "AArch64TargetMachine.h"
 #include "llvm/CodeGen/MachineDominators.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
@@ -43,7 +41,7 @@ struct LDTLSCleanup : public MachineFunctionPass {
   }
 
   bool runOnMachineFunction(MachineFunction &MF) override {
-    if (skipFunction(*MF.getFunction()))
+    if (skipFunction(MF.getFunction()))
       return false;
 
     AArch64FunctionInfo *AFI = MF.getInfo<AArch64FunctionInfo>();
@@ -107,13 +105,17 @@ struct LDTLSCleanup : public MachineFunctionPass {
                                  TII->get(TargetOpcode::COPY), AArch64::X0)
                              .addReg(TLSBaseAddrReg);
 
+    // Update the call site info.
+    if (I.shouldUpdateCallSiteInfo())
+      I.getMF()->eraseCallSiteInfo(&I);
+
     // Erase the TLS_base_addr instruction.
     I.eraseFromParent();
 
     return Copy;
   }
 
-  // Create a virtal register in *TLSBaseAddrReg, and populate it by
+  // Create a virtual register in *TLSBaseAddrReg, and populate it by
   // inserting a copy instruction after I. Returns the new instruction.
   MachineInstr *setRegister(MachineInstr &I, unsigned *TLSBaseAddrReg) {
     MachineFunction *MF = I.getParent()->getParent();

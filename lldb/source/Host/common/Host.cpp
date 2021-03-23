@@ -1,9 +1,8 @@
-//===-- Host.cpp ------------------------------------------------*- C++ -*-===//
+//===-- Host.cpp ----------------------------------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -29,7 +28,7 @@
 
 #if defined(__linux__) || defined(__FreeBSD__) ||                              \
     defined(__FreeBSD_kernel__) || defined(__APPLE__) ||                       \
-    defined(__NetBSD__) || defined(__OpenBSD__)
+    defined(__NetBSD__) || defined(__OpenBSD__) || defined(__EMSCRIPTEN__)
 #if !defined(__ANDROID__)
 #include <spawn.h>
 #endif
@@ -45,37 +44,35 @@
 #include <lwp.h>
 #endif
 
-// C++ Includes
+#include <csignal>
 
-// Other libraries and framework includes
-// Project includes
-
-#include "lldb/Core/ArchSpec.h"
+#include "lldb/Host/FileAction.h"
+#include "lldb/Host/FileSystem.h"
 #include "lldb/Host/Host.h"
 #include "lldb/Host/HostInfo.h"
 #include "lldb/Host/HostProcess.h"
 #include "lldb/Host/MonitoringProcessLauncher.h"
-#include "lldb/Host/Predicate.h"
+#include "lldb/Host/ProcessLaunchInfo.h"
 #include "lldb/Host/ProcessLauncher.h"
 #include "lldb/Host/ThreadLauncher.h"
-#include "lldb/Target/FileAction.h"
-#include "lldb/Target/ProcessLaunchInfo.h"
-#include "lldb/Target/UnixSignals.h"
-#include "lldb/Utility/CleanUp.h"
+#include "lldb/Host/posix/ConnectionFileDescriptorPosix.h"
 #include "lldb/Utility/DataBufferLLVM.h"
-#include "lldb/Utility/Error.h"
 #include "lldb/Utility/FileSpec.h"
 #include "lldb/Utility/Log.h"
+#include "lldb/Utility/Predicate.h"
+#include "lldb/Utility/ReproducerProvider.h"
+#include "lldb/Utility/Status.h"
 #include "lldb/lldb-private-forward.h"
 #include "llvm/ADT/SmallString.h"
+#include "llvm/ADT/StringSwitch.h"
+#include "llvm/Support/Errno.h"
 #include "llvm/Support/FileSystem.h"
 
 #if defined(_WIN32)
+#include "lldb/Host/windows/ConnectionGenericFileWindows.h"
 #include "lldb/Host/windows/ProcessLauncherWindows.h"
-#elif defined(__linux__) || defined(__NetBSD__)
-#include "lldb/Host/posix/ProcessLauncherPosixFork.h"
 #else
-#include "lldb/Host/posix/ProcessLauncherPosix.h"
+#include "lldb/Host/posix/ProcessLauncherPosixFork.h"
 #endif
 
 #if defined(__APPLE__)
@@ -103,7 +100,7 @@ struct MonitorInfo {
 
 static thread_result_t MonitorChildProcessThreadFunction(void *arg);
 
-HostThread Host::StartMonitoringChildProcess(
+llvm::Expected<HostThread> Host::StartMonitoringChildProcess(
     const Host::MonitorChildProcessCallback &callback, lldb::pid_t pid,
     bool monitor_signals) {
   MonitorInfo *info_ptr = new MonitorInfo();
@@ -116,15 +113,12 @@ HostThread Host::StartMonitoringChildProcess(
   ::snprintf(thread_name, sizeof(thread_name),
              "<lldb.host.wait4(pid=%" PRIu64 ")>", pid);
   return ThreadLauncher::LaunchThread(
-      thread_name, MonitorChildProcessThreadFunction, info_ptr, NULL);
+      thread_name, MonitorChildProcessThreadFunction, info_ptr, 0);
 }
 
 #ifndef __linux__
-//------------------------------------------------------------------
-// Scoped class that will disable thread canceling when it is
-// constructed, and exception safely restore the previous value it
-// when it goes out of scope.
-//------------------------------------------------------------------
+// Scoped class that will disable thread canceling when it is constructed, and
+// exception safely restore the previous value it when it goes out of scope.
 class ScopedPThreadCancelDisabler {
 public:
   ScopedPThreadCancelDisabler() {
@@ -171,8 +165,7 @@ static bool CheckForMonitorCancellation() {
 static thread_result_t MonitorChildProcessThreadFunction(void *arg) {
   Log *log(lldb_private::GetLogIfAllCategoriesSet(LIBLLDB_LOG_PROCESS));
   const char *function = __FUNCTION__;
-  if (log)
-    log->Printf("%s (arg = %p) thread starting...", function, arg);
+  LLDB_LOGF(log, "%s (arg = %p) thread starting...", function, arg);
 
   MonitorInfo *info = (MonitorInfo *)arg;
 
@@ -200,9 +193,8 @@ static thread_result_t MonitorChildProcessThreadFunction(void *arg) {
 
   while (1) {
     log = lldb_private::GetLogIfAllCategoriesSet(LIBLLDB_LOG_PROCESS);
-    if (log)
-      log->Printf("%s ::waitpid (pid = %" PRIi32 ", &status, options = %i)...",
-                  function, pid, options);
+    LLDB_LOGF(log, "%s ::waitpid (pid = %" PRIi32 ", &status, options = %i)...",
+              function, pid, options);
 
     if (CheckForMonitorCancellation())
       break;
@@ -217,17 +209,16 @@ static thread_result_t MonitorChildProcessThreadFunction(void *arg) {
       if (errno == EINTR)
         continue;
       else {
-        if (log)
-          log->Printf(
-              "%s (arg = %p) thread exiting because waitpid failed (%s)...",
-              __FUNCTION__, arg, strerror(errno));
+        LLDB_LOG(log,
+                 "arg = {0}, thread exiting because waitpid failed ({1})...",
+                 arg, llvm::sys::StrError());
         break;
       }
     } else if (wait_pid > 0) {
       bool exited = false;
       int signal = 0;
       int exit_status = 0;
-      const char *status_cstr = NULL;
+      const char *status_cstr = nullptr;
       if (WIFSTOPPED(status)) {
         signal = WSTOPSIG(status);
         status_cstr = "STOPPED";
@@ -253,12 +244,12 @@ static thread_result_t MonitorChildProcessThreadFunction(void *arg) {
 #endif
 
         log = lldb_private::GetLogIfAllCategoriesSet(LIBLLDB_LOG_PROCESS);
-        if (log)
-          log->Printf("%s ::waitpid (pid = %" PRIi32
-                      ", &status, options = %i) => pid = %" PRIi32
-                      ", status = 0x%8.8x (%s), signal = %i, exit_state = %i",
-                      function, pid, options, wait_pid, status, status_cstr,
-                      signal, exit_status);
+        LLDB_LOGF(log,
+                  "%s ::waitpid (pid = %" PRIi32
+                  ", &status, options = %i) => pid = %" PRIi32
+                  ", status = 0x%8.8x (%s), signal = %i, exit_state = %i",
+                  function, pid, options, wait_pid, status, status_cstr, signal,
+                  exit_status);
 
         if (exited || (signal != 0 && monitor_signals)) {
           bool callback_return = false;
@@ -267,19 +258,18 @@ static thread_result_t MonitorChildProcessThreadFunction(void *arg) {
 
           // If our process exited, then this thread should exit
           if (exited && wait_pid == abs(pid)) {
-            if (log)
-              log->Printf("%s (arg = %p) thread exiting because pid received "
-                          "exit signal...",
-                          __FUNCTION__, arg);
+            LLDB_LOGF(log,
+                      "%s (arg = %p) thread exiting because pid received "
+                      "exit signal...",
+                      __FUNCTION__, arg);
             break;
           }
-          // If the callback returns true, it means this process should
-          // exit
+          // If the callback returns true, it means this process should exit
           if (callback_return) {
-            if (log)
-              log->Printf("%s (arg = %p) thread exiting because callback "
-                          "returned true...",
-                          __FUNCTION__, arg);
+            LLDB_LOGF(log,
+                      "%s (arg = %p) thread exiting because callback "
+                      "returned true...",
+                      __FUNCTION__, arg);
             break;
           }
         }
@@ -288,10 +278,9 @@ static thread_result_t MonitorChildProcessThreadFunction(void *arg) {
   }
 
   log = lldb_private::GetLogIfAllCategoriesSet(LIBLLDB_LOG_PROCESS);
-  if (log)
-    log->Printf("%s (arg = %p) thread exiting...", __FUNCTION__, arg);
+  LLDB_LOGF(log, "%s (arg = %p) thread exiting...", __FUNCTION__, arg);
 
-  return NULL;
+  return nullptr;
 }
 
 #endif // #if !defined (__APPLE__) && !defined (_WIN32)
@@ -305,10 +294,21 @@ void Host::SystemLog(SystemLogType type, const char *format, va_list args) {
 #endif
 
 void Host::SystemLog(SystemLogType type, const char *format, ...) {
-  va_list args;
-  va_start(args, format);
-  SystemLog(type, format, args);
-  va_end(args);
+  {
+    va_list args;
+    va_start(args, format);
+    SystemLog(type, format, args);
+    va_end(args);
+  }
+
+  Log *log(GetLogIfAllCategoriesSet(LIBLLDB_LOG_HOST));
+  if (log && log->GetVerbose()) {
+    // Log to log channel. This allows testcases to grep for log output.
+    va_list args;
+    va_start(args, format);
+    log->VAPrintf(format, args);
+    va_end(args);
+  }
 }
 
 lldb::pid_t Host::GetCurrentProcessID() { return ::getpid(); }
@@ -402,26 +402,7 @@ const char *Host::GetSignalAsCString(int signo) {
   default:
     break;
   }
-  return NULL;
-}
-
-#endif
-
-#ifndef _WIN32
-
-lldb::thread_key_t
-Host::ThreadLocalStorageCreate(ThreadLocalStorageCleanupCallback callback) {
-  pthread_key_t key;
-  ::pthread_key_create(&key, callback);
-  return key;
-}
-
-void *Host::ThreadLocalStorageGet(lldb::thread_key_t key) {
-  return ::pthread_getspecific(key);
-}
-
-void Host::ThreadLocalStorageSet(lldb::thread_key_t key, void *value) {
-  ::pthread_setspecific(key, value);
+  return nullptr;
 }
 
 #endif
@@ -443,8 +424,10 @@ FileSpec Host::GetModuleFileSpecForHostAddress(const void *host_addr) {
 #if !defined(__ANDROID__)
   Dl_info info;
   if (::dladdr(host_addr, &info)) {
-    if (info.dli_fname)
-      module_filespec.SetFile(info.dli_fname, true);
+    if (info.dli_fname) {
+      module_filespec.SetFile(info.dli_fname, FileSpec::Style::native);
+      FileSystem::Instance().Resolve(module_filespec);
+    }
   }
 #endif
   return module_filespec;
@@ -484,46 +467,74 @@ MonitorShellCommand(std::shared_ptr<ShellInfo> shell_info, lldb::pid_t pid,
   return true;
 }
 
-Error Host::RunShellCommand(const char *command, const FileSpec &working_dir,
-                            int *status_ptr, int *signo_ptr,
-                            std::string *command_output_ptr,
-                            uint32_t timeout_sec, bool run_in_default_shell) {
-  return RunShellCommand(Args(command), working_dir, status_ptr, signo_ptr,
-                         command_output_ptr, timeout_sec, run_in_default_shell);
+Status Host::RunShellCommand(llvm::StringRef command,
+                             const FileSpec &working_dir, int *status_ptr,
+                             int *signo_ptr, std::string *command_output_ptr,
+                             const Timeout<std::micro> &timeout,
+                             bool run_in_shell, bool hide_stderr) {
+  return RunShellCommand(llvm::StringRef(), Args(command), working_dir,
+                         status_ptr, signo_ptr, command_output_ptr, timeout,
+                         run_in_shell, hide_stderr);
 }
 
-Error Host::RunShellCommand(const Args &args, const FileSpec &working_dir,
-                            int *status_ptr, int *signo_ptr,
-                            std::string *command_output_ptr,
-                            uint32_t timeout_sec, bool run_in_default_shell) {
-  Error error;
+Status Host::RunShellCommand(llvm::StringRef shell_path,
+                             llvm::StringRef command,
+                             const FileSpec &working_dir, int *status_ptr,
+                             int *signo_ptr, std::string *command_output_ptr,
+                             const Timeout<std::micro> &timeout,
+                             bool run_in_shell, bool hide_stderr) {
+  return RunShellCommand(shell_path, Args(command), working_dir, status_ptr,
+                         signo_ptr, command_output_ptr, timeout, run_in_shell,
+                         hide_stderr);
+}
+
+Status Host::RunShellCommand(const Args &args, const FileSpec &working_dir,
+                             int *status_ptr, int *signo_ptr,
+                             std::string *command_output_ptr,
+                             const Timeout<std::micro> &timeout,
+                             bool run_in_shell, bool hide_stderr) {
+  return RunShellCommand(llvm::StringRef(), args, working_dir, status_ptr,
+                         signo_ptr, command_output_ptr, timeout, run_in_shell,
+                         hide_stderr);
+}
+
+Status Host::RunShellCommand(llvm::StringRef shell_path, const Args &args,
+                             const FileSpec &working_dir, int *status_ptr,
+                             int *signo_ptr, std::string *command_output_ptr,
+                             const Timeout<std::micro> &timeout,
+                             bool run_in_shell, bool hide_stderr) {
+  Status error;
   ProcessLaunchInfo launch_info;
   launch_info.SetArchitecture(HostInfo::GetArchitecture());
-  if (run_in_default_shell) {
+  if (run_in_shell) {
     // Run the command in a shell
-    launch_info.SetShell(HostInfo::GetDefaultShell());
+    FileSpec shell = HostInfo::GetDefaultShell();
+    if (!shell_path.empty())
+      shell.SetPath(shell_path);
+
+    launch_info.SetShell(shell);
     launch_info.GetArguments().AppendArguments(args);
-    const bool localhost = true;
     const bool will_debug = false;
     const bool first_arg_is_full_shell_command = false;
     launch_info.ConvertArgumentsForLaunchingInShell(
-        error, localhost, will_debug, first_arg_is_full_shell_command, 0);
+        error, will_debug, first_arg_is_full_shell_command, 0);
   } else {
     // No shell, just run it
     const bool first_arg_is_executable = true;
     launch_info.SetArguments(args, first_arg_is_executable);
   }
 
+  launch_info.GetEnvironment() = Host::GetEnvironment();
+
   if (working_dir)
     launch_info.SetWorkingDirectory(working_dir);
-  llvm::SmallString<PATH_MAX> output_file_path;
+  llvm::SmallString<64> output_file_path;
 
   if (command_output_ptr) {
-    // Create a temporary file to get the stdout/stderr and redirect the
-    // output of the command into this file. We will later read this file
-    // if all goes well and fill the data into "command_output_ptr"
-    FileSpec tmpdir_file_spec;
-    if (HostInfo::GetLLDBPath(ePathTypeLLDBTempSystemDir, tmpdir_file_spec)) {
+    // Create a temporary file to get the stdout/stderr and redirect the output
+    // of the command into this file. We will later read this file if all goes
+    // well and fill the data into "command_output_ptr"
+    if (FileSpec tmpdir_file_spec = HostInfo::GetProcessTempDir()) {
       tmpdir_file_spec.AppendPathComponent("lldb-shell-output.%%%%%%");
       llvm::sys::fs::createUniqueFile(tmpdir_file_spec.GetPath(),
                                       output_file_path);
@@ -533,17 +544,19 @@ Error Host::RunShellCommand(const Args &args, const FileSpec &working_dir,
     }
   }
 
-  FileSpec output_file_spec{output_file_path.c_str(), false};
-
+  FileSpec output_file_spec(output_file_path.str());
+  // Set up file descriptors.
   launch_info.AppendSuppressFileAction(STDIN_FILENO, true, false);
-  if (output_file_spec) {
+  if (output_file_spec)
     launch_info.AppendOpenFileAction(STDOUT_FILENO, output_file_spec, false,
                                      true);
-    launch_info.AppendDuplicateFileAction(STDOUT_FILENO, STDERR_FILENO);
-  } else {
+  else
     launch_info.AppendSuppressFileAction(STDOUT_FILENO, false, true);
+
+  if (output_file_spec && !hide_stderr)
+    launch_info.AppendDuplicateFileAction(STDOUT_FILENO, STDERR_FILENO);
+  else
     launch_info.AppendSuppressFileAction(STDERR_FILENO, false, true);
-  }
 
   std::shared_ptr<ShellInfo> shell_info_sp(new ShellInfo());
   const bool monitor_signals = false;
@@ -560,18 +573,14 @@ Error Host::RunShellCommand(const Args &args, const FileSpec &working_dir,
     error.SetErrorString("failed to get process ID");
 
   if (error.Success()) {
-    bool timed_out = false;
-    shell_info_sp->process_reaped.WaitForValueEqualTo(
-        true, std::chrono::seconds(timeout_sec), &timed_out);
-    if (timed_out) {
+    if (!shell_info_sp->process_reaped.WaitForValueEqualTo(true, timeout)) {
       error.SetErrorString("timed out waiting for shell command to complete");
 
       // Kill the process since it didn't complete within the timeout specified
       Kill(pid, SIGKILL);
       // Wait for the monitor callback to get the message
-      timed_out = false;
       shell_info_sp->process_reaped.WaitForValueEqualTo(
-          true, std::chrono::seconds(1), &timed_out);
+          true, std::chrono::seconds(1));
     } else {
       if (status_ptr)
         *status_ptr = shell_info_sp->status;
@@ -581,14 +590,15 @@ Error Host::RunShellCommand(const Args &args, const FileSpec &working_dir,
 
       if (command_output_ptr) {
         command_output_ptr->clear();
-        uint64_t file_size = output_file_spec.GetByteSize();
+        uint64_t file_size =
+            FileSystem::Instance().GetByteSize(output_file_spec);
         if (file_size > 0) {
           if (file_size > command_output_ptr->max_size()) {
             error.SetErrorStringWithFormat(
                 "shell command output is too large to fit into a std::string");
           } else {
             auto Buffer =
-                DataBufferLLVM::CreateFromPath(output_file_spec.GetPath());
+                FileSystem::Instance().CreateDataBuffer(output_file_spec);
             if (error.Success())
               command_output_ptr->assign(Buffer->GetChars(),
                                          Buffer->GetByteSize());
@@ -602,373 +612,28 @@ Error Host::RunShellCommand(const Args &args, const FileSpec &working_dir,
   return error;
 }
 
-// LaunchProcessPosixSpawn for Apple, Linux, FreeBSD, NetBSD and other GLIBC
-// systems
-
-#if defined(__APPLE__) || defined(__linux__) || defined(__FreeBSD__) ||        \
-    defined(__GLIBC__) || defined(__NetBSD__)
-#if !defined(__ANDROID__)
-// this method needs to be visible to macosx/Host.cpp and
-// common/Host.cpp.
-
-short Host::GetPosixspawnFlags(const ProcessLaunchInfo &launch_info) {
-  short flags = POSIX_SPAWN_SETSIGDEF | POSIX_SPAWN_SETSIGMASK;
-
-#if defined(__APPLE__)
-  if (launch_info.GetFlags().Test(eLaunchFlagExec))
-    flags |= POSIX_SPAWN_SETEXEC; // Darwin specific posix_spawn flag
-
-  if (launch_info.GetFlags().Test(eLaunchFlagDebug))
-    flags |= POSIX_SPAWN_START_SUSPENDED; // Darwin specific posix_spawn flag
-
-  if (launch_info.GetFlags().Test(eLaunchFlagDisableASLR))
-    flags |= _POSIX_SPAWN_DISABLE_ASLR; // Darwin specific posix_spawn flag
-
-  if (launch_info.GetLaunchInSeparateProcessGroup())
-    flags |= POSIX_SPAWN_SETPGROUP;
-
-#ifdef POSIX_SPAWN_CLOEXEC_DEFAULT
-#if defined(__APPLE__) && (defined(__x86_64__) || defined(__i386__))
-  static LazyBool g_use_close_on_exec_flag = eLazyBoolCalculate;
-  if (g_use_close_on_exec_flag == eLazyBoolCalculate) {
-    g_use_close_on_exec_flag = eLazyBoolNo;
-
-    uint32_t major, minor, update;
-    if (HostInfo::GetOSVersion(major, minor, update)) {
-      // Kernel panic if we use the POSIX_SPAWN_CLOEXEC_DEFAULT on 10.7 or
-      // earlier
-      if (major > 10 || (major == 10 && minor > 7)) {
-        // Only enable for 10.8 and later OS versions
-        g_use_close_on_exec_flag = eLazyBoolYes;
-      }
-    }
-  }
-#else
-  static LazyBool g_use_close_on_exec_flag = eLazyBoolYes;
-#endif
-  // Close all files exception those with file actions if this is supported.
-  if (g_use_close_on_exec_flag == eLazyBoolYes)
-    flags |= POSIX_SPAWN_CLOEXEC_DEFAULT;
-#endif
-#endif // #if defined (__APPLE__)
-  return flags;
-}
-
-Error Host::LaunchProcessPosixSpawn(const char *exe_path,
-                                    const ProcessLaunchInfo &launch_info,
-                                    lldb::pid_t &pid) {
-  Error error;
-  Log *log(lldb_private::GetLogIfAllCategoriesSet(LIBLLDB_LOG_HOST |
-                                                  LIBLLDB_LOG_PROCESS));
-
-  posix_spawnattr_t attr;
-  error.SetError(::posix_spawnattr_init(&attr), eErrorTypePOSIX);
-
-  if (error.Fail()) {
-    LLDB_LOG(log, "error: {0}, ::posix_spawnattr_init ( &attr )", error);
-    return error;
-  }
-
-  // Make a quick class that will cleanup the posix spawn attributes in case
-  // we return in the middle of this function.
-  lldb_utility::CleanUp<posix_spawnattr_t *, int> posix_spawnattr_cleanup(
-      &attr, posix_spawnattr_destroy);
-
-  sigset_t no_signals;
-  sigset_t all_signals;
-  sigemptyset(&no_signals);
-  sigfillset(&all_signals);
-  ::posix_spawnattr_setsigmask(&attr, &no_signals);
-#if defined(__linux__) || defined(__FreeBSD__) || defined(__NetBSD__)
-  ::posix_spawnattr_setsigdefault(&attr, &no_signals);
-#else
-  ::posix_spawnattr_setsigdefault(&attr, &all_signals);
-#endif
-
-  short flags = GetPosixspawnFlags(launch_info);
-
-  error.SetError(::posix_spawnattr_setflags(&attr, flags), eErrorTypePOSIX);
-  if (error.Fail()) {
-    LLDB_LOG(log,
-             "error: {0}, ::posix_spawnattr_setflags ( &attr, flags={1:x} )",
-             error, flags);
-    return error;
-  }
-
-// posix_spawnattr_setbinpref_np appears to be an Apple extension per:
-// http://www.unix.com/man-page/OSX/3/posix_spawnattr_setbinpref_np/
-#if defined(__APPLE__) && !defined(__arm__)
-
-  // Don't set the binpref if a shell was provided.  After all, that's only
-  // going to affect what version of the shell
-  // is launched, not what fork of the binary is launched.  We insert "arch
-  // --arch <ARCH> as part of the shell invocation
-  // to do that job on OSX.
-
-  if (launch_info.GetShell() == nullptr) {
-    // We don't need to do this for ARM, and we really shouldn't now that we
-    // have multiple CPU subtypes and no posix_spawnattr call that allows us
-    // to set which CPU subtype to launch...
-    const ArchSpec &arch_spec = launch_info.GetArchitecture();
-    cpu_type_t cpu = arch_spec.GetMachOCPUType();
-    cpu_type_t sub = arch_spec.GetMachOCPUSubType();
-    if (cpu != 0 && cpu != static_cast<cpu_type_t>(UINT32_MAX) &&
-        cpu != static_cast<cpu_type_t>(LLDB_INVALID_CPUTYPE) &&
-        !(cpu == 0x01000007 && sub == 8)) // If haswell is specified, don't try
-                                          // to set the CPU type or we will fail
-    {
-      size_t ocount = 0;
-      error.SetError(::posix_spawnattr_setbinpref_np(&attr, 1, &cpu, &ocount),
-                     eErrorTypePOSIX);
-      if (error.Fail())
-        LLDB_LOG(log, "error: {0}, ::posix_spawnattr_setbinpref_np ( &attr, 1, "
-                      "cpu_type = {1:x}, count => {2} )",
-                 error, cpu, ocount);
-
-      if (error.Fail() || ocount != 1)
-        return error;
-    }
-  }
-
-#endif
-
-  const char *tmp_argv[2];
-  char *const *argv = const_cast<char *const *>(
-      launch_info.GetArguments().GetConstArgumentVector());
-  char *const *envp = const_cast<char *const *>(
-      launch_info.GetEnvironmentEntries().GetConstArgumentVector());
-  if (argv == NULL) {
-    // posix_spawn gets very unhappy if it doesn't have at least the program
-    // name in argv[0]. One of the side affects I have noticed is the
-    // environment
-    // variables don't make it into the child process if "argv == NULL"!!!
-    tmp_argv[0] = exe_path;
-    tmp_argv[1] = NULL;
-    argv = const_cast<char *const *>(tmp_argv);
-  }
-
+// The functions below implement process launching for non-Apple-based
+// platforms
 #if !defined(__APPLE__)
-  // manage the working directory
-  char current_dir[PATH_MAX];
-  current_dir[0] = '\0';
-#endif
-
-  FileSpec working_dir{launch_info.GetWorkingDirectory()};
-  if (working_dir) {
-#if defined(__APPLE__)
-    // Set the working directory on this thread only
-    if (__pthread_chdir(working_dir.GetCString()) < 0) {
-      if (errno == ENOENT) {
-        error.SetErrorStringWithFormat("No such file or directory: %s",
-                                       working_dir.GetCString());
-      } else if (errno == ENOTDIR) {
-        error.SetErrorStringWithFormat("Path doesn't name a directory: %s",
-                                       working_dir.GetCString());
-      } else {
-        error.SetErrorStringWithFormat("An unknown error occurred when "
-                                       "changing directory for process "
-                                       "execution.");
-      }
-      return error;
-    }
-#else
-    if (::getcwd(current_dir, sizeof(current_dir)) == NULL) {
-      error.SetError(errno, eErrorTypePOSIX);
-      LLDB_LOG(log, "error: {0}, unable to save the current directory", error);
-      return error;
-    }
-
-    if (::chdir(working_dir.GetCString()) == -1) {
-      error.SetError(errno, eErrorTypePOSIX);
-      LLDB_LOG(log, "error: {0}, unable to change working directory to {1}",
-               error, working_dir);
-      return error;
-    }
-#endif
-  }
-
-  ::pid_t result_pid = LLDB_INVALID_PROCESS_ID;
-  const size_t num_file_actions = launch_info.GetNumFileActions();
-  if (num_file_actions > 0) {
-    posix_spawn_file_actions_t file_actions;
-    error.SetError(::posix_spawn_file_actions_init(&file_actions),
-                   eErrorTypePOSIX);
-    if (error.Fail()) {
-      LLDB_LOG(log,
-               "error: {0}, ::posix_spawn_file_actions_init ( &file_actions )",
-               error);
-      return error;
-    }
-
-    // Make a quick class that will cleanup the posix spawn attributes in case
-    // we return in the middle of this function.
-    lldb_utility::CleanUp<posix_spawn_file_actions_t *, int>
-        posix_spawn_file_actions_cleanup(&file_actions,
-                                         posix_spawn_file_actions_destroy);
-
-    for (size_t i = 0; i < num_file_actions; ++i) {
-      const FileAction *launch_file_action =
-          launch_info.GetFileActionAtIndex(i);
-      if (launch_file_action) {
-        if (!AddPosixSpawnFileAction(&file_actions, launch_file_action, log,
-                                     error))
-          return error;
-      }
-    }
-
-    error.SetError(
-        ::posix_spawnp(&result_pid, exe_path, &file_actions, &attr, argv, envp),
-        eErrorTypePOSIX);
-
-    if (error.Fail()) {
-      LLDB_LOG(log, "error: {0}, ::posix_spawnp(pid => {1}, path = '{2}', "
-                    "file_actions = {3}, "
-                    "attr = {4}, argv = {5}, envp = {6} )",
-               error, result_pid, exe_path, &file_actions, &attr, argv, envp);
-      if (log) {
-        for (int ii = 0; argv[ii]; ++ii)
-          LLDB_LOG(log, "argv[{0}] = '{1}'", ii, argv[ii]);
-      }
-    }
-
-  } else {
-    error.SetError(
-        ::posix_spawnp(&result_pid, exe_path, NULL, &attr, argv, envp),
-        eErrorTypePOSIX);
-
-    if (error.Fail()) {
-      LLDB_LOG(log, "error: {0}, ::posix_spawnp ( pid => {1}, path = '{2}', "
-                    "file_actions = NULL, attr = {3}, argv = {4}, envp = {5} )",
-               error, result_pid, exe_path, &attr, argv, envp);
-      if (log) {
-        for (int ii = 0; argv[ii]; ++ii)
-          LLDB_LOG(log, "argv[{0}] = '{1}'", ii, argv[ii]);
-      }
-    }
-  }
-  pid = result_pid;
-
-  if (working_dir) {
-#if defined(__APPLE__)
-    // No more thread specific current working directory
-    __pthread_fchdir(-1);
-#else
-    if (::chdir(current_dir) == -1 && error.Success()) {
-      error.SetError(errno, eErrorTypePOSIX);
-      LLDB_LOG(log,
-               "error: {0}, unable to change current directory back to {1}",
-               error, current_dir);
-    }
-#endif
-  }
-
-  return error;
-}
-
-bool Host::AddPosixSpawnFileAction(void *_file_actions, const FileAction *info,
-                                   Log *log, Error &error) {
-  if (info == NULL)
-    return false;
-
-  posix_spawn_file_actions_t *file_actions =
-      reinterpret_cast<posix_spawn_file_actions_t *>(_file_actions);
-
-  switch (info->GetAction()) {
-  case FileAction::eFileActionNone:
-    error.Clear();
-    break;
-
-  case FileAction::eFileActionClose:
-    if (info->GetFD() == -1)
-      error.SetErrorString(
-          "invalid fd for posix_spawn_file_actions_addclose(...)");
-    else {
-      error.SetError(
-          ::posix_spawn_file_actions_addclose(file_actions, info->GetFD()),
-          eErrorTypePOSIX);
-      if (error.Fail())
-        LLDB_LOG(log, "error: {0}, posix_spawn_file_actions_addclose "
-                      "(action={1}, fd={2})",
-                 error, file_actions, info->GetFD());
-    }
-    break;
-
-  case FileAction::eFileActionDuplicate:
-    if (info->GetFD() == -1)
-      error.SetErrorString(
-          "invalid fd for posix_spawn_file_actions_adddup2(...)");
-    else if (info->GetActionArgument() == -1)
-      error.SetErrorString(
-          "invalid duplicate fd for posix_spawn_file_actions_adddup2(...)");
-    else {
-      error.SetError(
-          ::posix_spawn_file_actions_adddup2(file_actions, info->GetFD(),
-                                             info->GetActionArgument()),
-          eErrorTypePOSIX);
-      if (error.Fail())
-        LLDB_LOG(log, "error: {0}, posix_spawn_file_actions_adddup2 "
-                      "(action={1}, fd={2}, dup_fd={3})",
-                 error, file_actions, info->GetFD(), info->GetActionArgument());
-    }
-    break;
-
-  case FileAction::eFileActionOpen:
-    if (info->GetFD() == -1)
-      error.SetErrorString(
-          "invalid fd in posix_spawn_file_actions_addopen(...)");
-    else {
-      int oflag = info->GetActionArgument();
-
-      mode_t mode = 0;
-
-      if (oflag & O_CREAT)
-        mode = 0640;
-
-      error.SetError(::posix_spawn_file_actions_addopen(
-                         file_actions, info->GetFD(),
-                         info->GetPath().str().c_str(), oflag, mode),
-                     eErrorTypePOSIX);
-      if (error.Fail())
-        LLDB_LOG(
-            log, "error: {0}, posix_spawn_file_actions_addopen (action={1}, "
-                 "fd={2}, path='{3}', oflag={4}, mode={5})",
-            error, file_actions, info->GetFD(), info->GetPath(), oflag, mode);
-    }
-    break;
-  }
-  return error.Success();
-}
-#endif // !defined(__ANDROID__)
-#endif // defined (__APPLE__) || defined (__linux__) || defined (__FreeBSD__) ||
-       // defined (__GLIBC__) || defined(__NetBSD__)
-
-#if defined(__linux__) || defined(__FreeBSD__) || defined(__GLIBC__) ||        \
-    defined(__NetBSD__) || defined(_WIN32)
-// The functions below implement process launching via posix_spawn() for Linux,
-// FreeBSD and NetBSD.
-
-Error Host::LaunchProcess(ProcessLaunchInfo &launch_info) {
+Status Host::LaunchProcess(ProcessLaunchInfo &launch_info) {
   std::unique_ptr<ProcessLauncher> delegate_launcher;
 #if defined(_WIN32)
   delegate_launcher.reset(new ProcessLauncherWindows());
-#elif defined(__linux__) || defined(__NetBSD__)
-  delegate_launcher.reset(new ProcessLauncherPosixFork());
 #else
-  delegate_launcher.reset(new ProcessLauncherPosix());
+  delegate_launcher.reset(new ProcessLauncherPosixFork());
 #endif
   MonitoringProcessLauncher launcher(std::move(delegate_launcher));
 
-  Error error;
+  Status error;
   HostProcess process = launcher.LaunchProcess(launch_info, error);
 
   // TODO(zturner): It would be better if the entire HostProcess were returned
-  // instead of writing
-  // it into this structure.
+  // instead of writing it into this structure.
   launch_info.SetProcessID(process.GetProcessId());
 
   return error;
 }
-#endif // defined(__linux__) || defined(__FreeBSD__) || defined(__NetBSD__)
+#endif // !defined(__APPLE__)
 
 #ifndef _WIN32
 void Host::Kill(lldb::pid_t pid, int signo) { ::kill(pid, signo); }
@@ -983,8 +648,78 @@ bool Host::OpenFileInExternalEditor(const FileSpec &file_spec,
 
 #endif
 
-const UnixSignalsSP &Host::GetUnixSignals() {
-  static const auto s_unix_signals_sp =
-      UnixSignals::Create(HostInfo::GetArchitecture());
-  return s_unix_signals_sp;
+std::unique_ptr<Connection> Host::CreateDefaultConnection(llvm::StringRef url) {
+#if defined(_WIN32)
+  if (url.startswith("file://"))
+    return std::unique_ptr<Connection>(new ConnectionGenericFile());
+#endif
+  return std::unique_ptr<Connection>(new ConnectionFileDescriptor());
+}
+
+#if defined(LLVM_ON_UNIX)
+WaitStatus WaitStatus::Decode(int wstatus) {
+  if (WIFEXITED(wstatus))
+    return {Exit, uint8_t(WEXITSTATUS(wstatus))};
+  else if (WIFSIGNALED(wstatus))
+    return {Signal, uint8_t(WTERMSIG(wstatus))};
+  else if (WIFSTOPPED(wstatus))
+    return {Stop, uint8_t(WSTOPSIG(wstatus))};
+  llvm_unreachable("Unknown wait status");
+}
+#endif
+
+void llvm::format_provider<WaitStatus>::format(const WaitStatus &WS,
+                                               raw_ostream &OS,
+                                               StringRef Options) {
+  if (Options == "g") {
+    char type;
+    switch (WS.type) {
+    case WaitStatus::Exit:
+      type = 'W';
+      break;
+    case WaitStatus::Signal:
+      type = 'X';
+      break;
+    case WaitStatus::Stop:
+      type = 'S';
+      break;
+    }
+    OS << formatv("{0}{1:x-2}", type, WS.status);
+    return;
+  }
+
+  assert(Options.empty());
+  const char *desc;
+  switch(WS.type) {
+  case WaitStatus::Exit:
+    desc = "Exited with status";
+    break;
+  case WaitStatus::Signal:
+    desc = "Killed by signal";
+    break;
+  case WaitStatus::Stop:
+    desc = "Stopped by signal";
+    break;
+  }
+  OS << desc << " " << int(WS.status);
+}
+
+uint32_t Host::FindProcesses(const ProcessInstanceInfoMatch &match_info,
+                             ProcessInstanceInfoList &process_infos) {
+
+  if (llvm::Optional<ProcessInstanceInfoList> infos =
+          repro::GetReplayProcessInstanceInfoList()) {
+    process_infos = *infos;
+    return process_infos.size();
+  }
+
+  uint32_t result = FindProcessesImpl(match_info, process_infos);
+
+  if (repro::Generator *g = repro::Reproducer::Instance().GetGenerator()) {
+    g->GetOrCreate<repro::ProcessInfoProvider>()
+        .GetNewProcessInfoRecorder()
+        ->Record(process_infos);
+  }
+
+  return result;
 }

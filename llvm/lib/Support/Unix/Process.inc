@@ -1,9 +1,8 @@
 //===- Unix/Process.cpp - Unix Process Implementation --------- -*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -14,9 +13,9 @@
 #include "Unix.h"
 #include "llvm/ADT/Hashing.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/Config/config.h"
 #include "llvm/Support/ManagedStatic.h"
-#include "llvm/Support/Mutex.h"
-#include "llvm/Support/MutexGuard.h"
+#include <mutex>
 #if HAVE_FCNTL_H
 #include <fcntl.h>
 #endif
@@ -32,10 +31,7 @@
 #if HAVE_SIGNAL_H
 #include <signal.h>
 #endif
-// DragonFlyBSD, OpenBSD, and Bitrig have deprecated <malloc.h> for
-// <stdlib.h> instead. Unix.h includes this for us already.
-#if defined(HAVE_MALLOC_H) && !defined(__DragonFly__) && \
-    !defined(__OpenBSD__) && !defined(__Bitrig__)
+#if defined(HAVE_MALLINFO) || defined(HAVE_MALLINFO2)
 #include <malloc.h>
 #endif
 #if defined(HAVE_MALLCTL)
@@ -70,21 +66,34 @@ static std::pair<std::chrono::microseconds, std::chrono::microseconds> getRUsage
 #endif
 }
 
+Process::Pid Process::getProcessId() {
+  static_assert(sizeof(Pid) >= sizeof(pid_t),
+                "Process::Pid should be big enough to store pid_t");
+  return Pid(::getpid());
+}
+
 // On Cygwin, getpagesize() returns 64k(AllocationGranularity) and
 // offset in mmap(3) should be aligned to the AllocationGranularity.
-unsigned Process::getPageSize() {
+Expected<unsigned> Process::getPageSize() {
 #if defined(HAVE_GETPAGESIZE)
   static const int page_size = ::getpagesize();
 #elif defined(HAVE_SYSCONF)
   static long page_size = ::sysconf(_SC_PAGE_SIZE);
 #else
-#warning Cannot get the page size on this machine
+#error Cannot get the page size on this machine
 #endif
+  if (page_size == -1)
+    return errorCodeToError(std::error_code(errno, std::generic_category()));
+
   return static_cast<unsigned>(page_size);
 }
 
 size_t Process::GetMallocUsage() {
-#if defined(HAVE_MALLINFO)
+#if defined(HAVE_MALLINFO2)
+  struct mallinfo2 mi;
+  mi = ::mallinfo2();
+  return mi.uordblks;
+#elif defined(HAVE_MALLINFO)
   struct mallinfo mi;
   mi = ::mallinfo();
   return mi.uordblks;
@@ -172,15 +181,6 @@ Optional<std::string> Process::GetEnv(StringRef Name) {
   return std::string(Val);
 }
 
-std::error_code
-Process::GetArgumentVector(SmallVectorImpl<const char *> &ArgsOut,
-                           ArrayRef<const char *> ArgsIn,
-                           SpecificBumpPtrAllocator<char> &) {
-  ArgsOut.append(ArgsIn.begin(), ArgsIn.end());
-
-  return std::error_code();
-}
-
 namespace {
 class FDCloser {
 public:
@@ -207,13 +207,10 @@ std::error_code Process::FixupStandardFileDescriptors() {
   for (int StandardFD : StandardFDs) {
     struct stat st;
     errno = 0;
-    while (fstat(StandardFD, &st) < 0) {
+    if (RetryAfterSignal(-1, ::fstat, StandardFD, &st) < 0) {
       assert(errno && "expected errno to be set if fstat failed!");
       // fstat should return EBADF if the file descriptor is closed.
-      if (errno == EBADF)
-        break;
-      // retry fstat if we got EINTR, otherwise bubble up the failure.
-      if (errno != EINTR)
+      if (errno != EBADF)
         return std::error_code(errno, std::generic_category());
     }
     // if fstat succeeds, move on to the next FD.
@@ -222,11 +219,11 @@ std::error_code Process::FixupStandardFileDescriptors() {
     assert(errno == EBADF && "expected errno to have EBADF at this point!");
 
     if (NullFD < 0) {
-      while ((NullFD = open("/dev/null", O_RDWR)) < 0) {
-        if (errno == EINTR)
-          continue;
+      // Call ::open in a lambda to avoid overload resolution in
+      // RetryAfterSignal when open is overloaded, such as in Bionic.
+      auto Open = [&]() { return ::open("/dev/null", O_RDWR); };
+      if ((NullFD = RetryAfterSignal(-1, Open)) < 0)
         return std::error_code(errno, std::generic_category());
-      }
     }
 
     if (NullFD == StandardFD)
@@ -239,11 +236,11 @@ std::error_code Process::FixupStandardFileDescriptors() {
 
 std::error_code Process::SafelyCloseFileDescriptor(int FD) {
   // Create a signal set filled with *all* signals.
-  sigset_t FullSet;
-  if (sigfillset(&FullSet) < 0)
+  sigset_t FullSet, SavedSet;
+  if (sigfillset(&FullSet) < 0 || sigfillset(&SavedSet) < 0)
     return std::error_code(errno, std::generic_category());
+
   // Atomically swap our current signal mask with a full mask.
-  sigset_t SavedSet;
 #if LLVM_ENABLE_THREADS
   if (int EC = pthread_sigmask(SIG_SETMASK, &FullSet, &SavedSet))
     return std::error_code(EC, std::generic_category());
@@ -293,7 +290,7 @@ bool Process::FileDescriptorIsDisplayed(int fd) {
 #endif
 }
 
-static unsigned getColumns(int FileID) {
+static unsigned getColumns() {
   // If COLUMNS is defined in the environment, wrap to that many columns.
   if (const char *ColumnsStr = std::getenv("COLUMNS")) {
     int Columns = std::atoi(ColumnsStr);
@@ -301,33 +298,26 @@ static unsigned getColumns(int FileID) {
       return Columns;
   }
 
-  unsigned Columns = 0;
-
-#if defined(HAVE_SYS_IOCTL_H) && defined(HAVE_TERMIOS_H)
-  // Try to determine the width of the terminal.
-  struct winsize ws;
-  if (ioctl(FileID, TIOCGWINSZ, &ws) == 0)
-    Columns = ws.ws_col;
-#endif
-
-  return Columns;
+  // We used to call ioctl TIOCGWINSZ to determine the width. It is considered
+  // unuseful.
+  return 0;
 }
 
 unsigned Process::StandardOutColumns() {
   if (!StandardOutIsDisplayed())
     return 0;
 
-  return getColumns(1);
+  return getColumns();
 }
 
 unsigned Process::StandardErrColumns() {
   if (!StandardErrIsDisplayed())
     return 0;
 
-  return getColumns(2);
+  return getColumns();
 }
 
-#ifdef HAVE_TERMINFO
+#ifdef LLVM_ENABLE_TERMINFO
 // We manually declare these extern functions because finding the correct
 // headers from various terminfo, curses, or other sources is harder than
 // writing their specs down.
@@ -337,17 +327,18 @@ extern "C" int del_curterm(struct term *termp);
 extern "C" int tigetnum(char *capname);
 #endif
 
-#ifdef HAVE_TERMINFO
-static ManagedStatic<sys::Mutex> TermColorMutex;
+#ifdef LLVM_ENABLE_TERMINFO
+static ManagedStatic<std::mutex> TermColorMutex;
 #endif
 
 static bool terminalHasColors(int fd) {
-#ifdef HAVE_TERMINFO
+#ifdef LLVM_ENABLE_TERMINFO
   // First, acquire a global lock because these C routines are thread hostile.
-  MutexGuard G(*TermColorMutex);
+  std::lock_guard<std::mutex> G(*TermColorMutex);
 
+  struct term *previous_term = set_curterm(nullptr);
   int errret = 0;
-  if (setupterm((char *)nullptr, fd, &errret) != 0)
+  if (setupterm(nullptr, fd, &errret) != 0)
     // Regardless of why, if we can't get terminfo, we shouldn't try to print
     // colors.
     return false;
@@ -369,12 +360,27 @@ static bool terminalHasColors(int fd) {
 
   // Now extract the structure allocated by setupterm and free its memory
   // through a really silly dance.
-  struct term *termp = set_curterm((struct term *)nullptr);
+  struct term *termp = set_curterm(previous_term);
   (void)del_curterm(termp); // Drop any errors here.
 
   // Return true if we found a color capabilities for the current terminal.
   if (HasColors)
     return true;
+#else
+  // When the terminfo database is not available, check if the current terminal
+  // is one of terminals that are known to support ANSI color escape codes.
+  if (const char *TermStr = std::getenv("TERM")) {
+    return StringSwitch<bool>(TermStr)
+      .Case("ansi", true)
+      .Case("cygwin", true)
+      .Case("linux", true)
+      .StartsWith("screen", true)
+      .StartsWith("xterm", true)
+      .StartsWith("vt100", true)
+      .StartsWith("rxvt", true)
+      .EndsWith("color", true)
+      .Default(false);
+  }
 #endif
 
   // Otherwise, be conservative.

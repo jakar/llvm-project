@@ -1,14 +1,13 @@
 //===-- WebAssemblyReplacePhysRegs.cpp - Replace phys regs with virt regs -===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 ///
 /// \file
-/// \brief This file implements a pass that replaces physical registers with
+/// This file implements a pass that replaces physical registers with
 /// virtual registers.
 ///
 /// LLVM expects certain physical registers, such as a stack pointer. However,
@@ -19,8 +18,8 @@
 ///
 //===----------------------------------------------------------------------===//
 
-#include "WebAssembly.h"
 #include "MCTargetDesc/WebAssemblyMCTargetDesc.h"
+#include "WebAssembly.h"
 #include "WebAssemblyMachineFunctionInfo.h"
 #include "WebAssemblySubtarget.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
@@ -53,18 +52,22 @@ private:
 } // end anonymous namespace
 
 char WebAssemblyReplacePhysRegs::ID = 0;
+INITIALIZE_PASS(WebAssemblyReplacePhysRegs, DEBUG_TYPE,
+                "Replace physical registers with virtual registers", false,
+                false)
+
 FunctionPass *llvm::createWebAssemblyReplacePhysRegs() {
   return new WebAssemblyReplacePhysRegs();
 }
 
 bool WebAssemblyReplacePhysRegs::runOnMachineFunction(MachineFunction &MF) {
-  DEBUG({
+  LLVM_DEBUG({
     dbgs() << "********** Replace Physical Registers **********\n"
            << "********** Function: " << MF.getName() << '\n';
   });
 
   MachineRegisterInfo &MRI = MF.getRegInfo();
-  const auto &TRI = *MF.getSubtarget<WebAssemblySubtarget>().getRegisterInfo();
+  auto &TRI = *MF.getSubtarget<WebAssemblySubtarget>().getRegisterInfo();
   bool Changed = false;
 
   assert(!mustPreserveAnalysisID(LiveIntervalsID) &&
@@ -82,11 +85,21 @@ bool WebAssemblyReplacePhysRegs::runOnMachineFunction(MachineFunction &MF) {
     // Replace explicit uses of the physical register with a virtual register.
     const TargetRegisterClass *RC = TRI.getMinimalPhysRegClass(PReg);
     unsigned VReg = WebAssembly::NoRegister;
-    for (auto I = MRI.reg_begin(PReg), E = MRI.reg_end(); I != E; ) {
+    for (auto I = MRI.reg_begin(PReg), E = MRI.reg_end(); I != E;) {
       MachineOperand &MO = *I++;
       if (!MO.isImplicit()) {
-        if (VReg == WebAssembly::NoRegister)
+        if (VReg == WebAssembly::NoRegister) {
           VReg = MRI.createVirtualRegister(RC);
+          if (PReg == TRI.getFrameRegister(MF)) {
+            auto FI = MF.getInfo<WebAssemblyFunctionInfo>();
+            assert(!FI->isFrameBaseVirtual());
+            FI->setFrameBaseVreg(VReg);
+            LLVM_DEBUG({
+              dbgs() << "replacing preg " << PReg << " with " << VReg << " ("
+                     << Register::virtReg2Index(VReg) << ")\n";
+            });
+          }
+        }
         MO.setReg(VReg);
         if (MO.getParent()->isDebugValue())
           MO.setIsDebug();

@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -std=c++1z -verify %s
+// RUN: %clang_cc1 -fsyntax-only -std=c++1z -verify %s
 
 void f(int n) {
   switch (n) {
@@ -53,7 +53,7 @@ class [[fallthrough]] C {}; // expected-error {{'fallthrough' attribute cannot b
 [[fallthrough]] // expected-error {{'fallthrough' attribute cannot be applied to a declaration}}
 void g() {
   [[fallthrough]] int n; // expected-error {{'fallthrough' attribute cannot be applied to a declaration}}
-  [[fallthrough]] ++n; // expected-error-re {{{{^}}fallthrough attribute is only allowed on empty statements}}
+  [[fallthrough]] ++n; // expected-error {{'fallthrough' attribute only applies to empty statements}}
 
   switch (n) {
     // FIXME: This should be an error.

@@ -6,12 +6,8 @@
 # RUN:  .ccc : AT(ADDR(.ccc) - 0x500) { *(.ccc) } \
 # RUN: }" > %t.script
 # RUN: ld.lld %t --script %t.script -o %t2
-# RUN: llvm-readobj -program-headers %t2 | FileCheck %s
+# RUN: llvm-readobj -l %t2 | FileCheck %s
 
-# CHECK:      Type: PT_LOAD
-# CHECK-NEXT:   Offset: 0x0
-# CHECK-NEXT:   VirtualAddress: 0x0
-# CHECK-NEXT:   PhysicalAddress: 0x0
 # CHECK:      Type: PT_LOAD
 # CHECK-NEXT:   Offset: 0x1000
 # CHECK-NEXT:   VirtualAddress: 0x1000

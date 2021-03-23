@@ -27,3 +27,11 @@ manually:
 
 * When the declarations are in different header files;
 * When multiple variables are declared together.
+
+Options
+-------
+
+.. option:: IgnoreMacros
+
+   If set to `true`, the check will not give warnings inside macros. Default
+   is `true`.

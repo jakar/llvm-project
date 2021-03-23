@@ -3,23 +3,52 @@ set(LLVM_LINK_COMPONENTS
   AsmParser
   Core
   Support
+  TransformUtils
   )
 
-add_llvm_unittest(AnalysisTests
+if (DEFINED LLVM_HAVE_TF_API)
+  LIST(APPEND EXTRA_TESTS TFUtilsTest.cpp)
+else()
+  LIST(APPEND LLVM_OPTIONAL_SOURCES TFUtilsTest.cpp)
+endif()
+
+add_llvm_unittest_with_input_files(AnalysisTests
   AliasAnalysisTest.cpp
+  AliasSetTrackerTest.cpp
+  AssumeBundleQueriesTest.cpp
+  BasicAliasAnalysisTest.cpp
   BlockFrequencyInfoTest.cpp
   BranchProbabilityInfoTest.cpp
+  CallGraphTest.cpp
+  CaptureTrackingTest.cpp
   CFGTest.cpp
   CGSCCPassManagerTest.cpp
-  CallGraphTest.cpp
+  ConstraintSystemTest.cpp
+  DDGTest.cpp
+  DivergenceAnalysisTest.cpp
+  DomTreeUpdaterTest.cpp
+  GlobalsModRefTest.cpp
+  FunctionPropertiesAnalysisTest.cpp
+  IRSimilarityIdentifierTest.cpp
+  IVDescriptorsTest.cpp
   LazyCallGraphTest.cpp
+  LoadsTest.cpp
   LoopInfoTest.cpp
+  LoopNestTest.cpp
   MemoryBuiltinsTest.cpp
-  MemorySSA.cpp
+  MemorySSATest.cpp
+  PhiValuesTest.cpp
   ProfileSummaryInfoTest.cpp
   ScalarEvolutionTest.cpp
-  TBAATest.cpp
+  VectorFunctionABITest.cpp
+  SparsePropagation.cpp
   TargetLibraryInfoTest.cpp
-  UnrollAnalyzer.cpp
+  TBAATest.cpp
+  UnrollAnalyzerTest.cpp
+  ValueLatticeTest.cpp
   ValueTrackingTest.cpp
+  VectorUtilsTest.cpp
+  ${EXTRA_TESTS}
   )
+
+ target_link_libraries(AnalysisTests PRIVATE LLVMTestingSupport)

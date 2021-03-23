@@ -1,23 +1,25 @@
 //===- DbiModuleList.h - PDB module information list ------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_DEBUGINFO_PDB_RAW_DBIMODULELIST_H
-#define LLVM_DEBUGINFO_PDB_RAW_DBIMODULELIST_H
+#ifndef LLVM_DEBUGINFO_PDB_NATIVE_DBIMODULELIST_H
+#define LLVM_DEBUGINFO_PDB_NATIVE_DBIMODULELIST_H
 
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/iterator.h"
+#include "llvm/ADT/iterator_range.h"
 #include "llvm/DebugInfo/PDB/Native/DbiModuleDescriptor.h"
 #include "llvm/Support/BinaryStreamArray.h"
 #include "llvm/Support/BinaryStreamRef.h"
 #include "llvm/Support/Endian.h"
 #include "llvm/Support/Error.h"
+#include <cstddef>
 #include <cstdint>
+#include <iterator>
 #include <vector>
 
 namespace llvm {
@@ -29,14 +31,15 @@ struct FileInfoSubstreamHeader;
 class DbiModuleSourceFilesIterator
     : public iterator_facade_base<DbiModuleSourceFilesIterator,
                                   std::random_access_iterator_tag, StringRef> {
-  typedef iterator_facade_base<DbiModuleSourceFilesIterator,
-                               std::random_access_iterator_tag, StringRef>
-      BaseType;
+  using BaseType =
+      iterator_facade_base<DbiModuleSourceFilesIterator,
+                           std::random_access_iterator_tag, StringRef>;
 
 public:
   DbiModuleSourceFilesIterator(const DbiModuleList &Modules, uint32_t Modi,
                                uint16_t Filei);
   DbiModuleSourceFilesIterator() = default;
+  DbiModuleSourceFilesIterator(const DbiModuleSourceFilesIterator &R) = default;
   DbiModuleSourceFilesIterator &
   operator=(const DbiModuleSourceFilesIterator &R) = default;
 
@@ -108,7 +111,8 @@ private:
   BinaryStreamRef FileInfoSubstream;
   BinaryStreamRef NamesBuffer;
 };
-}
-}
 
-#endif // LLVM_DEBUGINFO_PDB_RAW_DBIMODULELIST_H
+} // end namespace pdb
+} // end namespace llvm
+
+#endif // LLVM_DEBUGINFO_PDB_NATIVE_DBIMODULELIST_H

@@ -10,20 +10,18 @@
 # RUN:         end    = ORIGIN(ram) + LENGTH(ram); \
 # RUN:       }" > %t.script
 # RUN: ld.lld -o %t1 --script %t.script %t
-# RUN: llvm-objdump -t %t1 | FileCheck %s
+# RUN: llvm-nm -p %t1 | FileCheck %s
 
-# CHECK:      SYMBOL TABLE:
-# CHECK-NEXT: 0000000000000000 *UND* 00000000
-# CHECK-NEXT: 0000000000008000 .text 00000000 _start
-# CHECK-NEXT: 0000000000008000 *ABS* 00000000 origin
-# CHECK-NEXT: 0000000000040000 *ABS* 00000000 length
-# CHECK-NEXT: 0000000000048000 *ABS* 00000000 end
+# CHECK:      0000000000008000 T _start
+# CHECK-NEXT: 0000000000008000 A origin
+# CHECK-NEXT: 0000000000040000 A length
+# CHECK-NEXT: 0000000000048000 A end
 
 # RUN: echo "SECTIONS { \
 # RUN:         no_exist_origin = ORIGIN(ram); \
 # RUN:         no_exist_length = LENGTH(ram); \
 # RUN:       }" > %t2.script
-# RUN: not ld.lld -o %t2 --script %t2.script %t 2>&1 \
+# RUN: not ld.lld -o /dev/null --script %t2.script %t 2>&1 \
 # RUN:  | FileCheck -check-prefix=ERR %s
 # ERR: {{.*}}.script:1: memory region not defined: ram
 

@@ -1,9 +1,8 @@
 //===- TargetSchedule.td - Target Independent Scheduling ---*- tablegen -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -88,7 +87,7 @@ class SchedMachineModel {
   // Per-cycle resources tables.
   ProcessorItineraries Itineraries = NoItineraries;
 
-  bit PostRAScheduler = 0; // Enable Post RegAlloc Scheduler pass.
+  bit PostRAScheduler = false; // Enable Post RegAlloc Scheduler pass.
 
   // Subtargets that define a model for only a subset of instructions
   // that have a scheduling class (itinerary class or SchedRW list)
@@ -97,7 +96,13 @@ class SchedMachineModel {
   // be an error. This should only be set during initial bringup,
   // or there will be no way to catch simple errors in the model
   // resulting from changes to the instruction definitions.
-  bit CompleteModel = 1;
+  bit CompleteModel = true;
+
+  // Indicates that we should do full overlap checking for multiple InstrRWs
+  // defining the same instructions within the same SchedMachineModel.
+  // FIXME: Remove when all in tree targets are clean with the full check
+  // enabled.
+  bit FullInstRWOverlapCheck = true;
 
   // A processor may only implement part of published ISA, due to either new ISA
   // extensions, (e.g. Pentium 4 doesn't have AVX) or implementation
@@ -113,12 +118,12 @@ class SchedMachineModel {
   // field.
   list<Predicate> UnsupportedFeatures = [];
 
-  bit NoModel = 0; // Special tag to indicate missing machine model.
+  bit NoModel = false; // Special tag to indicate missing machine model.
 }
 
 def NoSchedModel : SchedMachineModel {
-  let NoModel = 1;
-  let CompleteModel = 0;
+  let NoModel = true;
+  let CompleteModel = false;
 }
 
 // Define a kind of processor resource that may be common across
@@ -130,7 +135,7 @@ class ProcResourceKind;
 //
 // An optional Super resource may be given to model these resources as
 // a subset of the more general super resources. Using one of these
-// resources implies using one of the super resoruces.
+// resources implies using one of the super resources.
 //
 // ProcResourceUnits normally model a few buffered resources within an
 // out-of-order engine. Buffered resources may be held for multiple
@@ -158,7 +163,7 @@ class ProcResourceKind;
 // differently. Here we refer to stage between decoding into micro-ops
 // and moving them into a reservation station.) Normally NumMicroOps
 // is sufficient to limit dispatch/issue groups. However, some
-// processors can form groups of with only certain combinitions of
+// processors can form groups of with only certain combinations of
 // instruction types. e.g. POWER7.
 //
 // Use BufferSize = 1 for in-order execution units. This is used for
@@ -175,8 +180,7 @@ class ProcResourceKind;
 // BufferSize=1.
 //
 // SchedModel ties these units to a processor for any stand-alone defs
-// of this class. Instances of subclass ProcResource will be automatically
-// attached to a processor, so SchedModel is not needed.
+// of this class.
 class ProcResourceUnits<ProcResourceKind kind, int num> {
   ProcResourceKind Kind = kind;
   int NumUnits = num;
@@ -250,14 +254,18 @@ class ProcWriteResources<list<ProcResourceKind> resources> {
   list<int> ResourceCycles = [];
   int Latency = 1;
   int NumMicroOps = 1;
-  bit BeginGroup = 0;
-  bit EndGroup = 0;
+  bit BeginGroup = false;
+  bit EndGroup = false;
   // Allow a processor to mark some scheduling classes as unsupported
   // for stronger verification.
-  bit Unsupported = 0;
+  bit Unsupported = false;
   // Allow a processor to mark some scheduling classes as single-issue.
   // SingleIssue is an alias for Begin/End Group.
-  bit SingleIssue = 0;
+  bit SingleIssue = false;
+  // An instruction is allowed to retire out-of-order if RetireOOO is
+  // true for at least one of its writes. This field is only used by
+  // MCA for in-order subtargets, and is ignored for other targets.
+  bit RetireOOO = false;
   SchedMachineModel SchedModel = ?;
 }
 
@@ -275,10 +283,9 @@ class ProcWriteResources<list<ProcResourceKind> resources> {
 // ProcResources indicates the set of resources consumed by the write.
 // Optionally, ResourceCycles indicates the number of cycles the
 // resource is consumed. Each ResourceCycles item is paired with the
-// ProcResource item at the same position in its list. Since
-// ResourceCycles are rarely specialized, the list may be
-// incomplete. By default, resources are consumed for a single cycle,
-// regardless of latency, which models a fully pipelined processing
+// ProcResource item at the same position in its list. ResourceCycles
+// can be `[]`: in that case, all resources are consumed for a single
+// cycle, regardless of latency, which models a fully pipelined processing
 // unit. A value of 0 for ResourceCycles means that the resource must
 // be available but is not consumed, which is only relevant for
 // unbuffered resources.
@@ -314,7 +321,7 @@ class ProcReadAdvance<int cycles, list<SchedWrite> writes = []> {
   list<SchedWrite> ValidWrites = writes;
   // Allow a processor to mark some scheduling classes as unsupported
   // for stronger verification.
-  bit Unsupported = 0;
+  bit Unsupported = false;
   SchedMachineModel SchedModel = ?;
 }
 
@@ -349,17 +356,31 @@ class PredicateProlog<code c> {
   code Code = c;
 }
 
+// Base class for scheduling predicates.
+class SchedPredicateBase;
+
+// A scheduling predicate whose logic is defined by a MCInstPredicate.
+// This can directly be used by SchedWriteVariant definitions.
+class MCSchedPredicate<MCInstPredicate P> : SchedPredicateBase {
+  MCInstPredicate Pred = P;
+  SchedMachineModel SchedModel = ?;
+}
+
 // Define a predicate to determine which SchedVariant applies to a
 // particular MachineInstr. The code snippet is used as an
 // if-statement's expression. Available variables are MI, SchedModel,
 // and anything defined in a PredicateProlog.
 //
 // SchedModel silences warnings but is ignored.
-class SchedPredicate<code pred> {
+class SchedPredicate<code pred> : SchedPredicateBase {
   SchedMachineModel SchedModel = ?;
   code Predicate = pred;
 }
-def NoSchedPred : SchedPredicate<[{true}]>;
+
+// Define a predicate to be typically used as the default case in a
+// SchedVariant.  It the SchedVariant does not use any other predicate based on
+// MCSchedPredicate, this is the default scheduling case used by llvm-mca.
+def NoSchedPred : MCSchedPredicate<TruePred>;
 
 // Associate a predicate with a list of SchedReadWrites. By default,
 // the selected SchedReadWrites are still associated with a single
@@ -370,15 +391,15 @@ def NoSchedPred : SchedPredicate<[{true}]>;
 // operands. In this case, latency is not additive. If the current Variant
 // is already part of a Sequence, then that entire chain leading up to
 // the Variant is distributed over the variadic operands.
-class SchedVar<SchedPredicate pred, list<SchedReadWrite> selected> {
-  SchedPredicate Predicate = pred;
+class SchedVar<SchedPredicateBase pred, list<SchedReadWrite> selected> {
+  SchedPredicateBase Predicate = pred;
   list<SchedReadWrite> Selected = selected;
 }
 
 // SchedModel silences warnings but is ignored.
 class SchedVariant<list<SchedVar> variants> {
   list<SchedVar> Variants = variants;
-  bit Variadic = 0;
+  bit Variadic = false;
   SchedMachineModel SchedModel = ?;
 }
 
@@ -411,7 +432,7 @@ class InstRW<list<SchedReadWrite> rw, dag instrlist> {
   dag Instrs = instrlist;
   SchedMachineModel SchedModel = ?;
   // Allow a subtarget to mark some instructions as unsupported.
-  bit Unsupported = 0;
+  bit Unsupported = false;
 }
 
 // Map a set of itinerary classes to SchedReadWrite resources. This is
@@ -437,3 +458,119 @@ class SchedAlias<SchedReadWrite match, SchedReadWrite alias> {
   SchedReadWrite AliasRW = alias;
   SchedMachineModel SchedModel = ?;
 }
+
+// Allow the definition of processor register files for register renaming
+// purposes.
+//
+// Each processor register file declares:
+//  - The set of registers that can be renamed.
+//  - The number of physical registers which can be used for register renaming
+//    purpose.
+//  - The cost of a register rename.
+//  - The set of registers that allow move elimination.
+//  - The maximum number of moves that can be eliminated every cycle.
+//  - Whether move elimination is limited to register moves whose input
+//    is known to be zero.
+//
+// The cost of a rename is the number of physical registers allocated by the
+// register alias table to map the new definition. By default, register can be
+// renamed at the cost of a single physical register.  Note that register costs
+// are defined at register class granularity (see field `Costs`).
+//
+// The set of registers that are subject to register renaming is declared using
+// a list of register classes (see field `RegClasses`). An empty list of
+// register classes means: all the logical registers defined by the target can
+// be fully renamed.
+//
+// A register R can be renamed if its register class appears in the `RegClasses`
+// set. When R is written, a new alias is allocated at the cost of one or more
+// physical registers; as a result, false dependencies on R are removed.
+//
+// A sub-register V of register R is implicitly part of the same register file.
+// However, V is only renamed if its register class is part of `RegClasses`.
+// Otherwise, the processor keeps it (as well as any other different part
+// of R) together with R, and a write of V always causes a compulsory read of R.
+//
+// This is what happens for example on AMD processors (at least from Bulldozer
+// onwards), where AL and AH are not treated as independent from AX, and AX is
+// not treated as independent from EAX. A write to AL has an implicity false
+// dependency on the last write to EAX (or a portion of EAX).  As a consequence,
+// a write to AL cannot go in parallel with a write to AH.
+//
+// There is no false dependency if the partial register write belongs to a
+// register class that is in `RegClasses`.
+// There is also no penalty for writes that "clear the content a super-register"
+// (see MC/MCInstrAnalysis.h - method MCInstrAnalysis::clearsSuperRegisters()).
+// On x86-64, 32-bit GPR writes implicitly zero the upper half of the underlying
+// physical register, effectively removing any false dependencies with the
+// previous register definition.
+//
+// TODO: This implementation assumes that there is no limit in the number of
+// renames per cycle, which might not be true for all hardware or register
+// classes. Also, there is no limit to how many times the same logical register
+// can be renamed during the same cycle.
+//
+// TODO: we don't currently model merge penalties for the case where a write to
+// a part of a register is followed by a read from a larger part of the same
+// register. On some Intel chips, different parts of a GPR can be stored in
+// different physical registers. However, there is a cost to pay for when the
+// partial write is combined with the previous super-register definition.  We
+// should add support for these cases, and correctly model merge problems with
+// partial register accesses.
+//
+// Field MaxMovesEliminatedPerCycle specifies how many moves can be eliminated
+// every cycle. A default value of zero for that field means: there is no limit
+// to the number of moves that can be eliminated by this register file.
+//
+// An instruction MI is a candidate for move elimination if a call to
+// method TargetSubtargetInfo::isOptimizableRegisterMove(MI) returns true (see
+// llvm/CodeGen/TargetSubtargetInfo.h, and llvm/MC/MCInstrAnalysis.h).
+//
+// Subtargets can instantiate tablegen class IsOptimizableRegisterMove (see
+// llvm/Target/TargetInstrPredicate.td) to customize the set of move elimination
+// candidates. By default, no instruction is a valid move elimination candidate.
+//
+// A register move MI is eliminated only if:
+//  - MI is a move elimination candidate.
+//  - The destination register is from a register class that allows move
+//    elimination (see field `AllowMoveElimination` below).
+//  - Constraints on the move kind, and the maximum number of moves that can be
+//    eliminated per cycle are all met.
+
+class RegisterFile<int numPhysRegs, list<RegisterClass> Classes = [],
+                   list<int> Costs = [], list<bit> AllowMoveElim = [],
+                   int MaxMoveElimPerCy = 0, bit AllowZeroMoveElimOnly = false> {
+  list<RegisterClass> RegClasses = Classes;
+  list<int> RegCosts = Costs;
+  list<bit> AllowMoveElimination = AllowMoveElim;
+  int NumPhysRegs = numPhysRegs;
+  int MaxMovesEliminatedPerCycle = MaxMoveElimPerCy;
+  bit AllowZeroMoveEliminationOnly = AllowZeroMoveElimOnly;
+  SchedMachineModel SchedModel = ?;
+}
+
+// Describe the retire control unit.
+// A retire control unit specifies the size of the reorder buffer, as well as
+// the maximum number of opcodes that can be retired every cycle.
+// A value less-than-or-equal-to zero for field 'ReorderBufferSize' means: "the
+// size is unknown". The idea is that external tools can fall-back to using
+// field MicroOpBufferSize in SchedModel if the reorder buffer size is unknown.
+// A zero or negative value for field 'MaxRetirePerCycle' means "no
+// restrictions on the number of instructions retired per cycle".
+// Models can optionally specify up to one instance of RetireControlUnit per
+// scheduling model.
+class RetireControlUnit<int bufferSize, int retirePerCycle> {
+  int ReorderBufferSize = bufferSize;
+  int MaxRetirePerCycle = retirePerCycle;
+  SchedMachineModel SchedModel = ?;
+}
+
+// Base class for Load/StoreQueue.  It is used to identify processor resources
+// which describe load/store queues in the LS unit.
+class MemoryQueue<ProcResourceKind PR> {
+  ProcResourceKind QueueDescriptor = PR;
+  SchedMachineModel SchedModel = ?;
+}
+
+class LoadQueue<ProcResourceKind LDQueue> : MemoryQueue<LDQueue>;
+class StoreQueue<ProcResourceKind STQueue> : MemoryQueue<STQueue>;

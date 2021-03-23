@@ -1,5 +1,5 @@
-; RUN: opt %loadPolly -basicaa -polly-allow-differing-element-types -polly-scops -analyze < %s | FileCheck %s
-; RUN: opt %loadPolly -S -basicaa -polly-allow-differing-element-types -polly-codegen < %s | FileCheck --check-prefix=IR %s
+; RUN: opt %loadPolly -basic-aa -polly-allow-differing-element-types -polly-scops -analyze < %s | FileCheck %s
+; RUN: opt %loadPolly -S -basic-aa -polly-allow-differing-element-types -polly-codegen < %s | FileCheck --check-prefix=IR %s
 ;
 ; CHECK:         Arrays {
 ; CHECK-NEXT:        i8 MemRef_A[*]; // Element size 1
@@ -23,7 +23,7 @@
 ; IR:   %[[r4:[a-zA-Z0-9]*]] = bitcast i64* %scevgep8 to i8*
 ;
 ; IR: polly.stmt.for.body3:
-; IR:   call void @llvm.memmove.p0i8.p0i8.i64(i8* %[[r2]], i8* %[[r4]], i64 32, i32 4, i1 false)
+; IR:   call void @llvm.memmove.p0i8.p0i8.i64(i8* align 4 %[[r2]], i8* align 4 %[[r4]], i64 32, i1 false)
 ;
 ;    #include <string.h>
 ;

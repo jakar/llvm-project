@@ -1,13 +1,12 @@
 //===----------------------------------------------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is dual licensed under the MIT and the University of Illinois Open
-// Source Licenses. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
-// UNSUPPORTED: c++98, c++03, c++11, c++14
+// UNSUPPORTED: c++03, c++11, c++14
 // <numeric>
 
 // template<class _M, class _N>
@@ -17,8 +16,8 @@
 #include <cassert>
 #include <climits>
 #include <cstdint>
-#include <cstdlib>
 #include <type_traits>
+#include "test_macros.h"
 
 constexpr struct {
   int x;
@@ -90,9 +89,9 @@ constexpr bool do_test(int = 0)
     return accumulate;
 }
 
-int main()
+int main(int argc, char**)
 {
-    auto non_cce = std::rand(); // a value that can't possibly be constexpr
+    int non_cce = argc; // a value that can't possibly be constexpr
 
     static_assert(do_test<signed char>(), "");
     static_assert(do_test<short>(), "");
@@ -137,8 +136,10 @@ int main()
 //  LWG#2837
     {
     auto res1 = std::lcm(static_cast<std::int64_t>(1234), INT32_MIN);
-    (void)std::lcm(INT_MIN, 2UL);	// this used to trigger UBSAN
+    TEST_IGNORE_NODISCARD std::lcm(INT_MIN, 2UL);   // this used to trigger UBSAN
     static_assert(std::is_same_v<decltype(res1), std::int64_t>, "");
     assert(res1 == 1324997410816LL);
     }
+
+  return 0;
 }

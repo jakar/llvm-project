@@ -1,13 +1,14 @@
 //===----------------------------------------------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is dual licensed under the MIT and the University of Illinois Open
-// Source Licenses. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
 // REQUIRES: locale.en_US.UTF-8
+
+// XFAIL: LIBCXX-WINDOWS-FIXME
 
 // <fstream>
 
@@ -18,6 +19,7 @@
 #include <fstream>
 #include <cassert>
 
+#include "test_macros.h"
 #include "platform_support.h" // locale name macros
 
 template <class CharT>
@@ -37,7 +39,7 @@ struct test_buf
     virtual int_type overflow(int_type c = traits_type::eof()) {return base::overflow(c);}
 };
 
-int main()
+int main(int, char**)
 {
     {
         test_buf<char> f;
@@ -141,4 +143,6 @@ int main()
         assert(f.sbumpc() == -1);
     }
     std::remove("overflow.dat");
+
+  return 0;
 }

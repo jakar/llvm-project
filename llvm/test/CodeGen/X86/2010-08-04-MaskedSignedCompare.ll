@@ -2,29 +2,26 @@
 ; RUN: llc < %s -mtriple=x86_64-unknown-unknown | FileCheck %s
 ; PR7814
 
-@g_16 = global i64 -3738643449681751625, align 8
-@g_38 = global i32 0, align 4
+@g_16 = dso_local global i64 -3738643449681751625, align 8
+@g_38 = dso_local global i32 0, align 4
 @.str = private constant [4 x i8] c"%d\0A\00"
 
-define i32 @main() nounwind {
+define dso_local i32 @main() nounwind {
 ; CHECK-LABEL: main:
-; CHECK:       # BB#0: # %entry
-; CHECK-NEXT:    cmpq $0, {{.*}}(%rip)
-; CHECK-NEXT:    movb $-106, %al
-; CHECK-NEXT:    jne .LBB0_2
-; CHECK-NEXT:  # BB#1: # %entry
+; CHECK:       # %bb.0: # %entry
+; CHECK-NEXT:    pushq %rax
 ; CHECK-NEXT:    xorl %eax, %eax
-; CHECK-NEXT:  .LBB0_2: # %entry
-; CHECK-NEXT:    testb %al, %al
-; CHECK-NEXT:    jle .LBB0_3
-; CHECK-NEXT:  # BB#4: # %if.then
+; CHECK-NEXT:    cmpq {{.*}}(%rip), %rax
+; CHECK-NEXT:    sbbl %eax, %eax
+; CHECK-NEXT:    testb $-106, %al
+; CHECK-NEXT:    jle .LBB0_1
+; CHECK-NEXT:  # %bb.2: # %if.then
 ; CHECK-NEXT:    movl $1, {{.*}}(%rip)
 ; CHECK-NEXT:    movl $1, %esi
-; CHECK-NEXT:    jmp .LBB0_5
-; CHECK-NEXT:  .LBB0_3: # %entry.if.end_crit_edge
+; CHECK-NEXT:    jmp .LBB0_3
+; CHECK-NEXT:  .LBB0_1: # %entry.if.end_crit_edge
 ; CHECK-NEXT:    movl {{.*}}(%rip), %esi
-; CHECK-NEXT:  .LBB0_5: # %if.end
-; CHECK-NEXT:    pushq %rax
+; CHECK-NEXT:  .LBB0_3: # %if.end
 ; CHECK-NEXT:    movl $.L.str, %edi
 ; CHECK-NEXT:    xorl %eax, %eax
 ; CHECK-NEXT:    callq printf

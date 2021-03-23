@@ -1,4 +1,6 @@
 // RUN: %clang_cc1 -fsyntax-only -std=c++11 -verify %s
+// RUN: %clang_cc1 -fsyntax-only -std=c++14 -verify %s
+// RUN: %clang_cc1 -fsyntax-only -std=c++20 -verify %s
 // expected-no-diagnostics
 
 // Test default template arguments for function templates.
@@ -87,3 +89,76 @@ namespace PR13986 {
     A<1> m_target;
   };
 }
+
+// rdar://problem/34167492
+// Template B is instantiated during checking if defaulted A copy constructor
+// is constexpr. For this we check if S<int> copy constructor is constexpr. And
+// for this we check S constructor template with default argument that mentions
+// template B. In  turn, template instantiation triggers checking defaulted
+// members exception spec. The problem is that it checks defaulted members not
+// for instantiated class only, but all defaulted members so far. In this case
+// we try to check exception spec for A default constructor which requires
+// initializer for the field _a. But initializers are added after constexpr
+// check so we reject the code because cannot find _a initializer.
+namespace rdar34167492 {
+  template <typename T> struct B { using type = bool; };
+
+  template <typename T> struct S {
+    S() noexcept;
+
+    template <typename U, typename B<U>::type = true>
+    S(const S<U>&) noexcept;
+  };
+
+  class A {
+    A() noexcept = default;
+    A(const A&) noexcept = default;
+    S<int> _a{};
+  };
+}
+
+namespace use_of_earlier_param {
+  template<typename T> void f(T a, int = decltype(a)());
+  void g() { f(0); }
+}
+
+#if __cplusplus >= 201402L
+namespace lambda {
+  // Verify that a default argument in a lambda can refer to the type of a
+  // previous `auto` argument without crashing.
+  template <class T>
+  void bar() {
+    (void) [](auto c, int x = sizeof(decltype(c))) {};
+  }
+  void foo() {
+    bar<int>();
+  }
+
+#if __cplusplus >= 202002L
+  // PR46648: ensure we don't reject this by triggering default argument
+  // instantiation spuriously.
+  auto x = []<typename T>(T x = 123) {};
+  void y() { x(nullptr); }
+
+  template<int A> struct X {
+    template<int B> constexpr int f() {
+      auto l = []<int C>(int n = A + B + C) { return n; };
+      return l.template operator()<3>();
+    }
+  };
+  static_assert(X<100>().f<20>() == 123);
+
+  template<> template<int B> constexpr int X<200>::f() {
+    auto l = []<int C>(int n = 300 + B + C) { return n; };
+    return l.template operator()<1>();
+  }
+  static_assert(X<200>().f<20>() == 321);
+
+  template<> template<> constexpr int X<300>::f<20>() {
+    auto l = []<int C>(int n = 450 + C) { return n; };
+    return l.template operator()<6>();
+  }
+  static_assert(X<300>().f<20>() == 456);
+#endif
+} // namespace lambda
+#endif

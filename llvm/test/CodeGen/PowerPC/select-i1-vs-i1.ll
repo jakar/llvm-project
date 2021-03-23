@@ -1,5 +1,6 @@
-; RUN: llc -verify-machineinstrs < %s | FileCheck %s
-; RUN: llc -verify-machineinstrs -ppc-gen-isel=false < %s | FileCheck --check-prefix=CHECK-NO-ISEL %s
+; RUN: llc -ppc-reduce-cr-logicals -verify-machineinstrs -tail-dup-placement=false < %s | FileCheck %s
+; RUN: llc -ppc-reduce-cr-logicals -verify-machineinstrs \
+; RUN:   -ppc-gen-isel=false < %s | FileCheck --check-prefix=CHECK-NO-ISEL %s
 target datalayout = "E-m:e-i64:64-n32:64"
 target triple = "powerpc64-unknown-linux-gnu"
 
@@ -17,7 +18,7 @@ entry:
 
 ; CHECK-LABEL: @testi32slt
 ; CHECK-NO-ISEL-LABEL: @testi32slt
-; CHECK-DAG: cmpw {{[0-9]+}}, 5, 6
+; CHECK-DAG: cmpw 5, 6
 ; CHECK-DAG: cmpw {{[0-9]+}}, 3, 4
 ; CHECK: crandc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
 ; CHECK: isel 3, 7, 8, [[REG1]]
@@ -39,7 +40,7 @@ entry:
   ret i32 %cond
 
 ; CHECK-NO-ISEL-LABEL: @testi32ult
-; CHECK-DAG: cmpw {{[0-9]+}}, 5, 6
+; CHECK-DAG: cmpw 5, 6
 ; CHECK-DAG: cmpw {{[0-9]+}}, 3, 4
 ; CHECK: crandc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
 ; CHECK: isel 3, 7, 8, [[REG1]]
@@ -62,7 +63,7 @@ entry:
 
 ; CHECK-LABEL: @testi32sle
 ; CHECK-NO-ISEL-LABEL: @testi32sle
-; CHECK-DAG: cmpw {{[0-9]+}}, 5, 6
+; CHECK-DAG: cmpw 5, 6
 ; CHECK-DAG: cmpw {{[0-9]+}}, 3, 4
 ; CHECK: crorc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
 ; CHECK: isel 3, 7, 8, [[REG1]]
@@ -85,7 +86,7 @@ entry:
 
 ; CHECK-LABEL: @testi32ule
 ; CHECK-NO-ISEL-LABEL: @testi32ule
-; CHECK-DAG: cmpw {{[0-9]+}}, 5, 6
+; CHECK-DAG: cmpw 5, 6
 ; CHECK-DAG: cmpw {{[0-9]+}}, 3, 4
 ; CHECK: crorc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
 ; CHECK: isel 3, 7, 8, [[REG1]]
@@ -108,7 +109,7 @@ entry:
 
 ; CHECK-LABEL: @testi32eq
 ; CHECK-NO-ISEL-LABEL: @testi32eq
-; CHECK-DAG: cmpw {{[0-9]+}}, 5, 6
+; CHECK-DAG: cmpw 5, 6
 ; CHECK-DAG: cmpw {{[0-9]+}}, 3, 4
 ; CHECK: creqv [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
 ; CHECK: isel 3, 7, 8, [[REG1]]
@@ -131,7 +132,7 @@ entry:
 
 ; CHECK-LABEL: @testi32sge
 ; CHECK-NO-ISEL-LABEL: @testi32sge
-; CHECK-DAG: cmpw {{[0-9]+}}, 5, 6
+; CHECK-DAG: cmpw 5, 6
 ; CHECK-DAG: cmpw {{[0-9]+}}, 3, 4
 ; CHECK: crorc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
 ; CHECK: isel 3, 7, 8, [[REG1]]
@@ -154,7 +155,7 @@ entry:
 
 ; CHECK-LABEL: @testi32uge
 ; CHECK-NO-ISEL-LABEL: @testi32uge
-; CHECK-DAG: cmpw {{[0-9]+}}, 5, 6
+; CHECK-DAG: cmpw 5, 6
 ; CHECK-DAG: cmpw {{[0-9]+}}, 3, 4
 ; CHECK: crorc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
 ; CHECK: isel 3, 7, 8, [[REG1]]
@@ -177,7 +178,7 @@ entry:
 
 ; CHECK-LABEL: @testi32sgt
 ; CHECK-NO-ISEL-LABEL: @testi32sgt
-; CHECK-DAG: cmpw {{[0-9]+}}, 5, 6
+; CHECK-DAG: cmpw 5, 6
 ; CHECK-DAG: cmpw {{[0-9]+}}, 3, 4
 ; CHECK: crandc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
 ; CHECK: isel 3, 7, 8, [[REG1]]
@@ -200,7 +201,7 @@ entry:
 
 ; CHECK-LABEL: @testi32ugt
 ; CHECK-NO-ISEL-LABEL: @testi32ugt
-; CHECK-DAG: cmpw {{[0-9]+}}, 5, 6
+; CHECK-DAG: cmpw 5, 6
 ; CHECK-DAG: cmpw {{[0-9]+}}, 3, 4
 ; CHECK: crandc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
 ; CHECK: isel 3, 7, 8, [[REG1]]
@@ -223,7 +224,7 @@ entry:
 
 ; CHECK-LABEL: @testi32ne
 ; CHECK-NO-ISEL-LABEL: @testi32ne
-; CHECK-DAG: cmpw {{[0-9]+}}, 5, 6
+; CHECK-DAG: cmpw 5, 6
 ; CHECK-DAG: cmpw {{[0-9]+}}, 3, 4
 ; CHECK: crxor [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
 ; CHECK: isel 3, 7, 8, [[REG1]]
@@ -475,12 +476,13 @@ entry:
   ret float %cond
 
 ; CHECK-LABEL: @testfloatslt
-; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
-; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: crandc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bc 12, [[REG1]], .LBB[[BB:[0-9_]+]]
+; CHECK: fcmpu {{[0-9]+}}, 3, 4
+; CHECK: bc 12, 2, .LBB[[BB1:[0-9_]+]]
+; CHECK: fcmpu {{[0-9]+}}, 1, 2
+; CHECK: bc 12, 2, .LBB[[BB2:[0-9_]+]]
+; CHECK: .LBB[[BB1]]:
 ; CHECK: fmr 5, 6
-; CHECK: .LBB[[BB]]:
+; CHECK: .LBB[[BB2]]:
 ; CHECK: fmr 1, 5
 ; CHECK: blr
 }
@@ -494,12 +496,13 @@ entry:
   ret float %cond
 
 ; CHECK-LABEL: @testfloatult
-; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
-; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: crandc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bc 12, [[REG1]], .LBB[[BB:[0-9_]+]]
+; CHECK: fcmpu {{[0-9]+}}, 3, 4
+; CHECK: bc 4, 2, .LBB[[BB1:[0-9_]+]]
+; CHECK: fcmpu {{[0-9]+}}, 1, 2
+; CHECK: bc 4, 2, .LBB[[BB2:[0-9_]+]]
+; CHECK: .LBB[[BB1]]:
 ; CHECK: fmr 5, 6
-; CHECK: .LBB[[BB]]:
+; CHECK: .LBB[[BB2]]:
 ; CHECK: fmr 1, 5
 ; CHECK: blr
 }
@@ -513,10 +516,10 @@ entry:
   ret float %cond
 
 ; CHECK-LABEL: @testfloatsle
-; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
-; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: crorc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bc 12, [[REG1]], .LBB[[BB:[0-9_]+]]
+; CHECK: fcmpu {{[0-9]+}}, 3, 4
+; CHECK: bc 4, 2, .LBB[[BB:[0-9_]+]]
+; CHECK: fcmpu {{[0-9]+}}, 1, 2
+; CHECK: bc 12, 2, .LBB[[BB]]
 ; CHECK: fmr 5, 6
 ; CHECK: .LBB[[BB]]:
 ; CHECK: fmr 1, 5
@@ -532,10 +535,10 @@ entry:
   ret float %cond
 
 ; CHECK-LABEL: @testfloatule
-; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
-; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: crorc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bc 12, [[REG1]], .LBB[[BB:[0-9_]+]]
+; CHECK: fcmpu {{[0-9]+}}, 3, 4
+; CHECK: bc 12, 2, .LBB[[BB:[0-9_]+]]
+; CHECK: fcmpu {{[0-9]+}}, 1, 2
+; CHECK: bc 4, 2, .LBB[[BB]]
 ; CHECK: fmr 5, 6
 ; CHECK: .LBB[[BB]]:
 ; CHECK: fmr 1, 5
@@ -554,10 +557,8 @@ entry:
 ; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
 ; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
 ; CHECK: creqv [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bc 12, [[REG1]], .LBB[[BB:[0-9_]+]]
-; CHECK: fmr 5, 6
-; CHECK: .LBB[[BB]]:
-; CHECK: fmr 1, 5
+; CHECK: bclr 12, [[REG1]], 0
+; CHECK: fmr 1, 6
 ; CHECK: blr
 }
 
@@ -570,10 +571,10 @@ entry:
   ret float %cond
 
 ; CHECK-LABEL: @testfloatsge
-; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
-; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: crorc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bc 12, [[REG1]], .LBB[[BB:[0-9_]+]]
+; CHECK: fcmpu {{[0-9]+}}, 3, 4
+; CHECK: bc 12, 2, .LBB[[BB:[0-9_]+]]
+; CHECK: fcmpu {{[0-9]+}}, 1, 2
+; CHECK: bc 4, 2, .LBB[[BB]]
 ; CHECK: fmr 5, 6
 ; CHECK: .LBB[[BB]]:
 ; CHECK: fmr 1, 5
@@ -589,10 +590,10 @@ entry:
   ret float %cond
 
 ; CHECK-LABEL: @testfloatuge
-; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
-; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: crorc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bc 12, [[REG1]], .LBB[[BB:[0-9_]+]]
+; CHECK: fcmpu {{[0-9]+}}, 3, 4
+; CHECK: bc 4, 2, .LBB[[BB:[0-9_]+]]
+; CHECK: fcmpu {{[0-9]+}}, 1, 2
+; CHECK: bc 12, 2, .LBB[[BB]]
 ; CHECK: fmr 5, 6
 ; CHECK: .LBB[[BB]]:
 ; CHECK: fmr 1, 5
@@ -608,12 +609,13 @@ entry:
   ret float %cond
 
 ; CHECK-LABEL: @testfloatsgt
-; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
-; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: crandc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bc 12, [[REG1]], .LBB[[BB:[0-9_]+]]
+; CHECK: fcmpu {{[0-9]+}}, 3, 4
+; CHECK: bc 4, 2, .LBB[[BB1:[0-9_]+]]
+; CHECK: fcmpu {{[0-9]+}}, 1, 2
+; CHECK: bc 4, 2, .LBB[[BB2:[0-9_]+]]
+; CHECK: .LBB[[BB1]]:
 ; CHECK: fmr 5, 6
-; CHECK: .LBB[[BB]]:
+; CHECK: .LBB[[BB2]]:
 ; CHECK: fmr 1, 5
 ; CHECK: blr
 }
@@ -627,12 +629,13 @@ entry:
   ret float %cond
 
 ; CHECK-LABEL: @testfloatugt
-; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
-; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: crandc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bc 12, [[REG1]], .LBB[[BB:[0-9_]+]]
+; CHECK: fcmpu {{[0-9]+}}, 3, 4
+; CHECK: bc 12, 2, .LBB[[BB1:[0-9_]+]]
+; CHECK: fcmpu {{[0-9]+}}, 1, 2
+; CHECK: bc 12, 2, .LBB[[BB2:[0-9_]+]]
+; CHECK: .LBB[[BB1]]:
 ; CHECK: fmr 5, 6
-; CHECK: .LBB[[BB]]:
+; CHECK: .LBB[[BB2]]:
 ; CHECK: fmr 1, 5
 ; CHECK: blr
 }
@@ -649,10 +652,8 @@ entry:
 ; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
 ; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
 ; CHECK: crxor [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bc 12, [[REG1]], .LBB[[BB:[0-9_]+]]
-; CHECK: fmr 5, 6
-; CHECK: .LBB[[BB]]:
-; CHECK: fmr 1, 5
+; CHECK: bclr 12, [[REG1]], 0
+; CHECK: fmr 1, 6
 ; CHECK: blr
 }
 
@@ -665,12 +666,13 @@ entry:
   ret double %cond
 
 ; CHECK-LABEL: @testdoubleslt
-; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
-; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: crandc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bc 12, [[REG1]], .LBB[[BB:[0-9_]+]]
+; CHECK: fcmpu {{[0-9]+}}, 3, 4
+; CHECK: bc 12, 2, .LBB[[BB1:[0-9_]+]]
+; CHECK: fcmpu {{[0-9]+}}, 1, 2
+; CHECK: bc 12, 2, .LBB[[BB2:[0-9_]+]]
+; CHECK: .LBB[[BB1]]:
 ; CHECK: fmr 5, 6
-; CHECK: .LBB[[BB]]:
+; CHECK: .LBB[[BB2]]:
 ; CHECK: fmr 1, 5
 ; CHECK: blr
 }
@@ -684,12 +686,13 @@ entry:
   ret double %cond
 
 ; CHECK-LABEL: @testdoubleult
-; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
-; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: crandc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bc 12, [[REG1]], .LBB[[BB:[0-9_]+]]
+; CHECK: fcmpu {{[0-9]+}}, 3, 4
+; CHECK: bc 4, 2, .LBB[[BB1:[0-9_]+]]
+; CHECK: fcmpu {{[0-9]+}}, 1, 2
+; CHECK: bc 4, 2, .LBB[[BB2:[0-9_]+]]
+; CHECK: .LBB[[BB1]]:
 ; CHECK: fmr 5, 6
-; CHECK: .LBB[[BB]]:
+; CHECK: .LBB[[BB2]]:
 ; CHECK: fmr 1, 5
 ; CHECK: blr
 }
@@ -703,10 +706,10 @@ entry:
   ret double %cond
 
 ; CHECK-LABEL: @testdoublesle
-; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
-; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: crorc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bc 12, [[REG1]], .LBB[[BB:[0-9_]+]]
+; CHECK: fcmpu {{[0-9]+}}, 3, 4
+; CHECK: bc 4, 2, .LBB[[BB:[0-9_]+]]
+; CHECK: fcmpu {{[0-9]+}}, 1, 2
+; CHECK: bc 12, 2, .LBB[[BB]]
 ; CHECK: fmr 5, 6
 ; CHECK: .LBB[[BB]]:
 ; CHECK: fmr 1, 5
@@ -722,10 +725,10 @@ entry:
   ret double %cond
 
 ; CHECK-LABEL: @testdoubleule
-; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
-; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: crorc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bc 12, [[REG1]], .LBB[[BB:[0-9_]+]]
+; CHECK: fcmpu {{[0-9]+}}, 3, 4
+; CHECK: bc 12, 2, .LBB[[BB:[0-9_]+]]
+; CHECK: fcmpu {{[0-9]+}}, 1, 2
+; CHECK: bc 4, 2, .LBB[[BB]]
 ; CHECK: fmr 5, 6
 ; CHECK: .LBB[[BB]]:
 ; CHECK: fmr 1, 5
@@ -744,10 +747,8 @@ entry:
 ; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
 ; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
 ; CHECK: creqv [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bc 12, [[REG1]], .LBB[[BB:[0-9_]+]]
-; CHECK: fmr 5, 6
-; CHECK: .LBB[[BB]]:
-; CHECK: fmr 1, 5
+; CHECK: bclr 12, [[REG1]], 0
+; CHECK: fmr 1, 6
 ; CHECK: blr
 }
 
@@ -760,10 +761,10 @@ entry:
   ret double %cond
 
 ; CHECK-LABEL: @testdoublesge
-; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
-; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: crorc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bc 12, [[REG1]], .LBB[[BB:[0-9_]+]]
+; CHECK: fcmpu {{[0-9]+}}, 3, 4
+; CHECK: bc 12, 2, .LBB[[BB:[0-9_]+]]
+; CHECK: fcmpu {{[0-9]+}}, 1, 2
+; CHECK: bc 4, 2, .LBB[[BB]]
 ; CHECK: fmr 5, 6
 ; CHECK: .LBB[[BB]]:
 ; CHECK: fmr 1, 5
@@ -779,10 +780,10 @@ entry:
   ret double %cond
 
 ; CHECK-LABEL: @testdoubleuge
-; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
-; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: crorc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bc 12, [[REG1]], .LBB[[BB:[0-9_]+]]
+; CHECK: fcmpu {{[0-9]+}}, 3, 4
+; CHECK: bc 4, 2, .LBB[[BB:[0-9_]+]]
+; CHECK: fcmpu {{[0-9]+}}, 1, 2
+; CHECK: bc 12, 2, .LBB[[BB]]
 ; CHECK: fmr 5, 6
 ; CHECK: .LBB[[BB]]:
 ; CHECK: fmr 1, 5
@@ -798,12 +799,13 @@ entry:
   ret double %cond
 
 ; CHECK-LABEL: @testdoublesgt
-; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
-; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: crandc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bc 12, [[REG1]], .LBB[[BB:[0-9_]+]]
+; CHECK: fcmpu {{[0-9]+}}, 3, 4
+; CHECK: bc 4, 2, .LBB[[BB1:[0-9_]+]]
+; CHECK: fcmpu {{[0-9]+}}, 1, 2
+; CHECK: bc 4, 2, .LBB[[BB2:[0-9_]+]]
+; CHECK: .LBB[[BB1]]:
 ; CHECK: fmr 5, 6
-; CHECK: .LBB[[BB]]:
+; CHECK: .LBB[[BB2]]:
 ; CHECK: fmr 1, 5
 ; CHECK: blr
 }
@@ -817,12 +819,13 @@ entry:
   ret double %cond
 
 ; CHECK-LABEL: @testdoubleugt
-; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
-; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: crandc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bc 12, [[REG1]], .LBB[[BB:[0-9_]+]]
+; CHECK: fcmpu {{[0-9]+}}, 3, 4
+; CHECK: bc 12, 2, .LBB[[BB1:[0-9_]+]]
+; CHECK: fcmpu {{[0-9]+}}, 1, 2
+; CHECK: bc 12, 2, .LBB[[BB2:[0-9_]+]]
+; CHECK: .LBB[[BB1]]:
 ; CHECK: fmr 5, 6
-; CHECK: .LBB[[BB]]:
+; CHECK: .LBB[[BB2]]:
 ; CHECK: fmr 1, 5
 ; CHECK: blr
 }
@@ -839,10 +842,8 @@ entry:
 ; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
 ; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
 ; CHECK: crxor [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bc 12, [[REG1]], .LBB[[BB:[0-9_]+]]
-; CHECK: fmr 5, 6
-; CHECK: .LBB[[BB]]:
-; CHECK: fmr 1, 5
+; CHECK: bclr 12, [[REG1]], 0
+; CHECK: fmr 1, 6
 ; CHECK: blr
 }
 
@@ -856,9 +857,10 @@ entry:
 
 ; CHECK-LABEL: @testv4floatslt
 ; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
+; CHECK: bc 12, 2, .LBB[[BB:[0-9_]+]]
 ; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: crandc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bclr 12, [[REG1]], 0
+; CHECK: bclr 12, 2, 0
+; CHECK: .LBB[[BB]]:
 ; CHECK: vmr 2, 3
 ; CHECK: blr
 }
@@ -872,10 +874,11 @@ entry:
   ret <4 x float> %cond
 
 ; CHECK-LABEL: @testv4floatult
-; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
-; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: crandc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bclr 12, [[REG1]], 0
+; CHECK: fcmpu {{[0-9]+}}, 3, 4
+; CHECK: bc 4, 2, .LBB[[BB:[0-9_]+]]
+; CHECK: fcmpu {{[0-9]+}}, 1, 2
+; CHECK: bclr 4, 2, 0
+; CHECK: .LBB[[BB]]:
 ; CHECK: vmr 2, 3
 ; CHECK: blr
 }
@@ -889,10 +892,10 @@ entry:
   ret <4 x float> %cond
 
 ; CHECK-LABEL: @testv4floatsle
-; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
-; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: crorc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bclr 12, [[REG1]], 0
+; CHECK: fcmpu {{[0-9]+}}, 3, 4
+; CHECK: bclr 4, 2, 0
+; CHECK: fcmpu {{[0-9]+}}, 1, 2
+; CHECK: bclr 12, 2, 0
 ; CHECK: vmr 2, 3
 ; CHECK: blr
 }
@@ -907,9 +910,9 @@ entry:
 
 ; CHECK-LABEL: @testv4floatule
 ; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
+; CHECK: bclr 12, 2, 0
 ; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: crorc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bclr 12, [[REG1]], 0
+; CHECK: bclr 4, 2, 0
 ; CHECK: vmr 2, 3
 ; CHECK: blr
 }
@@ -925,10 +928,8 @@ entry:
 ; CHECK-LABEL: @testv4floateq
 ; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
 ; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: crxor [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bc 12, [[REG1]], .LBB[[BB1:[0-9_]+]]
-; CHECK: vmr 3, 2
-; CHECK: .LBB[[BB1]]
+; CHECK: creqv [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
+; CHECK: bclr 12, [[REG1]], 0
 ; CHECK: vmr 2, 3
 ; CHECK: blr
 }
@@ -943,9 +944,9 @@ entry:
 
 ; CHECK-LABEL: @testv4floatsge
 ; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
+; CHECK: bclr 12, 2, 0
 ; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: crorc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bclr 12, [[REG1]], 0
+; CHECK: bclr 4, 2, 0
 ; CHECK: vmr 2, 3
 ; CHECK: blr
 }
@@ -960,9 +961,9 @@ entry:
 
 ; CHECK-LABEL: @testv4floatuge
 ; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
+; CHECK: bclr 4, 2, 0
 ; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: crorc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bclr 12, [[REG1]], 0
+; CHECK: bclr 12, 2, 0
 ; CHECK: vmr 2, 3
 ; CHECK: blr
 }
@@ -976,10 +977,10 @@ entry:
   ret <4 x float> %cond
 
 ; CHECK-LABEL: @testv4floatsgt
-; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
-; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: crandc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bclr 12, [[REG1]], 0
+; CHECK: fcmpu {{[0-9]+}}, 3, 4
+; CHECK: bc 4, 2, .LBB[[BB1:[0-9_]+]]
+; CHECK: fcmpu {{[0-9]+}}, 1, 2
+; CHECK: bclr 4, 2, 0
 ; CHECK: vmr 2, 3
 ; CHECK: blr
 }
@@ -993,10 +994,11 @@ entry:
   ret <4 x float> %cond
 
 ; CHECK-LABEL: @testv4floatugt
-; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
-; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: crandc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bclr 12, [[REG1]], 0
+; CHECK: fcmpu {{[0-9]+}}, 3, 4
+; CHECK: bc 12, 2, .LBB[[BB:[0-9_]+]]
+; CHECK: fcmpu {{[0-9]+}}, 1, 2
+; CHECK: bclr 12, 2, 0
+; CHECK: .LBB[[BB]]
 ; CHECK: vmr 2, 3
 ; CHECK: blr
 }
@@ -1059,9 +1061,10 @@ entry:
 
 ; CHECK-LABEL: @testv2doubleslt
 ; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
+; CHECK: bc 12, 2, .LBB[[BB:[0-9_]+]]
 ; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: crandc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bclr 12, [[REG1]], 0
+; CHECK: bclr 12, 2, 0
+; CHECK: .LBB[[BB]]:
 ; CHECK: vmr 2, 3
 ; CHECK: blr
 }
@@ -1076,9 +1079,10 @@ entry:
 
 ; CHECK-LABEL: @testv2doubleult
 ; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
+; CHECK: bc 4, 2, .LBB[[BB:[0-9_]+]]
 ; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: crandc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bclr 12, [[REG1]], 0
+; CHECK: bclr 4, 2, 0
+; CHECK: .LBB[[BB]]:
 ; CHECK: vmr 2, 3
 ; CHECK: blr
 }
@@ -1093,9 +1097,9 @@ entry:
 
 ; CHECK-LABEL: @testv2doublesle
 ; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
+; CHECK: bclr 4, 2, 0
 ; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: crorc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bclr 12, [[REG1]], 0
+; CHECK: bclr 12, 2, 0
 ; CHECK: vmr 2, 3
 ; CHECK: blr
 }
@@ -1110,9 +1114,9 @@ entry:
 
 ; CHECK-LABEL: @testv2doubleule
 ; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
+; CHECK: bclr 12, 2, 0
 ; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: crorc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bclr 12, [[REG1]], 0
+; CHECK: bclr 4, 2, 0
 ; CHECK: vmr 2, 3
 ; CHECK: blr
 }
@@ -1128,10 +1132,8 @@ entry:
 ; CHECK-LABEL: @testv2doubleeq
 ; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
 ; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: crxor [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bc 12, [[REG1]], .LBB[[BB55:[0-9_]+]]
-; CHECK: vmr 3, 2
-; CHECK: .LBB[[BB55]]
+; CHECK: creqv [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
+; CHECK: bclr 12, [[REG1]], 0
 ; CHECK: vmr 2, 3
 ; CHECK: blr
 }
@@ -1146,9 +1148,9 @@ entry:
 
 ; CHECK-LABEL: @testv2doublesge
 ; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
+; CHECK: bclr 12, 2, 0
 ; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: crorc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bclr 12, [[REG1]], 0
+; CHECK: bclr 4, 2, 0
 ; CHECK: vmr 2, 3
 ; CHECK: blr
 }
@@ -1163,9 +1165,9 @@ entry:
 
 ; CHECK-LABEL: @testv2doubleuge
 ; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
+; CHECK: bclr 4, 2, 0
 ; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: crorc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bclr 12, [[REG1]], 0
+; CHECK: bclr 12, 2, 0
 ; CHECK: vmr 2, 3
 ; CHECK: blr
 }
@@ -1180,9 +1182,10 @@ entry:
 
 ; CHECK-LABEL: @testv2doublesgt
 ; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
+; CHECK: bc 4, 2, .LBB[[BB:[0-9_]+]]
 ; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: crandc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bclr 12, [[REG1]], 0
+; CHECK: bclr 4, 2, 0
+; CHECK: .LBB[[BB]]
 ; CHECK: vmr 2, 3
 ; CHECK: blr
 }
@@ -1197,9 +1200,10 @@ entry:
 
 ; CHECK-LABEL: @testv2doubleugt
 ; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
+; CHECK: bc 12, 2, .LBB[[BB:[0-9_]+]]
 ; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: crandc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bclr 12, [[REG1]], 0
+; CHECK: bclr 12, 2, 0
+; CHECK: .LBB[[BB]]
 ; CHECK: vmr 2, 3
 ; CHECK: blr
 }
@@ -1221,576 +1225,5 @@ entry:
 ; CHECK: blr
 }
 
-define <4 x double> @testqv4doubleslt(float %c1, float %c2, float %c3, float %c4, <4 x double> %a1, <4 x double> %a2) #1 {
-entry:
-  %cmp1 = fcmp oeq float %c3, %c4
-  %cmp3tmp = fcmp oeq float %c1, %c2
-  %cmp3 = icmp slt i1 %cmp3tmp, %cmp1
-  %cond = select i1 %cmp3, <4 x double> %a1, <4 x double> %a2
-  ret <4 x double> %cond
-
-; CHECK-LABEL: @testqv4doubleslt
-; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
-; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: crandc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bc 12, [[REG1]], .LBB[[BB:[0-9_]+]]
-; CHECK: qvfmr 5, 6
-; CHECK: .LBB[[BB]]:
-; CHECK: qvfmr 1, 5
-; CHECK: blr
-}
-
-define <4 x double> @testqv4doubleult(float %c1, float %c2, float %c3, float %c4, <4 x double> %a1, <4 x double> %a2) #1 {
-entry:
-  %cmp1 = fcmp oeq float %c3, %c4
-  %cmp3tmp = fcmp oeq float %c1, %c2
-  %cmp3 = icmp ult i1 %cmp3tmp, %cmp1
-  %cond = select i1 %cmp3, <4 x double> %a1, <4 x double> %a2
-  ret <4 x double> %cond
-
-; CHECK-LABEL: @testqv4doubleult
-; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
-; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: crandc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bc 12, [[REG1]], .LBB[[BB:[0-9_]+]]
-; CHECK: qvfmr 5, 6
-; CHECK: .LBB[[BB]]:
-; CHECK: qvfmr 1, 5
-; CHECK: blr
-}
-
-define <4 x double> @testqv4doublesle(float %c1, float %c2, float %c3, float %c4, <4 x double> %a1, <4 x double> %a2) #1 {
-entry:
-  %cmp1 = fcmp oeq float %c3, %c4
-  %cmp3tmp = fcmp oeq float %c1, %c2
-  %cmp3 = icmp sle i1 %cmp3tmp, %cmp1
-  %cond = select i1 %cmp3, <4 x double> %a1, <4 x double> %a2
-  ret <4 x double> %cond
-
-; CHECK-LABEL: @testqv4doublesle
-; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
-; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: crorc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bc 12, [[REG1]], .LBB[[BB:[0-9_]+]]
-; CHECK: qvfmr 5, 6
-; CHECK: .LBB[[BB]]:
-; CHECK: qvfmr 1, 5
-; CHECK: blr
-}
-
-define <4 x double> @testqv4doubleule(float %c1, float %c2, float %c3, float %c4, <4 x double> %a1, <4 x double> %a2) #1 {
-entry:
-  %cmp1 = fcmp oeq float %c3, %c4
-  %cmp3tmp = fcmp oeq float %c1, %c2
-  %cmp3 = icmp ule i1 %cmp3tmp, %cmp1
-  %cond = select i1 %cmp3, <4 x double> %a1, <4 x double> %a2
-  ret <4 x double> %cond
-
-; CHECK-LABEL: @testqv4doubleule
-; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
-; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: crorc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bc 12, [[REG1]], .LBB[[BB:[0-9_]+]]
-; CHECK: qvfmr 5, 6
-; CHECK: .LBB[[BB]]:
-; CHECK: qvfmr 1, 5
-; CHECK: blr
-}
-
-define <4 x double> @testqv4doubleeq(float %c1, float %c2, float %c3, float %c4, <4 x double> %a1, <4 x double> %a2) #1 {
-entry:
-  %cmp1 = fcmp oeq float %c3, %c4
-  %cmp3tmp = fcmp oeq float %c1, %c2
-  %cmp3 = icmp eq i1 %cmp3tmp, %cmp1
-  %cond = select i1 %cmp3, <4 x double> %a1, <4 x double> %a2
-  ret <4 x double> %cond
-
-; CHECK-LABEL: @testqv4doubleeq
-; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
-; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: creqv [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bc 12, [[REG1]], .LBB[[BB:[0-9_]+]]
-; CHECK: qvfmr 5, 6
-; CHECK: .LBB[[BB]]:
-; CHECK: qvfmr 1, 5
-; CHECK: blr
-}
-
-define <4 x double> @testqv4doublesge(float %c1, float %c2, float %c3, float %c4, <4 x double> %a1, <4 x double> %a2) #1 {
-entry:
-  %cmp1 = fcmp oeq float %c3, %c4
-  %cmp3tmp = fcmp oeq float %c1, %c2
-  %cmp3 = icmp sge i1 %cmp3tmp, %cmp1
-  %cond = select i1 %cmp3, <4 x double> %a1, <4 x double> %a2
-  ret <4 x double> %cond
-
-; CHECK-LABEL: @testqv4doublesge
-; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
-; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: crorc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bc 12, [[REG1]], .LBB[[BB:[0-9_]+]]
-; CHECK: qvfmr 5, 6
-; CHECK: .LBB[[BB]]:
-; CHECK: qvfmr 1, 5
-; CHECK: blr
-}
-
-define <4 x double> @testqv4doubleuge(float %c1, float %c2, float %c3, float %c4, <4 x double> %a1, <4 x double> %a2) #1 {
-entry:
-  %cmp1 = fcmp oeq float %c3, %c4
-  %cmp3tmp = fcmp oeq float %c1, %c2
-  %cmp3 = icmp uge i1 %cmp3tmp, %cmp1
-  %cond = select i1 %cmp3, <4 x double> %a1, <4 x double> %a2
-  ret <4 x double> %cond
-
-; CHECK-LABEL: @testqv4doubleuge
-; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
-; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: crorc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bc 12, [[REG1]], .LBB[[BB:[0-9_]+]]
-; CHECK: qvfmr 5, 6
-; CHECK: .LBB[[BB]]:
-; CHECK: qvfmr 1, 5
-; CHECK: blr
-}
-
-define <4 x double> @testqv4doublesgt(float %c1, float %c2, float %c3, float %c4, <4 x double> %a1, <4 x double> %a2) #1 {
-entry:
-  %cmp1 = fcmp oeq float %c3, %c4
-  %cmp3tmp = fcmp oeq float %c1, %c2
-  %cmp3 = icmp sgt i1 %cmp3tmp, %cmp1
-  %cond = select i1 %cmp3, <4 x double> %a1, <4 x double> %a2
-  ret <4 x double> %cond
-
-; CHECK-LABEL: @testqv4doublesgt
-; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
-; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: crandc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bc 12, [[REG1]], .LBB[[BB:[0-9_]+]]
-; CHECK: qvfmr 5, 6
-; CHECK: .LBB[[BB]]:
-; CHECK: qvfmr 1, 5
-; CHECK: blr
-}
-
-define <4 x double> @testqv4doubleugt(float %c1, float %c2, float %c3, float %c4, <4 x double> %a1, <4 x double> %a2) #1 {
-entry:
-  %cmp1 = fcmp oeq float %c3, %c4
-  %cmp3tmp = fcmp oeq float %c1, %c2
-  %cmp3 = icmp ugt i1 %cmp3tmp, %cmp1
-  %cond = select i1 %cmp3, <4 x double> %a1, <4 x double> %a2
-  ret <4 x double> %cond
-
-; CHECK-LABEL: @testqv4doubleugt
-; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
-; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: crandc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bc 12, [[REG1]], .LBB[[BB:[0-9_]+]]
-; CHECK: qvfmr 5, 6
-; CHECK: .LBB[[BB]]:
-; CHECK: qvfmr 1, 5
-; CHECK: blr
-}
-
-define <4 x double> @testqv4doublene(float %c1, float %c2, float %c3, float %c4, <4 x double> %a1, <4 x double> %a2) #1 {
-entry:
-  %cmp1 = fcmp oeq float %c3, %c4
-  %cmp3tmp = fcmp oeq float %c1, %c2
-  %cmp3 = icmp ne i1 %cmp3tmp, %cmp1
-  %cond = select i1 %cmp3, <4 x double> %a1, <4 x double> %a2
-  ret <4 x double> %cond
-
-; CHECK-LABEL: @testqv4doublene
-; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
-; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: crxor [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bc 12, [[REG1]], .LBB[[BB:[0-9_]+]]
-; CHECK: qvfmr 5, 6
-; CHECK: .LBB[[BB]]:
-; CHECK: qvfmr 1, 5
-; CHECK: blr
-}
-
-define <4 x float> @testqv4floatslt(float %c1, float %c2, float %c3, float %c4, <4 x float> %a1, <4 x float> %a2) #1 {
-entry:
-  %cmp1 = fcmp oeq float %c3, %c4
-  %cmp3tmp = fcmp oeq float %c1, %c2
-  %cmp3 = icmp slt i1 %cmp3tmp, %cmp1
-  %cond = select i1 %cmp3, <4 x float> %a1, <4 x float> %a2
-  ret <4 x float> %cond
-
-; CHECK-LABEL: @testqv4floatslt
-; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
-; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: crandc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bc 12, [[REG1]], .LBB[[BB:[0-9_]+]]
-; CHECK: qvfmr 5, 6
-; CHECK: .LBB[[BB]]:
-; CHECK: qvfmr 1, 5
-; CHECK: blr
-}
-
-define <4 x float> @testqv4floatult(float %c1, float %c2, float %c3, float %c4, <4 x float> %a1, <4 x float> %a2) #1 {
-entry:
-  %cmp1 = fcmp oeq float %c3, %c4
-  %cmp3tmp = fcmp oeq float %c1, %c2
-  %cmp3 = icmp ult i1 %cmp3tmp, %cmp1
-  %cond = select i1 %cmp3, <4 x float> %a1, <4 x float> %a2
-  ret <4 x float> %cond
-
-; CHECK-LABEL: @testqv4floatult
-; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
-; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: crandc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bc 12, [[REG1]], .LBB[[BB:[0-9_]+]]
-; CHECK: qvfmr 5, 6
-; CHECK: .LBB[[BB]]:
-; CHECK: qvfmr 1, 5
-; CHECK: blr
-}
-
-define <4 x float> @testqv4floatsle(float %c1, float %c2, float %c3, float %c4, <4 x float> %a1, <4 x float> %a2) #1 {
-entry:
-  %cmp1 = fcmp oeq float %c3, %c4
-  %cmp3tmp = fcmp oeq float %c1, %c2
-  %cmp3 = icmp sle i1 %cmp3tmp, %cmp1
-  %cond = select i1 %cmp3, <4 x float> %a1, <4 x float> %a2
-  ret <4 x float> %cond
-
-; CHECK-LABEL: @testqv4floatsle
-; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
-; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: crorc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bc 12, [[REG1]], .LBB[[BB:[0-9_]+]]
-; CHECK: qvfmr 5, 6
-; CHECK: .LBB[[BB]]:
-; CHECK: qvfmr 1, 5
-; CHECK: blr
-}
-
-define <4 x float> @testqv4floatule(float %c1, float %c2, float %c3, float %c4, <4 x float> %a1, <4 x float> %a2) #1 {
-entry:
-  %cmp1 = fcmp oeq float %c3, %c4
-  %cmp3tmp = fcmp oeq float %c1, %c2
-  %cmp3 = icmp ule i1 %cmp3tmp, %cmp1
-  %cond = select i1 %cmp3, <4 x float> %a1, <4 x float> %a2
-  ret <4 x float> %cond
-
-; CHECK-LABEL: @testqv4floatule
-; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
-; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: crorc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bc 12, [[REG1]], .LBB[[BB:[0-9_]+]]
-; CHECK: qvfmr 5, 6
-; CHECK: .LBB[[BB]]:
-; CHECK: qvfmr 1, 5
-; CHECK: blr
-}
-
-define <4 x float> @testqv4floateq(float %c1, float %c2, float %c3, float %c4, <4 x float> %a1, <4 x float> %a2) #1 {
-entry:
-  %cmp1 = fcmp oeq float %c3, %c4
-  %cmp3tmp = fcmp oeq float %c1, %c2
-  %cmp3 = icmp eq i1 %cmp3tmp, %cmp1
-  %cond = select i1 %cmp3, <4 x float> %a1, <4 x float> %a2
-  ret <4 x float> %cond
-
-; CHECK-LABEL: @testqv4floateq
-; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
-; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: creqv [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bc 12, [[REG1]], .LBB[[BB:[0-9_]+]]
-; CHECK: qvfmr 5, 6
-; CHECK: .LBB[[BB]]:
-; CHECK: qvfmr 1, 5
-; CHECK: blr
-}
-
-define <4 x float> @testqv4floatsge(float %c1, float %c2, float %c3, float %c4, <4 x float> %a1, <4 x float> %a2) #1 {
-entry:
-  %cmp1 = fcmp oeq float %c3, %c4
-  %cmp3tmp = fcmp oeq float %c1, %c2
-  %cmp3 = icmp sge i1 %cmp3tmp, %cmp1
-  %cond = select i1 %cmp3, <4 x float> %a1, <4 x float> %a2
-  ret <4 x float> %cond
-
-; CHECK-LABEL: @testqv4floatsge
-; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
-; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: crorc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bc 12, [[REG1]], .LBB[[BB:[0-9_]+]]
-; CHECK: qvfmr 5, 6
-; CHECK: .LBB[[BB]]:
-; CHECK: qvfmr 1, 5
-; CHECK: blr
-}
-
-define <4 x float> @testqv4floatuge(float %c1, float %c2, float %c3, float %c4, <4 x float> %a1, <4 x float> %a2) #1 {
-entry:
-  %cmp1 = fcmp oeq float %c3, %c4
-  %cmp3tmp = fcmp oeq float %c1, %c2
-  %cmp3 = icmp uge i1 %cmp3tmp, %cmp1
-  %cond = select i1 %cmp3, <4 x float> %a1, <4 x float> %a2
-  ret <4 x float> %cond
-
-; CHECK-LABEL: @testqv4floatuge
-; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
-; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: crorc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bc 12, [[REG1]], .LBB[[BB:[0-9_]+]]
-; CHECK: qvfmr 5, 6
-; CHECK: .LBB[[BB]]:
-; CHECK: qvfmr 1, 5
-; CHECK: blr
-}
-
-define <4 x float> @testqv4floatsgt(float %c1, float %c2, float %c3, float %c4, <4 x float> %a1, <4 x float> %a2) #1 {
-entry:
-  %cmp1 = fcmp oeq float %c3, %c4
-  %cmp3tmp = fcmp oeq float %c1, %c2
-  %cmp3 = icmp sgt i1 %cmp3tmp, %cmp1
-  %cond = select i1 %cmp3, <4 x float> %a1, <4 x float> %a2
-  ret <4 x float> %cond
-
-; CHECK-LABEL: @testqv4floatsgt
-; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
-; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: crandc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bc 12, [[REG1]], .LBB[[BB:[0-9_]+]]
-; CHECK: qvfmr 5, 6
-; CHECK: .LBB[[BB]]:
-; CHECK: qvfmr 1, 5
-; CHECK: blr
-}
-
-define <4 x float> @testqv4floatugt(float %c1, float %c2, float %c3, float %c4, <4 x float> %a1, <4 x float> %a2) #1 {
-entry:
-  %cmp1 = fcmp oeq float %c3, %c4
-  %cmp3tmp = fcmp oeq float %c1, %c2
-  %cmp3 = icmp ugt i1 %cmp3tmp, %cmp1
-  %cond = select i1 %cmp3, <4 x float> %a1, <4 x float> %a2
-  ret <4 x float> %cond
-
-; CHECK-LABEL: @testqv4floatugt
-; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
-; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: crandc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bc 12, [[REG1]], .LBB[[BB:[0-9_]+]]
-; CHECK: qvfmr 5, 6
-; CHECK: .LBB[[BB]]:
-; CHECK: qvfmr 1, 5
-; CHECK: blr
-}
-
-define <4 x float> @testqv4floatne(float %c1, float %c2, float %c3, float %c4, <4 x float> %a1, <4 x float> %a2) #1 {
-entry:
-  %cmp1 = fcmp oeq float %c3, %c4
-  %cmp3tmp = fcmp oeq float %c1, %c2
-  %cmp3 = icmp ne i1 %cmp3tmp, %cmp1
-  %cond = select i1 %cmp3, <4 x float> %a1, <4 x float> %a2
-  ret <4 x float> %cond
-
-; CHECK-LABEL: @testqv4floatne
-; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
-; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: crxor [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bc 12, [[REG1]], .LBB[[BB:[0-9_]+]]
-; CHECK: qvfmr 5, 6
-; CHECK: .LBB[[BB]]:
-; CHECK: qvfmr 1, 5
-; CHECK: blr
-}
-
-define <4 x i1> @testqv4i1slt(float %c1, float %c2, float %c3, float %c4, <4 x i1> %a1, <4 x i1> %a2) #1 {
-entry:
-  %cmp1 = fcmp oeq float %c3, %c4
-  %cmp3tmp = fcmp oeq float %c1, %c2
-  %cmp3 = icmp slt i1 %cmp3tmp, %cmp1
-  %cond = select i1 %cmp3, <4 x i1> %a1, <4 x i1> %a2
-  ret <4 x i1> %cond
-
-; CHECK-LABEL: @testqv4i1slt
-; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
-; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: crandc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bc 12, [[REG1]], .LBB[[BB:[0-9_]+]]
-; CHECK: qvfmr 5, 6
-; CHECK: .LBB[[BB]]:
-; CHECK: qvfmr 1, 5
-; CHECK: blr
-}
-
-define <4 x i1> @testqv4i1ult(float %c1, float %c2, float %c3, float %c4, <4 x i1> %a1, <4 x i1> %a2) #1 {
-entry:
-  %cmp1 = fcmp oeq float %c3, %c4
-  %cmp3tmp = fcmp oeq float %c1, %c2
-  %cmp3 = icmp ult i1 %cmp3tmp, %cmp1
-  %cond = select i1 %cmp3, <4 x i1> %a1, <4 x i1> %a2
-  ret <4 x i1> %cond
-
-; CHECK-LABEL: @testqv4i1ult
-; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
-; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: crandc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bc 12, [[REG1]], .LBB[[BB:[0-9_]+]]
-; CHECK: qvfmr 5, 6
-; CHECK: .LBB[[BB]]:
-; CHECK: qvfmr 1, 5
-; CHECK: blr
-}
-
-define <4 x i1> @testqv4i1sle(float %c1, float %c2, float %c3, float %c4, <4 x i1> %a1, <4 x i1> %a2) #1 {
-entry:
-  %cmp1 = fcmp oeq float %c3, %c4
-  %cmp3tmp = fcmp oeq float %c1, %c2
-  %cmp3 = icmp sle i1 %cmp3tmp, %cmp1
-  %cond = select i1 %cmp3, <4 x i1> %a1, <4 x i1> %a2
-  ret <4 x i1> %cond
-
-; CHECK-LABEL: @testqv4i1sle
-; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
-; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: crorc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bc 12, [[REG1]], .LBB[[BB:[0-9_]+]]
-; CHECK: qvfmr 5, 6
-; CHECK: .LBB[[BB]]:
-; CHECK: qvfmr 1, 5
-; CHECK: blr
-}
-
-define <4 x i1> @testqv4i1ule(float %c1, float %c2, float %c3, float %c4, <4 x i1> %a1, <4 x i1> %a2) #1 {
-entry:
-  %cmp1 = fcmp oeq float %c3, %c4
-  %cmp3tmp = fcmp oeq float %c1, %c2
-  %cmp3 = icmp ule i1 %cmp3tmp, %cmp1
-  %cond = select i1 %cmp3, <4 x i1> %a1, <4 x i1> %a2
-  ret <4 x i1> %cond
-
-; CHECK-LABEL: @testqv4i1ule
-; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
-; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: crorc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bc 12, [[REG1]], .LBB[[BB:[0-9_]+]]
-; CHECK: qvfmr 5, 6
-; CHECK: .LBB[[BB]]:
-; CHECK: qvfmr 1, 5
-; CHECK: blr
-}
-
-define <4 x i1> @testqv4i1eq(float %c1, float %c2, float %c3, float %c4, <4 x i1> %a1, <4 x i1> %a2) #1 {
-entry:
-  %cmp1 = fcmp oeq float %c3, %c4
-  %cmp3tmp = fcmp oeq float %c1, %c2
-  %cmp3 = icmp eq i1 %cmp3tmp, %cmp1
-  %cond = select i1 %cmp3, <4 x i1> %a1, <4 x i1> %a2
-  ret <4 x i1> %cond
-
-; CHECK-LABEL: @testqv4i1eq
-; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
-; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: creqv [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bc 12, [[REG1]], .LBB[[BB:[0-9_]+]]
-; CHECK: qvfmr 5, 6
-; CHECK: .LBB[[BB]]:
-; CHECK: qvfmr 1, 5
-; CHECK: blr
-}
-
-define <4 x i1> @testqv4i1sge(float %c1, float %c2, float %c3, float %c4, <4 x i1> %a1, <4 x i1> %a2) #1 {
-entry:
-  %cmp1 = fcmp oeq float %c3, %c4
-  %cmp3tmp = fcmp oeq float %c1, %c2
-  %cmp3 = icmp sge i1 %cmp3tmp, %cmp1
-  %cond = select i1 %cmp3, <4 x i1> %a1, <4 x i1> %a2
-  ret <4 x i1> %cond
-
-; CHECK-LABEL: @testqv4i1sge
-; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
-; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: crorc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bc 12, [[REG1]], .LBB[[BB:[0-9_]+]]
-; CHECK: qvfmr 5, 6
-; CHECK: .LBB[[BB]]:
-; CHECK: qvfmr 1, 5
-; CHECK: blr
-}
-
-define <4 x i1> @testqv4i1uge(float %c1, float %c2, float %c3, float %c4, <4 x i1> %a1, <4 x i1> %a2) #1 {
-entry:
-  %cmp1 = fcmp oeq float %c3, %c4
-  %cmp3tmp = fcmp oeq float %c1, %c2
-  %cmp3 = icmp uge i1 %cmp3tmp, %cmp1
-  %cond = select i1 %cmp3, <4 x i1> %a1, <4 x i1> %a2
-  ret <4 x i1> %cond
-
-; CHECK-LABEL: @testqv4i1uge
-; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
-; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: crorc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bc 12, [[REG1]], .LBB[[BB:[0-9_]+]]
-; CHECK: qvfmr 5, 6
-; CHECK: .LBB[[BB]]:
-; CHECK: qvfmr 1, 5
-; CHECK: blr
-}
-
-define <4 x i1> @testqv4i1sgt(float %c1, float %c2, float %c3, float %c4, <4 x i1> %a1, <4 x i1> %a2) #1 {
-entry:
-  %cmp1 = fcmp oeq float %c3, %c4
-  %cmp3tmp = fcmp oeq float %c1, %c2
-  %cmp3 = icmp sgt i1 %cmp3tmp, %cmp1
-  %cond = select i1 %cmp3, <4 x i1> %a1, <4 x i1> %a2
-  ret <4 x i1> %cond
-
-; CHECK-LABEL: @testqv4i1sgt
-; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
-; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: crandc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bc 12, [[REG1]], .LBB[[BB:[0-9_]+]]
-; CHECK: qvfmr 5, 6
-; CHECK: .LBB[[BB]]:
-; CHECK: qvfmr 1, 5
-; CHECK: blr
-}
-
-define <4 x i1> @testqv4i1ugt(float %c1, float %c2, float %c3, float %c4, <4 x i1> %a1, <4 x i1> %a2) #1 {
-entry:
-  %cmp1 = fcmp oeq float %c3, %c4
-  %cmp3tmp = fcmp oeq float %c1, %c2
-  %cmp3 = icmp ugt i1 %cmp3tmp, %cmp1
-  %cond = select i1 %cmp3, <4 x i1> %a1, <4 x i1> %a2
-  ret <4 x i1> %cond
-
-; CHECK-LABEL: @testqv4i1ugt
-; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
-; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: crandc [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bc 12, [[REG1]], .LBB[[BB:[0-9_]+]]
-; CHECK: qvfmr 5, 6
-; CHECK: .LBB[[BB]]:
-; CHECK: qvfmr 1, 5
-; CHECK: blr
-}
-
-define <4 x i1> @testqv4i1ne(float %c1, float %c2, float %c3, float %c4, <4 x i1> %a1, <4 x i1> %a2) #1 {
-entry:
-  %cmp1 = fcmp oeq float %c3, %c4
-  %cmp3tmp = fcmp oeq float %c1, %c2
-  %cmp3 = icmp ne i1 %cmp3tmp, %cmp1
-  %cond = select i1 %cmp3, <4 x i1> %a1, <4 x i1> %a2
-  ret <4 x i1> %cond
-
-; CHECK-LABEL: @testqv4i1ne
-; CHECK-DAG: fcmpu {{[0-9]+}}, 3, 4
-; CHECK-DAG: fcmpu {{[0-9]+}}, 1, 2
-; CHECK: crxor [[REG1:[0-9]+]], {{[0-9]+}}, {{[0-9]+}}
-; CHECK: bc 12, [[REG1]], .LBB[[BB:[0-9_]+]]
-; CHECK: qvfmr 5, 6
-; CHECK: .LBB[[BB]]:
-; CHECK: qvfmr 1, 5
-; CHECK: blr
-}
-
 attributes #0 = { nounwind readnone "target-cpu"="pwr7" }
-attributes #1 = { nounwind readnone "target-cpu"="a2q" }
 

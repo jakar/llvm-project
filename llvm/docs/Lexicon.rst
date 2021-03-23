@@ -64,10 +64,10 @@ C
 
 **CSE**
     Common Subexpression Elimination. An optimization that removes common
-    subexpression compuation. For example ``(a+b)*(a+b)`` has two subexpressions
-    that are the same: ``(a+b)``. This optimization would perform the addition
-    only once and then perform the multiply (but only if it's computationally
-    correct/safe).
+    subexpression computation. For example ``(a+b)*(a+b)`` has two
+    subexpressions that are the same: ``(a+b)``. This optimization would
+    perform the addition only once and then perform the multiply (but only if
+    it's computationally correct/safe).
 
 D
 -
@@ -92,6 +92,19 @@ D
 **DSE**
     Dead Store Elimination
 
+E
+-
+
+**ento**
+    This namespace houses the
+    `Clang Static Analyzer <https://clang.llvm.org/docs/ClangStaticAnalyzer.html>`_.
+    It is an abbreviation of `entomology <https://en.wikipedia.org/wiki/Entomology>`_.
+
+      *"Entomology is the scientific study of insects."*
+
+    In the past, this namespace had not only the name `GR` (aka. Graph Reachability)
+    but also `entoSA`.
+
 F
 -
 
@@ -109,6 +122,18 @@ G
     Garbage Collection. The practice of using reachability analysis instead of
     explicit memory management to reclaim unused memory.
 
+**GEP**
+    ``GetElementPtr``. An LLVM IR instruction that is used to get the address
+    of a subelement of an aggregate data structure. It is documented in detail
+    `here <https://llvm.org/docs/GetElementPtr.html>`_.
+
+**GVN**
+    Global Value Numbering. GVN is a pass that partitions values computed by a
+    function into congruence classes. Values ending up in the same congruence
+    class are guaranteed to be the same for every execution of the program.
+    In that respect, congruency is a compile-time approximation of equivalence
+    of values at runtime.
+
 H
 -
 
@@ -120,6 +145,12 @@ H
 
 I
 -
+
+**ICE**
+    Internal Compiler Error. This abbreviation is used to describe errors
+    that occur in LLVM or Clang as they are compiling source code. For example,
+    if a valid C++ source program were to trigger an assert in Clang when
+    compiled, that could be referred to as an "ICE".
 
 **IPA**
     Inter-Procedural Analysis. Refers to any variety of code analysis that
@@ -167,6 +198,7 @@ M
 
 N
 -
+.. _nfc:
 
 **NFC**
   "No functional change". Used in a commit message to indicate that a patch
@@ -211,6 +243,10 @@ R
     and other optimization.  For example, changing ``(A+B-A)`` into ``(B+A-A)``,
     permitting it to be optimized into ``(B+0)`` then ``(B)``.
 
+**RFC**
+  Request for Comment. An email sent to a project mailing list in order to
+  solicit feedback on a proposed change.
+
 .. _roots:
 .. _stack roots:
 
@@ -231,7 +267,7 @@ S
 **Safe Point**
     In garbage collection, it is necessary to identify `stack roots`_ so that
     reachability analysis may proceed. It may be infeasible to provide this
-    information for every instruction, so instead the information may is
+    information for every instruction, so instead the information is
     calculated only at designated safe points. With a copying collector,
     `derived pointers`_ must not be retained across safe points and `object
     pointers`_ must be reloaded from stack roots.
@@ -248,6 +284,14 @@ S
 **SLP**
     Superword-Level Parallelism, same as :ref:`Basic-Block Vectorization
     <lexicon-bb-vectorization>`.
+
+**Splat**
+    Splat refers to a vector of identical scalar elements.
+
+    The term is based on the PowerPC Altivec instructions that provided
+    this functionality in hardware. For example, "vsplth" and the corresponding
+    software intrinsic "vec_splat()". Examples of other hardware names for this
+    action include "duplicate" (ARM) and "broadcast" (x86).
 
 **SRoA**
     Scalar Replacement of Aggregates

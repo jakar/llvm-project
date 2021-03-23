@@ -1,9 +1,8 @@
 //===-- ARMSchedule.td - ARM Scheduling Definitions --------*- tablegen -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //===----------------------------------------------------------------------===//
@@ -131,14 +130,81 @@ def WriteFPDIV64 : SchedWrite;
 def WriteFPSQRT32 : SchedWrite;
 def WriteFPSQRT64 : SchedWrite;
 
+// Vector load and stores
+def WriteVLD1 : SchedWrite;
+def WriteVLD2 : SchedWrite;
+def WriteVLD3 : SchedWrite;
+def WriteVLD4 : SchedWrite;
+def WriteVST1 : SchedWrite;
+def WriteVST2 : SchedWrite;
+def WriteVST3 : SchedWrite;
+def WriteVST4 : SchedWrite;
+
+
 // Define TII for use in SchedVariant Predicates.
 def : PredicateProlog<[{
   const ARMBaseInstrInfo *TII =
     static_cast<const ARMBaseInstrInfo*>(SchedModel->getInstrInfo());
   (void)TII;
+  const ARMSubtarget *STI =
+    static_cast<const ARMSubtarget*>(SchedModel->getSubtargetInfo());
+  (void)STI;
 }]>;
 
-def IsPredicatedPred : SchedPredicate<[{TII->isPredicated(*MI)}]>;
+def IsPredicated : CheckFunctionPredicateWithTII<
+  "ARM_MC::isPredicated",
+  "isPredicated"
+>;
+def IsPredicatedPred : MCSchedPredicate<IsPredicated>;
+
+def IsCPSRDefined : CheckFunctionPredicateWithTII<
+  "ARM_MC::isCPSRDefined",
+  "ARMBaseInstrInfo::isCPSRDefined"
+>;
+
+def IsCPSRDefinedPred : MCSchedPredicate<IsCPSRDefined>;
+
+let FunctionMapper = "ARM_AM::getAM2ShiftOpc" in {
+  class CheckAM2NoShift<int n> : CheckImmOperand_s<n, "ARM_AM::no_shift">;
+  class CheckAM2ShiftLSL<int n> : CheckImmOperand_s<n, "ARM_AM::lsl">;
+}
+
+let FunctionMapper = "ARM_AM::getAM2Op" in {
+  class CheckAM2OpAdd<int n> : CheckImmOperand_s<n, "ARM_AM::add"> {}
+  class CheckAM2OpSub<int n> : CheckImmOperand_s<n, "ARM_AM::sub"> {}
+}
+
+let FunctionMapper = "ARM_AM::getAM2Offset" in {
+  class CheckAM2Offset<int n, int of> : CheckImmOperand<n, of> {}
+}
+
+def IsLDMBaseRegInList : CheckFunctionPredicate<
+  "ARM_MC::isLDMBaseRegInList", "ARM_MC::isLDMBaseRegInList"
+>;
+
+let FunctionMapper = "ARM_AM::getAM3Op" in {
+  class CheckAM3OpSub<int n> : CheckImmOperand_s<n, "ARM_AM::sub"> {}
+}
+
+// LDM, base reg in list
+def IsLDMBaseRegInListPred : MCSchedPredicate<IsLDMBaseRegInList>;
+
+class IsRegPCPred<int n> : MCSchedPredicate<CheckRegOperand<n, PC>>;
+
+class BranchWriteRes<int lat, int uops, list<ProcResourceKind> resl,
+                     list<int> rcl, SchedWriteRes wr> :
+  SchedWriteRes<!listconcat(wr.ProcResources, resl)> {
+  let Latency = !add(wr.Latency, lat);
+  let ResourceCycles = !listconcat(wr.ResourceCycles, rcl);
+  let NumMicroOps = !add(wr.NumMicroOps, uops);
+  SchedWriteRes BaseWr = wr;
+}
+
+class CheckBranchForm<int n, BranchWriteRes br> :
+  SchedWriteVariant<[
+    SchedVar<IsRegPCPred<n>, [br]>,
+    SchedVar<NoSchedPred,    [br.BaseWr]>
+  ]>;
 
 //===----------------------------------------------------------------------===//
 // Instruction Itinerary classes used for ARM
@@ -400,12 +466,4 @@ def IIC_VTBX1      : InstrItinClass;
 def IIC_VTBX2      : InstrItinClass;
 def IIC_VTBX3      : InstrItinClass;
 def IIC_VTBX4      : InstrItinClass;
-
-//===----------------------------------------------------------------------===//
-// Processor instruction itineraries.
-
-include "ARMScheduleV6.td"
-include "ARMScheduleA8.td"
-include "ARMScheduleA9.td"
-include "ARMScheduleSwift.td"
-include "ARMScheduleR52.td"
+def IIC_VDOTPROD   : InstrItinClass;

@@ -1,3 +1,4 @@
+; REQUIRES: x86
 ; RUN: llvm-as -o %t.obj %s
 ; RUN: lld-link /dll /out:%t.dll %t.obj
 ; RUN: llvm-objdump -d %t.dll | FileCheck %s
@@ -6,7 +7,7 @@
 ; CHECK: xorl %eax, %eax
 ; CHECK-NEXT: retq
 
-target datalayout = "e-m:w-i64:64-f80:128-n8:16:32:64-S128"
+target datalayout = "e-m:w-p270:32:32-p271:32:32-p272:64:64-i64:64-f80:128-n8:16:32:64-S128"
 target triple = "x86_64-pc-windows-msvc"
 
 define void @_DllMainCRTStartup() {
@@ -17,8 +18,5 @@ define i32 @foo() {
   ret i32 0
 }
 
-!llvm.module.flags = !{!0}
-
-!0 = !{i32 6, !"Linker Options", !1}
-!1 = !{!2}
-!2 = !{!"/INCLUDE:foo"}
+!llvm.linker.options = !{!0}
+!0 = !{!"/INCLUDE:foo"}

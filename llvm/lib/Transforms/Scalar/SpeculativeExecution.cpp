@@ -1,9 +1,8 @@
 //===- SpeculativeExecution.cpp ---------------------------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -62,12 +61,14 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/Transforms/Scalar/SpeculativeExecution.h"
-#include "llvm/ADT/SmallSet.h"
+#include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/Analysis/GlobalsModRef.h"
 #include "llvm/Analysis/ValueTracking.h"
 #include "llvm/IR/Instructions.h"
+#include "llvm/IR/IntrinsicInst.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Operator.h"
+#include "llvm/InitializePasses.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
 
@@ -137,6 +138,7 @@ INITIALIZE_PASS_END(SpeculativeExecutionLegacyPass, "speculative-execution",
 void SpeculativeExecutionLegacyPass::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addRequired<TargetTransformInfoWrapperPass>();
   AU.addPreserved<GlobalsAAWrapperPass>();
+  AU.setPreservesCFG();
 }
 
 bool SpeculativeExecutionLegacyPass::runOnFunction(Function &F) {
@@ -151,8 +153,8 @@ namespace llvm {
 
 bool SpeculativeExecutionPass::runImpl(Function &F, TargetTransformInfo *TTI) {
   if (OnlyIfDivergentTarget && !TTI->hasBranchDivergence()) {
-    DEBUG(dbgs() << "Not running SpeculativeExecution because "
-                    "TTI->hasBranchDivergence() is false.\n");
+    LLVM_DEBUG(dbgs() << "Not running SpeculativeExecution because "
+                         "TTI->hasBranchDivergence() is false.\n");
     return false;
   }
 
@@ -208,36 +210,105 @@ bool SpeculativeExecutionPass::runOnBasicBlock(BasicBlock &B) {
   return false;
 }
 
+static InstructionCost ComputeSpeculationCost(const Instruction *I,
+                                              const TargetTransformInfo &TTI) {
+  switch (Operator::getOpcode(I)) {
+    case Instruction::GetElementPtr:
+    case Instruction::Add:
+    case Instruction::Mul:
+    case Instruction::And:
+    case Instruction::Or:
+    case Instruction::Select:
+    case Instruction::Shl:
+    case Instruction::Sub:
+    case Instruction::LShr:
+    case Instruction::AShr:
+    case Instruction::Xor:
+    case Instruction::ZExt:
+    case Instruction::SExt:
+    case Instruction::Call:
+    case Instruction::BitCast:
+    case Instruction::PtrToInt:
+    case Instruction::IntToPtr:
+    case Instruction::AddrSpaceCast:
+    case Instruction::FPToUI:
+    case Instruction::FPToSI:
+    case Instruction::UIToFP:
+    case Instruction::SIToFP:
+    case Instruction::FPExt:
+    case Instruction::FPTrunc:
+    case Instruction::FAdd:
+    case Instruction::FSub:
+    case Instruction::FMul:
+    case Instruction::FDiv:
+    case Instruction::FRem:
+    case Instruction::FNeg:
+    case Instruction::ICmp:
+    case Instruction::FCmp:
+    case Instruction::Trunc:
+    case Instruction::Freeze:
+    case Instruction::ExtractElement:
+    case Instruction::InsertElement:
+    case Instruction::ShuffleVector:
+    case Instruction::ExtractValue:
+    case Instruction::InsertValue:
+      return TTI.getUserCost(I, TargetTransformInfo::TCK_SizeAndLatency);
+
+    default:
+      return InstructionCost::getInvalid(); // Disallow anything not explicitly
+                                            // listed.
+  }
+}
+
 bool SpeculativeExecutionPass::considerHoistingFromTo(
     BasicBlock &FromBlock, BasicBlock &ToBlock) {
-  SmallSet<const Instruction *, 8> NotHoisted;
-  const auto AllPrecedingUsesFromBlockHoisted = [&NotHoisted](User *U) {
-    for (Value* V : U->operand_values()) {
-      if (Instruction *I = dyn_cast<Instruction>(V)) {
-        if (NotHoisted.count(I) > 0)
+  SmallPtrSet<const Instruction *, 8> NotHoisted;
+  const auto AllPrecedingUsesFromBlockHoisted = [&NotHoisted](const User *U) {
+    // Debug variable has special operand to check it's not hoisted.
+    if (const auto *DVI = dyn_cast<DbgVariableIntrinsic>(U)) {
+      return all_of(DVI->location_ops(), [&NotHoisted](Value *V) {
+        if (const auto *I = dyn_cast_or_null<Instruction>(V)) {
+          if (NotHoisted.count(I) == 0)
+            return true;
+        }
+        return false;
+      });
+    }
+
+    // Usially debug label instrinsic corresponds to label in LLVM IR. In these
+    // cases we should not move it here.
+    // TODO: Possible special processing needed to detect it is related to a
+    // hoisted instruction.
+    if (isa<DbgLabelInst>(U))
+      return false;
+
+    for (const Value *V : U->operand_values()) {
+      if (const Instruction *I = dyn_cast<Instruction>(V)) {
+        if (NotHoisted.contains(I))
           return false;
       }
     }
     return true;
   };
 
-  unsigned TotalSpeculationCost = 0;
-  for (auto& I : FromBlock) {
-    const unsigned Cost = TTI->getUserCost(&I);
-    if (Cost != UINT_MAX && isSafeToSpeculativelyExecute(&I) &&
+  InstructionCost TotalSpeculationCost = 0;
+  unsigned NotHoistedInstCount = 0;
+  for (const auto &I : FromBlock) {
+    const InstructionCost Cost = ComputeSpeculationCost(&I, *TTI);
+    if (Cost.isValid() && isSafeToSpeculativelyExecute(&I) &&
         AllPrecedingUsesFromBlockHoisted(&I)) {
       TotalSpeculationCost += Cost;
       if (TotalSpeculationCost > SpecExecMaxSpeculationCost)
         return false;  // too much to hoist
     } else {
-      NotHoisted.insert(&I);
-      if (NotHoisted.size() > SpecExecMaxNotHoisted)
+      // Debug info instrinsics should not be counted for threshold.
+      if (!isa<DbgInfoIntrinsic>(I))
+        NotHoistedInstCount++;
+      if (NotHoistedInstCount > SpecExecMaxNotHoisted)
         return false; // too much left behind
+      NotHoisted.insert(&I);
     }
   }
-
-  if (TotalSpeculationCost == 0)
-    return false; // nothing to hoist
 
   for (auto I = FromBlock.begin(); I != FromBlock.end();) {
     // We have to increment I before moving Current as moving Current
@@ -273,6 +344,7 @@ PreservedAnalyses SpeculativeExecutionPass::run(Function &F,
     return PreservedAnalyses::all();
   PreservedAnalyses PA;
   PA.preserve<GlobalsAA>();
+  PA.preserveSet<CFGAnalyses>();
   return PA;
 }
 }  // namespace llvm

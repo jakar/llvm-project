@@ -1,9 +1,8 @@
 //===-- AVRInstrInfo.cpp - AVR Instruction Information --------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -41,19 +40,19 @@ AVRInstrInfo::AVRInstrInfo()
 
 void AVRInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
                                MachineBasicBlock::iterator MI,
-                               const DebugLoc &DL, unsigned DestReg,
-                               unsigned SrcReg, bool KillSrc) const {
+                               const DebugLoc &DL, MCRegister DestReg,
+                               MCRegister SrcReg, bool KillSrc) const {
   const AVRSubtarget &STI = MBB.getParent()->getSubtarget<AVRSubtarget>();
   const AVRRegisterInfo &TRI = *STI.getRegisterInfo();
   unsigned Opc;
 
   // Not all AVR devices support the 16-bit `MOVW` instruction.
   if (AVR::DREGSRegClass.contains(DestReg, SrcReg)) {
-    if (STI.hasMOVW()) {
+    if (STI.hasMOVW() && AVR::DREGSMOVWRegClass.contains(DestReg, SrcReg)) {
       BuildMI(MBB, MI, DL, get(AVR::MOVWRdRr), DestReg)
           .addReg(SrcReg, getKillRegState(KillSrc));
     } else {
-      unsigned DestLo, DestHi, SrcLo, SrcHi;
+      Register DestLo, DestHi, SrcLo, SrcHi;
 
       TRI.splitReg(DestReg, DestLo, DestHi);
       TRI.splitReg(SrcReg,  SrcLo,  SrcHi);
@@ -120,7 +119,7 @@ unsigned AVRInstrInfo::isStoreToStackSlot(const MachineInstr &MI,
 
 void AVRInstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
                                        MachineBasicBlock::iterator MI,
-                                       unsigned SrcReg, bool isKill,
+                                       Register SrcReg, bool isKill,
                                        int FrameIndex,
                                        const TargetRegisterClass *RC,
                                        const TargetRegisterInfo *TRI) const {
@@ -139,7 +138,7 @@ void AVRInstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
   MachineMemOperand *MMO = MF.getMachineMemOperand(
       MachinePointerInfo::getFixedStack(MF, FrameIndex),
       MachineMemOperand::MOStore, MFI.getObjectSize(FrameIndex),
-      MFI.getObjectAlignment(FrameIndex));
+      MFI.getObjectAlign(FrameIndex));
 
   unsigned Opcode = 0;
   if (TRI->isTypeLegalForClass(*RC, MVT::i8)) {
@@ -159,7 +158,7 @@ void AVRInstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
 
 void AVRInstrInfo::loadRegFromStackSlot(MachineBasicBlock &MBB,
                                         MachineBasicBlock::iterator MI,
-                                        unsigned DestReg, int FrameIndex,
+                                        Register DestReg, int FrameIndex,
                                         const TargetRegisterClass *RC,
                                         const TargetRegisterInfo *TRI) const {
   DebugLoc DL;
@@ -173,7 +172,7 @@ void AVRInstrInfo::loadRegFromStackSlot(MachineBasicBlock &MBB,
   MachineMemOperand *MMO = MF.getMachineMemOperand(
       MachinePointerInfo::getFixedStack(MF, FrameIndex),
       MachineMemOperand::MOLoad, MFI.getObjectSize(FrameIndex),
-      MFI.getObjectAlignment(FrameIndex));
+      MFI.getObjectAlign(FrameIndex));
 
   unsigned Opcode = 0;
   if (TRI->isTypeLegalForClass(*RC, MVT::i8)) {
@@ -273,7 +272,7 @@ bool AVRInstrInfo::analyzeBranch(MachineBasicBlock &MBB,
 
   while (I != MBB.begin()) {
     --I;
-    if (I->isDebugValue()) {
+    if (I->isDebugInstr()) {
       continue;
     }
 
@@ -402,7 +401,7 @@ unsigned AVRInstrInfo::insertBranch(MachineBasicBlock &MBB,
                                     ArrayRef<MachineOperand> Cond,
                                     const DebugLoc &DL,
                                     int *BytesAdded) const {
-  assert(!BytesAdded && "code size not handled");
+  if (BytesAdded) *BytesAdded = 0;
 
   // Shouldn't be a fall through.
   assert(TBB && "insertBranch must not be told to insert a fallthrough");
@@ -411,19 +410,24 @@ unsigned AVRInstrInfo::insertBranch(MachineBasicBlock &MBB,
 
   if (Cond.empty()) {
     assert(!FBB && "Unconditional branch with multiple successors!");
-    BuildMI(&MBB, DL, get(AVR::RJMPk)).addMBB(TBB);
+    auto &MI = *BuildMI(&MBB, DL, get(AVR::RJMPk)).addMBB(TBB);
+    if (BytesAdded)
+      *BytesAdded += getInstSizeInBytes(MI);
     return 1;
   }
 
   // Conditional branch.
   unsigned Count = 0;
   AVRCC::CondCodes CC = (AVRCC::CondCodes)Cond[0].getImm();
-  BuildMI(&MBB, DL, getBrCond(CC)).addMBB(TBB);
+  auto &CondMI = *BuildMI(&MBB, DL, getBrCond(CC)).addMBB(TBB);
+
+  if (BytesAdded) *BytesAdded += getInstSizeInBytes(CondMI);
   ++Count;
 
   if (FBB) {
     // Two-way Conditional branch. Insert the second branch.
-    BuildMI(&MBB, DL, get(AVR::RJMPk)).addMBB(FBB);
+    auto &MI = *BuildMI(&MBB, DL, get(AVR::RJMPk)).addMBB(FBB);
+    if (BytesAdded) *BytesAdded += getInstSizeInBytes(MI);
     ++Count;
   }
 
@@ -432,14 +436,14 @@ unsigned AVRInstrInfo::insertBranch(MachineBasicBlock &MBB,
 
 unsigned AVRInstrInfo::removeBranch(MachineBasicBlock &MBB,
                                     int *BytesRemoved) const {
-  assert(!BytesRemoved && "code size not handled");
+  if (BytesRemoved) *BytesRemoved = 0;
 
   MachineBasicBlock::iterator I = MBB.end();
   unsigned Count = 0;
 
   while (I != MBB.begin()) {
     --I;
-    if (I->isDebugValue()) {
+    if (I->isDebugInstr()) {
       continue;
     }
     //:TODO: add here the missing jmp instructions once they are implemented
@@ -450,6 +454,7 @@ unsigned AVRInstrInfo::removeBranch(MachineBasicBlock &MBB,
     }
 
     // Remove the branch.
+    if (BytesRemoved) *BytesRemoved += getInstSizeInBytes(*I);
     I->eraseFromParent();
     I = MBB.end();
     ++Count;
@@ -482,7 +487,8 @@ unsigned AVRInstrInfo::getInstSizeInBytes(const MachineInstr &MI) const {
   case TargetOpcode::KILL:
   case TargetOpcode::DBG_VALUE:
     return 0;
-  case TargetOpcode::INLINEASM: {
+  case TargetOpcode::INLINEASM:
+  case TargetOpcode::INLINEASM_BR: {
     const MachineFunction &MF = *MI.getParent()->getParent();
     const AVRTargetMachine &TM = static_cast<const AVRTargetMachine&>(MF.getTarget());
     const AVRSubtarget &STI = MF.getSubtarget<AVRSubtarget>();
@@ -492,6 +498,76 @@ unsigned AVRInstrInfo::getInstSizeInBytes(const MachineInstr &MI) const {
                                   *TM.getMCAsmInfo());
   }
   }
+}
+
+MachineBasicBlock *
+AVRInstrInfo::getBranchDestBlock(const MachineInstr &MI) const {
+  switch (MI.getOpcode()) {
+  default:
+    llvm_unreachable("unexpected opcode!");
+  case AVR::JMPk:
+  case AVR::CALLk:
+  case AVR::RCALLk:
+  case AVR::RJMPk:
+  case AVR::BREQk:
+  case AVR::BRNEk:
+  case AVR::BRSHk:
+  case AVR::BRLOk:
+  case AVR::BRMIk:
+  case AVR::BRPLk:
+  case AVR::BRGEk:
+  case AVR::BRLTk:
+    return MI.getOperand(0).getMBB();
+  case AVR::BRBSsk:
+  case AVR::BRBCsk:
+    return MI.getOperand(1).getMBB();
+  case AVR::SBRCRrB:
+  case AVR::SBRSRrB:
+  case AVR::SBICAb:
+  case AVR::SBISAb:
+    llvm_unreachable("unimplemented branch instructions");
+  }
+}
+
+bool AVRInstrInfo::isBranchOffsetInRange(unsigned BranchOp,
+                                         int64_t BrOffset) const {
+
+  switch (BranchOp) {
+  default:
+    llvm_unreachable("unexpected opcode!");
+  case AVR::JMPk:
+  case AVR::CALLk:
+    return true;
+  case AVR::RCALLk:
+  case AVR::RJMPk:
+    return isIntN(13, BrOffset);
+  case AVR::BRBSsk:
+  case AVR::BRBCsk:
+  case AVR::BREQk:
+  case AVR::BRNEk:
+  case AVR::BRSHk:
+  case AVR::BRLOk:
+  case AVR::BRMIk:
+  case AVR::BRPLk:
+  case AVR::BRGEk:
+  case AVR::BRLTk:
+    return isIntN(7, BrOffset);
+  }
+}
+
+unsigned AVRInstrInfo::insertIndirectBranch(MachineBasicBlock &MBB,
+                                            MachineBasicBlock &NewDestBB,
+                                            const DebugLoc &DL,
+                                            int64_t BrOffset,
+                                            RegScavenger *RS) const {
+    // This method inserts a *direct* branch (JMP), despite its name.
+    // LLVM calls this method to fixup unconditional branches; it never calls
+    // insertBranch or some hypothetical "insertDirectBranch".
+    // See lib/CodeGen/RegisterRelaxation.cpp for details.
+    // We end up here when a jump is too long for a RJMP instruction.
+    auto &MI = *BuildMI(&MBB, DL, get(AVR::JMPk)).addMBB(&NewDestBB);
+
+    return getInstSizeInBytes(MI);
 }
 
 } // end of namespace llvm

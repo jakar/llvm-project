@@ -1,9 +1,8 @@
 //===- BinaryStreamArray.h - Array backed by an arbitrary stream *- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -12,6 +11,7 @@
 
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/iterator.h"
+#include "llvm/Support/Alignment.h"
 #include "llvm/Support/BinaryStreamRef.h"
 #include "llvm/Support/Error.h"
 #include <cassert>
@@ -42,146 +42,10 @@ namespace llvm {
 /// having to specify a second template argument to VarStreamArray (documented
 /// below).
 template <typename T> struct VarStreamArrayExtractor {
-  struct ContextType {};
-
   // Method intentionally deleted.  You must provide an explicit specialization
-  // with one of the following two methods implemented.
-  static Error extract(BinaryStreamRef Stream, uint32_t &Len, T &Item) = delete;
-
-  static Error extract(BinaryStreamRef Stream, uint32_t &Len, T &Item,
-                       const ContextType &Ctx) = delete;
-};
-
-template <typename ArrayType, typename Value, typename Extractor,
-          typename WrappedCtx>
-class VarStreamArrayIterator
-    : public iterator_facade_base<
-          VarStreamArrayIterator<ArrayType, Value, Extractor, WrappedCtx>,
-          std::forward_iterator_tag, Value> {
-  typedef VarStreamArrayIterator<ArrayType, Value, Extractor, WrappedCtx>
-      IterType;
-
-public:
-  VarStreamArrayIterator() = default;
-  VarStreamArrayIterator(const ArrayType &Array, const WrappedCtx &Ctx,
-                         BinaryStreamRef Stream, bool *HadError = nullptr,
-                         uint32_t Offset = 0)
-      : IterRef(Stream), Ctx(&Ctx), Array(&Array), AbsOffset(Offset),
-        HadError(HadError) {
-    if (IterRef.getLength() == 0)
-      moveToEnd();
-    else {
-      auto EC = Ctx.template invoke<Extractor>(IterRef, ThisLen, ThisValue);
-      if (EC) {
-        consumeError(std::move(EC));
-        markError();
-      }
-    }
-  }
-
-  VarStreamArrayIterator(const ArrayType &Array, const WrappedCtx &Ctx,
-                         bool *HadError = nullptr)
-      : VarStreamArrayIterator(Array, Ctx, Array.Stream, HadError) {}
-
-  VarStreamArrayIterator(const WrappedCtx &Ctx) : Ctx(&Ctx) {}
-  VarStreamArrayIterator(const VarStreamArrayIterator &Other) = default;
-
-  ~VarStreamArrayIterator() = default;
-
-  bool operator==(const IterType &R) const {
-    if (Array && R.Array) {
-      // Both have a valid array, make sure they're same.
-      assert(Array == R.Array);
-      return IterRef == R.IterRef;
-    }
-
-    // Both iterators are at the end.
-    if (!Array && !R.Array)
-      return true;
-
-    // One is not at the end and one is.
-    return false;
-  }
-
-  const Value &operator*() const {
-    assert(Array && !HasError);
-    return ThisValue;
-  }
-
-  Value &operator*() {
-    assert(Array && !HasError);
-    return ThisValue;
-  }
-
-  IterType &operator+=(unsigned N) {
-    for (unsigned I = 0; I < N; ++I) {
-      // We are done with the current record, discard it so that we are
-      // positioned at the next record.
-      AbsOffset += ThisLen;
-      IterRef = IterRef.drop_front(ThisLen);
-      if (IterRef.getLength() == 0) {
-        // There is nothing after the current record, we must make this an end
-        // iterator.
-        moveToEnd();
-      } else {
-        // There is some data after the current record.
-        auto EC = Ctx->template invoke<Extractor>(IterRef, ThisLen, ThisValue);
-        if (EC) {
-          consumeError(std::move(EC));
-          markError();
-        } else if (ThisLen == 0) {
-          // An empty record? Make this an end iterator.
-          moveToEnd();
-        }
-      }
-    }
-    return *this;
-  }
-
-  uint32_t offset() const { return AbsOffset; }
-
-private:
-  void moveToEnd() {
-    Array = nullptr;
-    ThisLen = 0;
-  }
-  void markError() {
-    moveToEnd();
-    HasError = true;
-    if (HadError != nullptr)
-      *HadError = true;
-  }
-
-  Value ThisValue;
-  BinaryStreamRef IterRef;
-  const WrappedCtx *Ctx{nullptr};
-  const ArrayType *Array{nullptr};
-  uint32_t ThisLen{0};
-  uint32_t AbsOffset{0};
-  bool HasError{false};
-  bool *HadError{nullptr};
-};
-
-template <typename T, typename Context> struct ContextWrapper {
-  ContextWrapper() = default;
-
-  explicit ContextWrapper(Context &&Ctx) : Ctx(Ctx) {}
-
-  template <typename Extractor>
-  Error invoke(BinaryStreamRef Stream, uint32_t &Len, T &Item) const {
-    return Extractor::extract(Stream, Len, Item, Ctx);
-  }
-
-  Context Ctx;
-};
-
-template <typename T> struct ContextWrapper<T, void> {
-  ContextWrapper() = default;
-
-  template <typename Extractor>
-  Error invoke(BinaryStreamRef Stream, uint32_t &Len, T &Item) const {
-    return Extractor::extract(Stream, Len, Item);
-  }
+  // with the following method implemented.
+  Error operator()(BinaryStreamRef Stream, uint32_t &Len,
+                   T &Item) const = delete;
 };
 
 /// VarStreamArray represents an array of variable length records backed by a
@@ -200,88 +64,190 @@ template <typename T> struct ContextWrapper<T, void> {
 /// If you do not specify an Extractor type, you are expected to specialize
 /// VarStreamArrayExtractor<T> for your ValueType.
 ///
-/// The default extractor type is stateless, but by specializing
-/// VarStreamArrayExtractor or defining your own custom extractor type and
-/// adding the appropriate ContextType typedef to the class, you can pass a
-/// context field during construction of the VarStreamArray that will be
-/// passed to each call to extract.
+/// By default an Extractor is default constructed in the class, but in some
+/// cases you might find it useful for an Extractor to maintain state across
+/// extractions.  In this case you can provide your own Extractor through a
+/// secondary constructor.  The following examples show various ways of
+/// creating a VarStreamArray.
 ///
-template <typename Value, typename Extractor, typename WrappedCtx>
-class VarStreamArrayBase {
-  typedef VarStreamArrayBase<Value, Extractor, WrappedCtx> MyType;
+///       // Will use VarStreamArrayExtractor<MyType> as the extractor.
+///       VarStreamArray<MyType> MyTypeArray;
+///
+///       // Will use a default-constructed MyExtractor as the extractor.
+///       VarStreamArray<MyType, MyExtractor> MyTypeArray2;
+///
+///       // Will use the specific instance of MyExtractor provided.
+///       // MyExtractor need not be default-constructible in this case.
+///       MyExtractor E(SomeContext);
+///       VarStreamArray<MyType, MyExtractor> MyTypeArray3(E);
+///
+
+template <typename ValueType, typename Extractor> class VarStreamArrayIterator;
+
+template <typename ValueType,
+          typename Extractor = VarStreamArrayExtractor<ValueType>>
+class VarStreamArray {
+  friend class VarStreamArrayIterator<ValueType, Extractor>;
 
 public:
-  typedef VarStreamArrayIterator<MyType, Value, Extractor, WrappedCtx> Iterator;
-  friend Iterator;
+  typedef VarStreamArrayIterator<ValueType, Extractor> Iterator;
 
-  VarStreamArrayBase() = default;
+  VarStreamArray() = default;
 
-  VarStreamArrayBase(BinaryStreamRef Stream, const WrappedCtx &Ctx)
-      : Stream(Stream), Ctx(Ctx) {}
+  explicit VarStreamArray(const Extractor &E) : E(E) {}
 
-  VarStreamArrayBase(const MyType &Other)
-      : Stream(Other.Stream), Ctx(Other.Ctx) {}
+  explicit VarStreamArray(BinaryStreamRef Stream, uint32_t Skew = 0)
+      : Stream(Stream), Skew(Skew) {}
+
+  VarStreamArray(BinaryStreamRef Stream, const Extractor &E, uint32_t Skew = 0)
+      : Stream(Stream), E(E), Skew(Skew) {}
 
   Iterator begin(bool *HadError = nullptr) const {
-    if (empty())
-      return end();
-
-    return Iterator(*this, Ctx, Stream, HadError);
+    return Iterator(*this, E, Skew, nullptr);
   }
 
   bool valid() const { return Stream.valid(); }
 
-  Iterator end() const { return Iterator(Ctx); }
+  uint32_t skew() const { return Skew; }
+  Iterator end() const { return Iterator(E); }
 
   bool empty() const { return Stream.getLength() == 0; }
 
-  /// \brief given an offset into the array's underlying stream, return an
+  VarStreamArray<ValueType, Extractor> substream(uint32_t Begin,
+                                                 uint32_t End) const {
+    assert(Begin >= Skew);
+    // We should never cut off the beginning of the stream since it might be
+    // skewed, meaning the initial bytes are important.
+    BinaryStreamRef NewStream = Stream.slice(0, End);
+    return {NewStream, E, Begin};
+  }
+
+  /// given an offset into the array's underlying stream, return an
   /// iterator to the record at that offset.  This is considered unsafe
   /// since the behavior is undefined if \p Offset does not refer to the
   /// beginning of a valid record.
   Iterator at(uint32_t Offset) const {
-    return Iterator(*this, Ctx, Stream.drop_front(Offset), nullptr, Offset);
+    return Iterator(*this, E, Offset, nullptr);
   }
 
+  const Extractor &getExtractor() const { return E; }
+  Extractor &getExtractor() { return E; }
+
   BinaryStreamRef getUnderlyingStream() const { return Stream; }
+  void setUnderlyingStream(BinaryStreamRef NewStream, uint32_t NewSkew = 0) {
+    Stream = NewStream;
+    Skew = NewSkew;
+  }
+
+  void drop_front() { Skew += begin()->length(); }
 
 private:
   BinaryStreamRef Stream;
-  WrappedCtx Ctx;
+  Extractor E;
+  uint32_t Skew = 0;
 };
 
-template <typename Value, typename Extractor, typename Context>
-class VarStreamArrayImpl
-    : public VarStreamArrayBase<Value, Extractor,
-                                ContextWrapper<Value, Context>> {
-  typedef ContextWrapper<Value, Context> WrappedContext;
-  typedef VarStreamArrayImpl<Value, Extractor, Context> MyType;
-  typedef VarStreamArrayBase<Value, Extractor, WrappedContext> BaseType;
+template <typename ValueType, typename Extractor>
+class VarStreamArrayIterator
+    : public iterator_facade_base<VarStreamArrayIterator<ValueType, Extractor>,
+                                  std::forward_iterator_tag, ValueType> {
+  typedef VarStreamArrayIterator<ValueType, Extractor> IterType;
+  typedef VarStreamArray<ValueType, Extractor> ArrayType;
 
 public:
-  typedef Context ContextType;
+  VarStreamArrayIterator(const ArrayType &Array, const Extractor &E,
+                         uint32_t Offset, bool *HadError)
+      : IterRef(Array.Stream.drop_front(Offset)), Extract(E),
+        Array(&Array), AbsOffset(Offset), HadError(HadError) {
+    if (IterRef.getLength() == 0)
+      moveToEnd();
+    else {
+      auto EC = Extract(IterRef, ThisLen, ThisValue);
+      if (EC) {
+        consumeError(std::move(EC));
+        markError();
+      }
+    }
+  }
 
-  VarStreamArrayImpl() = default;
-  VarStreamArrayImpl(BinaryStreamRef Stream, Context &&Ctx)
-      : BaseType(Stream, WrappedContext(std::forward<Context>(Ctx))) {}
+  VarStreamArrayIterator() = default;
+  explicit VarStreamArrayIterator(const Extractor &E) : Extract(E) {}
+  ~VarStreamArrayIterator() = default;
+
+  bool operator==(const IterType &R) const {
+    if (Array && R.Array) {
+      // Both have a valid array, make sure they're same.
+      assert(Array == R.Array);
+      return IterRef == R.IterRef;
+    }
+
+    // Both iterators are at the end.
+    if (!Array && !R.Array)
+      return true;
+
+    // One is not at the end and one is.
+    return false;
+  }
+
+  const ValueType &operator*() const {
+    assert(Array && !HasError);
+    return ThisValue;
+  }
+
+  ValueType &operator*() {
+    assert(Array && !HasError);
+    return ThisValue;
+  }
+
+  IterType &operator+=(unsigned N) {
+    for (unsigned I = 0; I < N; ++I) {
+      // We are done with the current record, discard it so that we are
+      // positioned at the next record.
+      AbsOffset += ThisLen;
+      IterRef = IterRef.drop_front(ThisLen);
+      if (IterRef.getLength() == 0) {
+        // There is nothing after the current record, we must make this an end
+        // iterator.
+        moveToEnd();
+      } else {
+        // There is some data after the current record.
+        auto EC = Extract(IterRef, ThisLen, ThisValue);
+        if (EC) {
+          consumeError(std::move(EC));
+          markError();
+        } else if (ThisLen == 0) {
+          // An empty record? Make this an end iterator.
+          moveToEnd();
+        }
+      }
+    }
+    return *this;
+  }
+
+  uint32_t offset() const { return AbsOffset; }
+  uint32_t getRecordLength() const { return ThisLen; }
+
+private:
+  void moveToEnd() {
+    Array = nullptr;
+    ThisLen = 0;
+  }
+  void markError() {
+    moveToEnd();
+    HasError = true;
+    if (HadError != nullptr)
+      *HadError = true;
+  }
+
+  ValueType ThisValue;
+  BinaryStreamRef IterRef;
+  Extractor Extract;
+  const ArrayType *Array{nullptr};
+  uint32_t ThisLen{0};
+  uint32_t AbsOffset{0};
+  bool HasError{false};
+  bool *HadError{nullptr};
 };
-
-template <typename Value, typename Extractor>
-class VarStreamArrayImpl<Value, Extractor, void>
-    : public VarStreamArrayBase<Value, Extractor, ContextWrapper<Value, void>> {
-  typedef ContextWrapper<Value, void> WrappedContext;
-  typedef VarStreamArrayImpl<Value, Extractor, void> MyType;
-  typedef VarStreamArrayBase<Value, Extractor, WrappedContext> BaseType;
-
-public:
-  VarStreamArrayImpl() = default;
-  VarStreamArrayImpl(BinaryStreamRef Stream)
-      : BaseType(Stream, WrappedContext()) {}
-};
-
-template <typename Value, typename Extractor = VarStreamArrayExtractor<Value>>
-using VarStreamArray =
-    VarStreamArrayImpl<Value, Extractor, typename Extractor::ContextType>;
 
 template <typename T> class FixedStreamArrayIterator;
 
@@ -294,6 +260,8 @@ template <typename T> class FixedStreamArray {
   friend class FixedStreamArrayIterator<T>;
 
 public:
+  typedef FixedStreamArrayIterator<T> Iterator;
+
   FixedStreamArray() = default;
   explicit FixedStreamArray(BinaryStreamRef Stream) : Stream(Stream) {
     assert(Stream.getLength() % sizeof(T) == 0);
@@ -307,6 +275,7 @@ public:
     return !(*this == Other);
   }
 
+  FixedStreamArray(const FixedStreamArray &) = default;
   FixedStreamArray &operator=(const FixedStreamArray &) = default;
 
   const T &operator[](uint32_t Index) const {
@@ -319,7 +288,7 @@ public:
       // an exact multiple of the element size.
       consumeError(std::move(EC));
     }
-    assert(llvm::alignmentAdjustment(Data.data(), alignof(T)) == 0);
+    assert(isAddrAligned(Align::Of<T>(), Data.data()));
     return *reinterpret_cast<const T *>(Data.data());
   }
 
@@ -333,6 +302,12 @@ public:
 
   FixedStreamArrayIterator<T> end() const {
     return FixedStreamArrayIterator<T>(*this, size());
+  }
+
+  const T &front() const { return *begin(); }
+  const T &back() const {
+    FixedStreamArrayIterator<T> I = end();
+    return *(--I);
   }
 
   BinaryStreamRef getUnderlyingStream() const { return Stream; }
@@ -350,6 +325,8 @@ public:
   FixedStreamArrayIterator(const FixedStreamArray<T> &Array, uint32_t Index)
       : Array(Array), Index(Index) {}
 
+  FixedStreamArrayIterator<T>(const FixedStreamArrayIterator<T> &Other)
+      : Array(Other.Array), Index(Other.Index) {}
   FixedStreamArrayIterator<T> &
   operator=(const FixedStreamArrayIterator<T> &Other) {
     Array = Other.Array;
@@ -371,7 +348,7 @@ public:
   }
 
   FixedStreamArrayIterator<T> &operator-=(std::ptrdiff_t N) {
-    assert(Index >= N);
+    assert(std::ptrdiff_t(Index) >= N);
     Index -= N;
     return *this;
   }

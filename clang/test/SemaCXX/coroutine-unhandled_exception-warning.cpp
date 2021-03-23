@@ -16,10 +16,14 @@
 using std::experimental::suspend_always;
 using std::experimental::suspend_never;
 
+#ifndef DISABLE_WARNING
+struct promise_void { // expected-note {{defined here}}
+#else
 struct promise_void {
+#endif
   void get_return_object();
   suspend_always initial_suspend();
-  suspend_always final_suspend();
+  suspend_always final_suspend() noexcept;
   void return_void();
 };
 

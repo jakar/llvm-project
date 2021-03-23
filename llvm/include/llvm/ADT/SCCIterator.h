@@ -1,9 +1,8 @@
-//===---- ADT/SCCIterator.h - Strongly Connected Comp. Iter. ----*- C++ -*-===//
+//===- ADT/SCCIterator.h - Strongly Connected Comp. Iter. -------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 /// \file
@@ -33,7 +32,7 @@
 
 namespace llvm {
 
-/// \brief Enumerate the SCCs of a directed graph in reverse topological order
+/// Enumerate the SCCs of a directed graph in reverse topological order
 /// of the SCC DAG.
 ///
 /// This is implemented using Tarjan's DFS algorithm using an internal stack to
@@ -43,10 +42,10 @@ template <class GraphT, class GT = GraphTraits<GraphT>>
 class scc_iterator : public iterator_facade_base<
                          scc_iterator<GraphT, GT>, std::forward_iterator_tag,
                          const std::vector<typename GT::NodeRef>, ptrdiff_t> {
-  typedef typename GT::NodeRef NodeRef;
-  typedef typename GT::ChildIteratorType ChildItTy;
-  typedef std::vector<NodeRef> SccTy;
-  typedef typename scc_iterator::reference reference;
+  using NodeRef = typename GT::NodeRef;
+  using ChildItTy = typename GT::ChildIteratorType;
+  using SccTy = std::vector<NodeRef>;
+  using reference = typename scc_iterator::reference;
 
   /// Element of VisitStack during DFS.
   struct StackElement {
@@ -104,7 +103,7 @@ public:
   }
   static scc_iterator end(const GraphT &) { return scc_iterator(); }
 
-  /// \brief Direct loop termination test which is more efficient than
+  /// Direct loop termination test which is more efficient than
   /// comparison with \c end().
   bool isAtEnd() const {
     assert(!CurrentSCC.empty() || VisitStack.empty());
@@ -125,17 +124,20 @@ public:
     return CurrentSCC;
   }
 
-  /// \brief Test if the current SCC has a loop.
+  /// Test if the current SCC has a cycle.
   ///
   /// If the SCC has more than one node, this is trivially true.  If not, it may
-  /// still contain a loop if the node has an edge back to itself.
-  bool hasLoop() const;
+  /// still contain a cycle if the node has an edge back to itself.
+  bool hasCycle() const;
 
   /// This informs the \c scc_iterator that the specified \c Old node
   /// has been deleted, and \c New is to be used in its place.
   void ReplaceNode(NodeRef Old, NodeRef New) {
     assert(nodeVisitNumbers.count(Old) && "Old not in scc_iterator?");
-    nodeVisitNumbers[New] = nodeVisitNumbers[Old];
+    // Do the assignment in two steps, in case 'New' is not yet in the map, and
+    // inserting it causes the map to grow.
+    auto tempVal = nodeVisitNumbers[Old];
+    nodeVisitNumbers[New] = tempVal;
     nodeVisitNumbers.erase(Old);
   }
 };
@@ -210,7 +212,7 @@ template <class GraphT, class GT> void scc_iterator<GraphT, GT>::GetNextSCC() {
 }
 
 template <class GraphT, class GT>
-bool scc_iterator<GraphT, GT>::hasLoop() const {
+bool scc_iterator<GraphT, GT>::hasCycle() const {
     assert(!CurrentSCC.empty() && "Dereferencing END SCC iterator!");
     if (CurrentSCC.size() > 1)
       return true;
@@ -222,24 +224,14 @@ bool scc_iterator<GraphT, GT>::hasLoop() const {
     return false;
   }
 
-/// \brief Construct the begin iterator for a deduced graph type T.
+/// Construct the begin iterator for a deduced graph type T.
 template <class T> scc_iterator<T> scc_begin(const T &G) {
   return scc_iterator<T>::begin(G);
 }
 
-/// \brief Construct the end iterator for a deduced graph type T.
+/// Construct the end iterator for a deduced graph type T.
 template <class T> scc_iterator<T> scc_end(const T &G) {
   return scc_iterator<T>::end(G);
-}
-
-/// \brief Construct the begin iterator for a deduced graph type T's Inverse<T>.
-template <class T> scc_iterator<Inverse<T>> scc_begin(const Inverse<T> &G) {
-  return scc_iterator<Inverse<T>>::begin(G);
-}
-
-/// \brief Construct the end iterator for a deduced graph type T's Inverse<T>.
-template <class T> scc_iterator<Inverse<T>> scc_end(const Inverse<T> &G) {
-  return scc_iterator<Inverse<T>>::end(G);
 }
 
 } // end namespace llvm

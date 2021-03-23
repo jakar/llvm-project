@@ -1,14 +1,12 @@
-include_directories(.)
-include_directories(../Utility)
-
-add_lldb_library(lldbPluginProcessPOSIX PLUGIN
+add_lldb_library(lldbPluginProcessPOSIX
   CrashReason.cpp
+  NativeProcessELF.cpp
   ProcessMessage.cpp
   ProcessPOSIXLog.cpp
 
   LINK_LIBS
-    lldbCore
-    lldbInterpreter
+    lldbPluginProcessUtility
+    lldbUtility
   LINK_COMPONENTS
     Support
   )

@@ -9,14 +9,14 @@
 ; happens during the post-RA-scheduler, which should be enabled by
 ; default with the above specified cpus.
 
-@ptrs = external global [0 x i32*], align 4
+@ptrs = external dso_local global [0 x i32*], align 4
 @idxa = common global i32 0, align 4
 @idxb = common global i32 0, align 4
 @res = common global i32 0, align 4
 
 define void @addindirect() {
 ; CHECK-LABEL: addindirect:
-; CHECK:       # BB#0: # %entry
+; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    movl idxb, %ecx
 ; CHECK-NEXT:    movl idxa, %eax
 ; CHECK-NEXT:    movl ptrs(,%ecx,4), %ecx

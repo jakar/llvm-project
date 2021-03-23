@@ -1,9 +1,8 @@
 //===-- RNBServices.cpp -----------------------------------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -13,6 +12,7 @@
 
 #include "RNBServices.h"
 
+#include "DNB.h"
 #include "CFString.h"
 #include "DNBLog.h"
 #include "MacOSX/CFUtils.h"
@@ -29,16 +29,13 @@
 #include <SpringBoardServices/SpringBoardServices.h>
 #endif
 
-// From DNB.cpp
-size_t GetAllInfos(std::vector<struct kinfo_proc> &proc_infos);
-
 int GetProcesses(CFMutableArrayRef plistMutableArray, bool all_users) {
   if (plistMutableArray == NULL)
     return -1;
 
   // Running as root, get all processes
   std::vector<struct kinfo_proc> proc_infos;
-  const size_t num_proc_infos = GetAllInfos(proc_infos);
+  const size_t num_proc_infos = DNBGetAllInfos(proc_infos);
   if (num_proc_infos > 0) {
     const pid_t our_pid = getpid();
     const uid_t our_uid = getuid();
@@ -57,15 +54,14 @@ int GetProcesses(CFMutableArrayRef plistMutableArray, bool all_users) {
 
       const pid_t pid = proc_info.kp_proc.p_pid;
       // Skip zombie processes and processes with unset status
-      if (kinfo_user_matches == false || // User is acceptable
-          pid == our_pid ||              // Skip this process
-          pid == 0 ||                    // Skip kernel (kernel pid is zero)
+      if (!kinfo_user_matches || // User is acceptable
+          pid == our_pid ||      // Skip this process
+          pid == 0 ||            // Skip kernel (kernel pid is zero)
           proc_info.kp_proc.p_stat ==
               SZOMB || // Zombies are bad, they like brains...
           proc_info.kp_proc.p_flag & P_TRACED || // Being debugged?
-          proc_info.kp_proc.p_flag & P_WEXIT ||  // Working on exiting?
-          proc_info.kp_proc.p_flag &
-              P_TRANSLATED) // Skip translated ppc (Rosetta)
+          proc_info.kp_proc.p_flag & P_WEXIT     // Working on exiting?
+      )
         continue;
 
       // Create a new mutable dictionary for each application
@@ -80,7 +76,7 @@ int GetProcesses(CFMutableArrayRef plistMutableArray, bool all_users) {
       ::CFDictionarySetValue(appInfoDict.get(), DTSERVICES_APP_PID_KEY,
                              pidCFNumber.get());
 
-      // Set the a boolean to indicate if this is the front most
+      // Set a boolean to indicate if this is the front most
       ::CFDictionarySetValue(appInfoDict.get(), DTSERVICES_APP_FRONTMOST_KEY,
                              kCFBooleanFalse);
 
@@ -169,7 +165,7 @@ int ListApplications(std::string &plist, bool opt_runningApps,
                                pidCFNumber.get());
       }
 
-      // Set the a boolean to indicate if this is the front most
+      // Set a boolean to indicate if this is the front most
       if (sbsFrontAppID.get() && displayIdentifier &&
           (::CFStringCompare(sbsFrontAppID.get(), displayIdentifier, 0) ==
            kCFCompareEqualTo))
@@ -220,7 +216,7 @@ int ListApplications(std::string &plist, bool opt_runningApps,
     CFIndex size = ::CFDataGetLength(plistData.get());
     const UInt8 *bytes = ::CFDataGetBytePtr(plistData.get());
     if (bytes != NULL && size > 0) {
-      plist.assign((char *)bytes, size);
+      plist.assign((const char *)bytes, size);
       return 0; // Success
     } else {
       DNBLogError("empty application property list.");

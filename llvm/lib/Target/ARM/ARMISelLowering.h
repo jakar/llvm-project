@@ -1,9 +1,8 @@
-//===-- ARMISelLowering.h - ARM DAG Lowering Interface ----------*- C++ -*-===//
+//===- ARMISelLowering.h - ARM DAG Lowering Interface -----------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -19,22 +18,36 @@
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/CodeGen/CallingConvLower.h"
+#include "llvm/CodeGen/ISDOpcodes.h"
 #include "llvm/CodeGen/MachineFunction.h"
-#include "llvm/CodeGen/MachineValueType.h"
-#include "llvm/CodeGen/SelectionDAG.h"
 #include "llvm/CodeGen/SelectionDAGNodes.h"
+#include "llvm/CodeGen/TargetLowering.h"
 #include "llvm/CodeGen/ValueTypes.h"
+#include "llvm/IR/Attributes.h"
 #include "llvm/IR/CallingConv.h"
+#include "llvm/IR/Function.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/InlineAsm.h"
 #include "llvm/Support/CodeGen.h"
-#include "llvm/Target/TargetLowering.h"
+#include "llvm/Support/MachineValueType.h"
 #include <utility>
 
 namespace llvm {
 
 class ARMSubtarget;
+class DataLayout;
+class FastISel;
+class FunctionLoweringInfo;
+class GlobalValue;
 class InstrItineraryData;
+class Instruction;
+class MachineBasicBlock;
+class MachineInstr;
+class SelectionDAG;
+class TargetLibraryInfo;
+class TargetMachine;
+class TargetRegisterInfo;
+class VectorType;
 
   namespace ARMISD {
 
@@ -55,24 +68,34 @@ class InstrItineraryData;
       CALL,         // Function call.
       CALL_PRED,    // Function call that's predicable.
       CALL_NOLINK,  // Function call with branch not branch-and-link.
+      tSECALL,      // CMSE non-secure function call.
       BRCOND,       // Conditional branch.
       BR_JT,        // Jumptable branch.
       BR2_JT,       // Jumptable branch (2 level - jumptable entry is a jump).
       RET_FLAG,     // Return with a flag operand.
+      SERET_FLAG,   // CMSE Entry function return with a flag operand.
       INTRET_FLAG,  // Interrupt return with an LR-offset and a flag operand.
 
       PIC_ADD,      // Add with a PC operand and a PIC label.
+
+      ASRL,         // MVE long arithmetic shift right.
+      LSRL,         // MVE long shift right.
+      LSLL,         // MVE long shift left.
 
       CMP,          // ARM compare instructions.
       CMN,          // ARM CMN instructions.
       CMPZ,         // ARM compare that sets only Z flag.
       CMPFP,        // ARM VFP compare instruction, sets FPSCR.
+      CMPFPE,       // ARM VFP signalling compare instruction, sets FPSCR.
       CMPFPw0,      // ARM VFP compare against zero instruction, sets FPSCR.
+      CMPFPEw0,     // ARM VFP signalling compare against zero instruction, sets FPSCR.
       FMSTAT,       // ARM fmstat instruction.
 
       CMOV,         // ARM conditional move instructions.
+      SUBS,         // Flag-setting subtraction.
 
       SSAT,         // Signed saturation
+      USAT,         // Unsigned saturation
 
       BCC_i64,
 
@@ -84,9 +107,11 @@ class InstrItineraryData;
       ADDE,         // Add using carry
       SUBC,         // Sub with carry
       SUBE,         // Sub using carry
+      LSLS,         // Shift left producing carry
 
       VMOVRRD,      // double to two gprs.
       VMOVDRR,      // Two gprs to double.
+      VMOVSR,       // move gpr to single, used for f32 literal constructed in a gpr
 
       EH_SJLJ_SETJMP,         // SjLj exception handling setjmp.
       EH_SJLJ_LONGJMP,        // SjLj exception handling longjmp.
@@ -105,44 +130,48 @@ class InstrItineraryData;
       WIN__CHKSTK,  // Windows' __chkstk call to do stack probing.
       WIN__DBZCHK,  // Windows' divide by zero check
 
-      VCEQ,         // Vector compare equal.
-      VCEQZ,        // Vector compare equal to zero.
-      VCGE,         // Vector compare greater than or equal.
-      VCGEZ,        // Vector compare greater than or equal to zero.
-      VCLEZ,        // Vector compare less than or equal to zero.
-      VCGEU,        // Vector compare unsigned greater than or equal.
-      VCGT,         // Vector compare greater than.
-      VCGTZ,        // Vector compare greater than zero.
-      VCLTZ,        // Vector compare less than zero.
-      VCGTU,        // Vector compare unsigned greater than.
+      WLS,          // Low-overhead loops, While Loop Start branch. See t2WhileLoopStart
+      WLSSETUP,     // Setup for the iteration count of a WLS. See t2WhileLoopSetup.
+      LOOP_DEC,     // Really a part of LE, performs the sub
+      LE,           // Low-overhead loops, Loop End
+
+      PREDICATE_CAST, // Predicate cast for MVE i1 types
+      VECTOR_REG_CAST, // Reinterpret the current contents of a vector register
+
+      VCMP,         // Vector compare.
+      VCMPZ,        // Vector compare to zero.
       VTST,         // Vector test bits.
 
+      // Vector shift by vector
+      VSHLs,        // ...left/right by signed
+      VSHLu,        // ...left/right by unsigned
+
       // Vector shift by immediate:
-      VSHL,         // ...left
-      VSHRs,        // ...right (signed)
-      VSHRu,        // ...right (unsigned)
+      VSHLIMM,      // ...left
+      VSHRsIMM,     // ...right (signed)
+      VSHRuIMM,     // ...right (unsigned)
 
       // Vector rounding shift by immediate:
-      VRSHRs,       // ...right (signed)
-      VRSHRu,       // ...right (unsigned)
-      VRSHRN,       // ...right narrow
+      VRSHRsIMM,    // ...right (signed)
+      VRSHRuIMM,    // ...right (unsigned)
+      VRSHRNIMM,    // ...right narrow
 
       // Vector saturating shift by immediate:
-      VQSHLs,       // ...left (signed)
-      VQSHLu,       // ...left (unsigned)
-      VQSHLsu,      // ...left (signed to unsigned)
-      VQSHRNs,      // ...right narrow (signed)
-      VQSHRNu,      // ...right narrow (unsigned)
-      VQSHRNsu,     // ...right narrow (signed to unsigned)
+      VQSHLsIMM,    // ...left (signed)
+      VQSHLuIMM,    // ...left (unsigned)
+      VQSHLsuIMM,   // ...left (signed to unsigned)
+      VQSHRNsIMM,   // ...right narrow (signed)
+      VQSHRNuIMM,   // ...right narrow (unsigned)
+      VQSHRNsuIMM,  // ...right narrow (signed to unsigned)
 
       // Vector saturating rounding shift by immediate:
-      VQRSHRNs,     // ...right narrow (signed)
-      VQRSHRNu,     // ...right narrow (unsigned)
-      VQRSHRNsu,    // ...right narrow (signed to unsigned)
+      VQRSHRNsIMM,  // ...right narrow (signed)
+      VQRSHRNuIMM,  // ...right narrow (unsigned)
+      VQRSHRNsuIMM, // ...right narrow (signed to unsigned)
 
       // Vector shift and insert:
-      VSLI,         // ...left
-      VSRI,         // ...right
+      VSLIIMM,      // ...left
+      VSRIIMM,      // ...right
 
       // Vector get lane (VMOV scalar to ARM core register)
       // (These are used for 8- and 16-bit element types only.)
@@ -155,6 +184,10 @@ class InstrItineraryData;
 
       // Vector move f32 immediate:
       VMOVFPIMM,
+
+      // Move H <-> R, clearing top 16 bits
+      VMOVrh,
+      VMOVhr,
 
       // Vector duplicate:
       VDUP,
@@ -170,10 +203,51 @@ class InstrItineraryData;
       VTRN,         // transpose
       VTBL1,        // 1-register shuffle with mask
       VTBL2,        // 2-register shuffle with mask
+      VMOVN,        // MVE vmovn
+
+      // MVE Saturating truncates
+      VQMOVNs,      // Vector (V) Saturating (Q) Move and Narrow (N), signed (s)
+      VQMOVNu,      // Vector (V) Saturating (Q) Move and Narrow (N), unsigned (u)
+
+      // MVE float <> half converts
+      VCVTN,        // MVE vcvt f32 -> f16, truncating into either the bottom or top lanes
+      VCVTL,        // MVE vcvt f16 -> f32, extending from either the bottom or top lanes
 
       // Vector multiply long:
       VMULLs,       // ...signed
       VMULLu,       // ...unsigned
+
+      VQDMULH,      // MVE vqdmulh instruction
+
+      // MVE reductions
+      VADDVs,       // sign- or zero-extend the elements of a vector to i32,
+      VADDVu,       //   add them all together, and return an i32 of their sum
+      VADDVps,      // Same as VADDV[su] but with a v4i1 predicate mask
+      VADDVpu,
+      VADDLVs,      // sign- or zero-extend elements to i64 and sum, returning
+      VADDLVu,      //   the low and high 32-bit halves of the sum
+      VADDLVAs,     // Same as VADDLV[su] but also add an input accumulator
+      VADDLVAu,     //   provided as low and high halves
+      VADDLVps,     // Same as VADDLV[su] but with a v4i1 predicate mask
+      VADDLVpu,
+      VADDLVAps,    // Same as VADDLVp[su] but with a v4i1 predicate mask
+      VADDLVApu,
+      VMLAVs,       // sign- or zero-extend the elements of two vectors to i32, multiply them
+      VMLAVu,       //   and add the results together, returning an i32 of their sum
+      VMLAVps,      // Same as VMLAV[su] with a v4i1 predicate mask
+      VMLAVpu,
+      VMLALVs,      // Same as VMLAV but with i64, returning the low and
+      VMLALVu,      //   high 32-bit halves of the sum
+      VMLALVps,     // Same as VMLALV[su] with a v4i1 predicate mask
+      VMLALVpu,
+      VMLALVAs,     // Same as VMLALV but also add an input accumulator
+      VMLALVAu,     //   provided as low and high halves
+      VMLALVAps,    // Same as VMLALVA[su] with a v4i1 predicate mask
+      VMLALVApu,
+      VMINVu,        // Find minimum unsigned value of a vector and register
+      VMINVs,        // Find minimum signed value of a vector and register
+      VMAXVu,        // Find maximum unsigned value of a vector and register
+      VMAXVs,        // Find maximum signed value of a vector and register
 
       SMULWB,       // Signed multiply word by half word, bottom
       SMULWT,       // Signed multiply word by half word, top
@@ -188,6 +262,14 @@ class InstrItineraryData;
       SMLALDX,      // Signed multiply accumulate long dual exchange
       SMLSLD,       // Signed multiply subtract long dual
       SMLSLDX,      // Signed multiply subtract long dual exchange
+      SMMLAR,       // Signed multiply long, round and add
+      SMMLSR,       // Signed multiply long, subtract and round
+
+      // Single Lane QADD8 and QADD16. Only the bottom lane. That's what the b stands for.
+      QADD8b,
+      QSUB8b,
+      QADD16b,
+      QSUB16b,
 
       // Operands of the standard BUILD_VECTOR node are not legalized, which
       // is fine if BUILD_VECTORs are always lowered to shuffles or other
@@ -204,12 +286,17 @@ class InstrItineraryData;
       // Vector AND with NOT of immediate
       VBICIMM,
 
-      // Vector bitwise select
-      VBSL,
+      // Pseudo vector bitwise select
+      VBSP,
 
       // Pseudo-instruction representing a memory copy using ldm/stm
       // instructions.
       MEMCPY,
+
+      // V8.1MMainline condition select
+      CSINV, // Conditional select invert.
+      CSNEG, // Conditional select negate.
+      CSINC, // Conditional select increment.
 
       // Vector load N-element structure to all lanes:
       VLD1DUP = ISD::FIRST_TARGET_MEMORY_OPCODE,
@@ -237,10 +324,29 @@ class InstrItineraryData;
       VST4_UPD,
       VST2LN_UPD,
       VST3LN_UPD,
-      VST4LN_UPD
+      VST4LN_UPD,
+
+      // Load/Store of dual registers
+      LDRD,
+      STRD
     };
 
   } // end namespace ARMISD
+
+  namespace ARM {
+  /// Possible values of current rounding mode, which is specified in bits
+  /// 23:22 of FPSCR.
+  enum Rounding {
+    RN = 0,    // Round to Nearest
+    RP = 1,    // Round towards Plus infinity
+    RM = 2,    // Round towards Minus infinity
+    RZ = 3,    // Round towards Zero
+    rmMask = 3 // Bit mask selecting rounding mode
+  };
+
+  // Bit position of rounding mode bits in FPSCR.
+  const unsigned RoundingBitsPos = 22;
+  } // namespace ARM
 
   /// Define some predicates that are used for node matching.
   namespace ARM {
@@ -264,7 +370,6 @@ class InstrItineraryData;
 
     /// ReplaceNodeResults - Replace the results of node with an illegal result
     /// type with new values built out of custom code.
-    ///
     void ReplaceNodeResults(SDNode *N, SmallVectorImpl<SDValue>&Results,
                             SelectionDAG &DAG) const override;
 
@@ -274,6 +379,8 @@ class InstrItineraryData;
       // ARM does not support scalar condition selects on vectors.
       return (Kind != ScalarCondVectorVal);
     }
+
+    bool isReadOnly(const GlobalValue *GV) const;
 
     /// getSetCCResultType - Return the value type to use for ISD::SETCC.
     EVT getSetCCResultType(const DataLayout &DL, LLVMContext &Context,
@@ -289,7 +396,15 @@ class InstrItineraryData;
     SDValue PerformCMOVCombine(SDNode *N, SelectionDAG &DAG) const;
     SDValue PerformBRCONDCombine(SDNode *N, SelectionDAG &DAG) const;
     SDValue PerformCMOVToBFICombine(SDNode *N, SelectionDAG &DAG) const;
+    SDValue PerformIntrinsicCombine(SDNode *N, DAGCombinerInfo &DCI) const;
     SDValue PerformDAGCombine(SDNode *N, DAGCombinerInfo &DCI) const override;
+
+    bool SimplifyDemandedBitsForTargetNode(SDValue Op,
+                                           const APInt &OriginalDemandedBits,
+                                           const APInt &OriginalDemandedElts,
+                                           KnownBits &Known,
+                                           TargetLoweringOpt &TLO,
+                                           unsigned Depth) const override;
 
     bool isDesirableToTransformToIntegerOp(unsigned Opc, EVT VT) const override;
 
@@ -297,17 +412,21 @@ class InstrItineraryData;
     /// unaligned memory accesses of the specified type. Returns whether it
     /// is "fast" by reference in the second argument.
     bool allowsMisalignedMemoryAccesses(EVT VT, unsigned AddrSpace,
-                                        unsigned Align,
+                                        Align Alignment,
+                                        MachineMemOperand::Flags Flags,
                                         bool *Fast) const override;
 
-    EVT getOptimalMemOpType(uint64_t Size,
-                            unsigned DstAlign, unsigned SrcAlign,
-                            bool IsMemset, bool ZeroMemset,
-                            bool MemcpyStrSrc,
-                            MachineFunction &MF) const override;
+    EVT getOptimalMemOpType(const MemOp &Op,
+                            const AttributeList &FuncAttributes) const override;
 
-    using TargetLowering::isZExtFree;
+    bool isTruncateFree(Type *SrcTy, Type *DstTy) const override;
+    bool isTruncateFree(EVT SrcVT, EVT DstVT) const override;
     bool isZExtFree(SDValue Val, EVT VT2) const override;
+    bool shouldSinkOperands(Instruction *I,
+                            SmallVectorImpl<Use *> &Ops) const override;
+    Type* shouldConvertSplatType(ShuffleVectorInst* SVI) const override;
+
+    bool isFNegFree(EVT VT) const override;
 
     bool isVectorLoadExtDesirable(SDValue ExtVal) const override;
 
@@ -317,7 +436,8 @@ class InstrItineraryData;
     /// isLegalAddressingMode - Return true if the addressing mode represented
     /// by AM is legal for this target, for a load/store of the specified type.
     bool isLegalAddressingMode(const DataLayout &DL, const AddrMode &AM,
-                               Type *Ty, unsigned AS) const override;
+                               Type *Ty, unsigned AS,
+                               Instruction *I = nullptr) const override;
 
     /// getScalingFactorCost - Return the cost of the scaling used in
     /// addressing mode represented by AM.
@@ -327,6 +447,10 @@ class InstrItineraryData;
                              unsigned AS) const override;
 
     bool isLegalT2ScaledAddressingMode(const AddrMode &AM, EVT VT) const;
+
+    /// Returns true if the addressing mode representing by AM is legal
+    /// for the Thumb1 target, for a load/store of the specified type.
+    bool isLegalT1ScaledAddressingMode(const AddrMode &AM, EVT VT) const;
 
     /// isLegalICmpImmediate - Return true if the specified immediate is legal
     /// icmp immediate, that is the target has icmp instructions which can
@@ -359,6 +483,9 @@ class InstrItineraryData;
                                        const SelectionDAG &DAG,
                                        unsigned Depth) const override;
 
+    bool targetShrinkDemandedConstant(SDValue Op, const APInt &DemandedBits,
+                                      const APInt &DemandedElts,
+                                      TargetLoweringOpt &TLO) const override;
 
     bool ExpandInlineAsm(CallInst *CI) const override;
 
@@ -420,13 +547,8 @@ class InstrItineraryData;
 
     /// getRegClassFor - Return the register class that should be used for the
     /// specified value type.
-    const TargetRegisterClass *getRegClassFor(MVT VT) const override;
-
-    /// Returns true if a cast between SrcAS and DestAS is a noop.
-    bool isNoopAddrSpaceCast(unsigned SrcAS, unsigned DestAS) const override {
-      // Addrspacecasts are always noops.
-      return true;
-    }
+    const TargetRegisterClass *
+    getRegClassFor(MVT VT, bool isDivergent = false) const override;
 
     bool shouldAlignPointerArgs(CallInst *CI, unsigned &MinSize,
                                 unsigned &PrefAlign) const override;
@@ -439,40 +561,49 @@ class InstrItineraryData;
     Sched::Preference getSchedulingPreference(SDNode *N) const override;
 
     bool
-    isShuffleMaskLegal(const SmallVectorImpl<int> &M, EVT VT) const override;
+    isShuffleMaskLegal(ArrayRef<int> M, EVT VT) const override;
     bool isOffsetFoldingLegal(const GlobalAddressSDNode *GA) const override;
 
     /// isFPImmLegal - Returns true if the target can instruction select the
     /// specified FP immediate natively. If false, the legalizer will
     /// materialize the FP immediate as a load from a constant pool.
-    bool isFPImmLegal(const APFloat &Imm, EVT VT) const override;
+    bool isFPImmLegal(const APFloat &Imm, EVT VT,
+                      bool ForCodeSize = false) const override;
 
     bool getTgtMemIntrinsic(IntrinsicInfo &Info,
                             const CallInst &I,
+                            MachineFunction &MF,
                             unsigned Intrinsic) const override;
 
-    /// \brief Returns true if it is beneficial to convert a load of a constant
+    /// Returns true if it is beneficial to convert a load of a constant
     /// to just the constant itself.
     bool shouldConvertConstantLoadToIntImm(const APInt &Imm,
                                            Type *Ty) const override;
 
     /// Return true if EXTRACT_SUBVECTOR is cheap for this result type
     /// with this index.
-    bool isExtractSubvectorCheap(EVT ResVT, unsigned Index) const override;
+    bool isExtractSubvectorCheap(EVT ResVT, EVT SrcVT,
+                                 unsigned Index) const override;
 
-    /// \brief Returns true if an argument of type Ty needs to be passed in a
+    bool shouldFormOverflowOp(unsigned Opcode, EVT VT,
+                              bool MathUsed) const override {
+      // Using overflow ops for overflow checks only should beneficial on ARM.
+      return TargetLowering::shouldFormOverflowOp(Opcode, VT, true);
+    }
+
+    /// Returns true if an argument of type Ty needs to be passed in a
     /// contiguous block of registers in calling convention CallConv.
     bool functionArgumentNeedsConsecutiveRegisters(
         Type *Ty, CallingConv::ID CallConv, bool isVarArg) const override;
 
     /// If a physical register, this returns the register that receives the
     /// exception address on entry to an EH pad.
-    unsigned
+    Register
     getExceptionPointerRegister(const Constant *PersonalityFn) const override;
 
     /// If a physical register, this returns the register that receives the
     /// exception typeid on entry to a landing pad.
-    unsigned
+    Register
     getExceptionSelectorRegister(const Constant *PersonalityFn) const override;
 
     Instruction *makeDMB(IRBuilder<> &Builder, ARM_MB::MemBOpt Domain) const;
@@ -488,7 +619,7 @@ class InstrItineraryData;
     Instruction *emitTrailingFence(IRBuilder<> &Builder, Instruction *Inst,
                                    AtomicOrdering Ord) const override;
 
-    unsigned getMaxSupportedInterleaveFactor() const override { return 4; }
+    unsigned getMaxSupportedInterleaveFactor() const override;
 
     bool lowerInterleavedLoad(LoadInst *LI,
                               ArrayRef<ShuffleVectorInst *> Shuffles,
@@ -503,14 +634,20 @@ class InstrItineraryData;
     bool shouldExpandAtomicStoreInIR(StoreInst *SI) const override;
     TargetLoweringBase::AtomicExpansionKind
     shouldExpandAtomicRMWInIR(AtomicRMWInst *AI) const override;
-    bool shouldExpandAtomicCmpXchgInIR(AtomicCmpXchgInst *AI) const override;
+    TargetLoweringBase::AtomicExpansionKind
+    shouldExpandAtomicCmpXchgInIR(AtomicCmpXchgInst *AI) const override;
 
     bool useLoadStackGuardNode() const override;
+
+    void insertSSPDeclarations(Module &M) const override;
+    Value *getSDagStackGuard(const Module &M) const override;
+    Function *getSSPStackGuardCheck(const Module &M) const override;
 
     bool canCombineStoreAndExtract(Type *VectorTy, Value *Idx,
                                    unsigned &Cost) const override;
 
-    bool canMergeStoresTo(EVT MemVT) const override {
+    bool canMergeStoresTo(unsigned AddressSpace, EVT MemVT,
+                          const SelectionDAG &DAG) const override {
       // Do not merge to larger than i32.
       return (MemVT.getSizeInBits() <= 32);
     }
@@ -530,14 +667,19 @@ class InstrItineraryData;
       return HasStandaloneRem;
     }
 
+    bool shouldExpandShift(SelectionDAG &DAG, SDNode *N) const override;
+
     CCAssignFn *CCAssignFnForCall(CallingConv::ID CC, bool isVarArg) const;
     CCAssignFn *CCAssignFnForReturn(CallingConv::ID CC, bool isVarArg) const;
 
     /// Returns true if \p VecTy is a legal interleaved access type. This
     /// function checks the vector element type and the overall width of the
     /// vector.
-    bool isLegalInterleavedAccessType(VectorType *VecTy,
+    bool isLegalInterleavedAccessType(unsigned Factor, FixedVectorType *VecTy,
+                                      Align Alignment,
                                       const DataLayout &DL) const;
+
+    bool alignLoopsWithOptSize() const override;
 
     /// Returns the number of interleaved accesses that will be generated when
     /// lowering accesses of the given type.
@@ -545,6 +687,18 @@ class InstrItineraryData;
                                        const DataLayout &DL) const;
 
     void finalizeLowering(MachineFunction &MF) const override;
+
+    /// Return the correct alignment for the current calling convention.
+    Align getABIAlignmentForCallingConv(Type *ArgTy,
+                                        DataLayout DL) const override;
+
+    bool isDesirableToCommuteWithShift(const SDNode *N,
+                                       CombineLevel Level) const override;
+
+    bool shouldFoldConstantShiftPairToMask(const SDNode *N,
+                                           CombineLevel Level) const override;
+
+    bool preferIncOfAddToSubOfNot(EVT VT) const override;
 
   protected:
     std::pair<const TargetRegisterClass *, uint8_t>
@@ -561,7 +715,6 @@ class InstrItineraryData;
     const InstrItineraryData *Itins;
 
     /// ARMPCLabelIndex - Keep track of the number of ARM PC labels created.
-    ///
     unsigned ARMPCLabelIndex;
 
     // TODO: remove this, and have shouldInsertFencesForAtomic do the proper
@@ -575,7 +728,7 @@ class InstrItineraryData;
     void addQRTypeForNEON(MVT VT);
     std::pair<SDValue, SDValue> getARMXALUOOp(SDValue Op, SelectionDAG &DAG, SDValue &ARMcc) const;
 
-    typedef SmallVector<std::pair<unsigned, SDValue>, 8> RegsToPassVector;
+    using RegsToPassVector = SmallVector<std::pair<unsigned, SDValue>, 8>;
 
     void PassF64ArgInRegs(const SDLoc &dl, SelectionDAG &DAG, SDValue Chain,
                           SDValue &Arg, RegsToPassVector &RegsToPass,
@@ -598,9 +751,13 @@ class InstrItineraryData;
     SDValue LowerEH_SJLJ_SETJMP(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerEH_SJLJ_LONGJMP(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerEH_SJLJ_SETUP_DISPATCH(SDValue Op, SelectionDAG &DAG) const;
+    SDValue LowerINTRINSIC_VOID(SDValue Op, SelectionDAG &DAG,
+                                    const ARMSubtarget *Subtarget) const;
     SDValue LowerINTRINSIC_WO_CHAIN(SDValue Op, SelectionDAG &DAG,
                                     const ARMSubtarget *Subtarget) const;
     SDValue LowerBlockAddress(SDValue Op, SelectionDAG &DAG) const;
+    SDValue LowerConstantPool(SDValue Op, SelectionDAG &DAG) const;
+    SDValue LowerGlobalAddress(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerGlobalAddressDarwin(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerGlobalAddressELF(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerGlobalAddressWindows(SDValue Op, SelectionDAG &DAG) const;
@@ -614,9 +771,11 @@ class InstrItineraryData;
     SDValue LowerGlobalTLSAddressWindows(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerGLOBAL_OFFSET_TABLE(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerBR_JT(SDValue Op, SelectionDAG &DAG) const;
-    SDValue LowerXALUO(SDValue Op, SelectionDAG &DAG) const;
+    SDValue LowerSignedALUO(SDValue Op, SelectionDAG &DAG) const;
+    SDValue LowerUnsignedALUO(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerSELECT(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerSELECT_CC(SDValue Op, SelectionDAG &DAG) const;
+    SDValue LowerBRCOND(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerBR_CC(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerFCOPYSIGN(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerRETURNADDR(SDValue Op, SelectionDAG &DAG) const;
@@ -624,15 +783,19 @@ class InstrItineraryData;
     SDValue LowerShiftRightParts(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerShiftLeftParts(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerFLT_ROUNDS_(SDValue Op, SelectionDAG &DAG) const;
+    SDValue LowerSET_ROUNDING(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerConstantFP(SDValue Op, SelectionDAG &DAG,
                             const ARMSubtarget *ST) const;
     SDValue LowerBUILD_VECTOR(SDValue Op, SelectionDAG &DAG,
                               const ARMSubtarget *ST) const;
+    SDValue LowerINSERT_VECTOR_ELT(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerFSINCOS(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerDivRem(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerDIV_Windows(SDValue Op, SelectionDAG &DAG, bool Signed) const;
     void ExpandDIV_Windows(SDValue Op, SelectionDAG &DAG, bool Signed,
                            SmallVectorImpl<SDValue> &Results) const;
+    SDValue ExpandBITCAST(SDNode *N, SelectionDAG &DAG,
+                          const ARMSubtarget *Subtarget) const;
     SDValue LowerWindowsDIVLibCall(SDValue Op, SelectionDAG &DAG, bool Signed,
                                    SDValue &Chain) const;
     SDValue LowerREM(SDNode *N, SelectionDAG &DAG) const;
@@ -641,20 +804,25 @@ class InstrItineraryData;
     SDValue LowerFP_EXTEND(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerFP_TO_INT(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerINT_TO_FP(SDValue Op, SelectionDAG &DAG) const;
+    SDValue LowerFSETCC(SDValue Op, SelectionDAG &DAG) const;
+    void lowerABS(SDNode *N, SmallVectorImpl<SDValue> &Results,
+                  SelectionDAG &DAG) const;
+    void LowerLOAD(SDNode *N, SmallVectorImpl<SDValue> &Results,
+                   SelectionDAG &DAG) const;
 
-    unsigned getRegisterByName(const char* RegName, EVT VT,
-                               SelectionDAG &DAG) const override;
+    Register getRegisterByName(const char* RegName, LLT VT,
+                               const MachineFunction &MF) const override;
 
-    /// isFMAFasterThanFMulAndFAdd - Return true if an FMA operation is faster
-    /// than a pair of fmul and fadd instructions. fmuladd intrinsics will be
-    /// expanded to FMAs when this method returns true, otherwise fmuladd is
-    /// expanded to fmul + fadd.
-    ///
-    /// ARM supports both fused and unfused multiply-add operations; we already
-    /// lower a pair of fmul and fadd to the latter so it's not clear that there
-    /// would be a gain or that the gain would be worthwhile enough to risk
-    /// correctness bugs.
-    bool isFMAFasterThanFMulAndFAdd(EVT VT) const override { return false; }
+    SDValue BuildSDIVPow2(SDNode *N, const APInt &Divisor, SelectionDAG &DAG,
+                          SmallVectorImpl<SDNode *> &Created) const override;
+
+    bool isFMAFasterThanFMulAndFAdd(const MachineFunction &MF,
+                                    EVT VT) const override;
+
+    SDValue MoveToHPR(const SDLoc &dl, SelectionDAG &DAG, MVT LocVT, MVT ValVT,
+                      SDValue Val) const;
+    SDValue MoveFromHPR(const SDLoc &dl, SelectionDAG &DAG, MVT LocVT,
+                        MVT ValVT, SDValue Val) const;
 
     SDValue ReconstructShuffle(SDValue Op, SelectionDAG &DAG) const;
 
@@ -666,14 +834,25 @@ class InstrItineraryData;
                             SDValue ThisVal) const;
 
     bool supportSplitCSR(MachineFunction *MF) const override {
-      return MF->getFunction()->getCallingConv() == CallingConv::CXX_FAST_TLS &&
-          MF->getFunction()->hasFnAttribute(Attribute::NoUnwind);
+      return MF->getFunction().getCallingConv() == CallingConv::CXX_FAST_TLS &&
+          MF->getFunction().hasFnAttribute(Attribute::NoUnwind);
     }
 
     void initializeSplitCSR(MachineBasicBlock *Entry) const override;
     void insertCopiesSplitCSR(
       MachineBasicBlock *Entry,
       const SmallVectorImpl<MachineBasicBlock *> &Exits) const override;
+
+    bool
+    splitValueIntoRegisterParts(SelectionDAG &DAG, const SDLoc &DL, SDValue Val,
+                                SDValue *Parts, unsigned NumParts, MVT PartVT,
+                                Optional<CallingConv::ID> CC) const override;
+
+    SDValue
+    joinRegisterPartsIntoValue(SelectionDAG &DAG, const SDLoc &DL,
+                               const SDValue *Parts, unsigned NumParts,
+                               MVT PartVT, EVT ValueVT,
+                               Optional<CallingConv::ID> CC) const override;
 
     SDValue
     LowerFormalArguments(SDValue Chain, CallingConv::ID CallConv, bool isVarArg,
@@ -695,20 +874,18 @@ class InstrItineraryData;
                       SmallVectorImpl<SDValue> &InVals) const override;
 
     /// HandleByVal - Target-specific cleanup for ByVal support.
-    void HandleByVal(CCState *, unsigned &, unsigned) const override;
+    void HandleByVal(CCState *, unsigned &, Align) const override;
 
     /// IsEligibleForTailCallOptimization - Check whether the call is eligible
     /// for tail call optimization. Targets which want to do tail call
     /// optimization should implement this function.
-    bool IsEligibleForTailCallOptimization(SDValue Callee,
-                                           CallingConv::ID CalleeCC,
-                                           bool isVarArg,
-                                           bool isCalleeStructRet,
-                                           bool isCallerStructRet,
-                                    const SmallVectorImpl<ISD::OutputArg> &Outs,
-                                    const SmallVectorImpl<SDValue> &OutVals,
-                                    const SmallVectorImpl<ISD::InputArg> &Ins,
-                                           SelectionDAG& DAG) const;
+    bool IsEligibleForTailCallOptimization(
+        SDValue Callee, CallingConv::ID CalleeCC, bool isVarArg,
+        bool isCalleeStructRet, bool isCallerStructRet,
+        const SmallVectorImpl<ISD::OutputArg> &Outs,
+        const SmallVectorImpl<SDValue> &OutVals,
+        const SmallVectorImpl<ISD::InputArg> &Ins, SelectionDAG &DAG,
+        const bool isIndirect) const;
 
     bool CanLowerReturn(CallingConv::ID CallConv,
                         MachineFunction &MF, bool isVarArg,
@@ -724,13 +901,17 @@ class InstrItineraryData;
 
     bool mayBeEmittedAsTailCall(const CallInst *CI) const override;
 
+    bool shouldConsiderGEPOffsetSplit() const override { return true; }
+
+    bool isUnsupportedFloatingType(EVT VT) const;
+
     SDValue getCMOV(const SDLoc &dl, EVT VT, SDValue FalseVal, SDValue TrueVal,
                     SDValue ARMcc, SDValue CCR, SDValue Cmp,
                     SelectionDAG &DAG) const;
     SDValue getARMCmp(SDValue LHS, SDValue RHS, ISD::CondCode CC,
                       SDValue &ARMcc, SelectionDAG &DAG, const SDLoc &dl) const;
     SDValue getVFPCmp(SDValue LHS, SDValue RHS, SelectionDAG &DAG,
-                      const SDLoc &dl, bool InvalidOnQNaN) const;
+                      const SDLoc &dl, bool Signaling = false) const;
     SDValue duplicateCmp(SDValue Cmp, SelectionDAG &DAG) const;
 
     SDValue OptimizeVFPBrcond(SDValue Op, SelectionDAG &DAG) const;
@@ -749,11 +930,15 @@ class InstrItineraryData;
                                            MachineBasicBlock *MBB) const;
     MachineBasicBlock *EmitLowered__dbzchk(MachineInstr &MI,
                                            MachineBasicBlock *MBB) const;
+    void addMVEVectorTypes(bool HasMVEFP);
+    void addAllExtLoads(const MVT From, const MVT To, LegalizeAction Action);
+    void setAllExpand(MVT VT);
   };
 
-  enum NEONModImmType {
+  enum VMOVModImmType {
     VMOVModImm,
     VMVNModImm,
+    MVEVMVNModImm,
     OtherModImm
   };
 

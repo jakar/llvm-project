@@ -1,12 +1,14 @@
+# See www/CMake.html for instructions on how to build libcxxabi with CMake.
+
+if (NOT IS_DIRECTORY "${CMAKE_CURRENT_LIST_DIR}/../libcxx")
+  message(FATAL_ERROR "libc++abi now requires being built in a monorepo layout with libcxx available")
+endif()
+
 #===============================================================================
 # Setup Project
 #===============================================================================
 
-cmake_minimum_required(VERSION 3.4.3)
-
-if(POLICY CMP0042)
-  cmake_policy(SET CMP0042 NEW) # Set MACOSX_RPATH=YES by default
-endif()
+cmake_minimum_required(VERSION 3.13.4)
 
 # Add path for custom modules
 set(CMAKE_MODULE_PATH
@@ -15,153 +17,110 @@ set(CMAKE_MODULE_PATH
   ${CMAKE_MODULE_PATH}
   )
 
-if (CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
-  project(libcxxabi)
+set(CMAKE_FOLDER "libc++")
 
-  # Rely on llvm-config.
-  set(CONFIG_OUTPUT)
-  if (NOT LLVM_CONFIG_PATH)
-    find_program(LLVM_CONFIG_PATH "llvm-config")
-  endif()
-  if(DEFINED LLVM_PATH)
-    set(LLVM_INCLUDE_DIR ${LLVM_INCLUDE_DIR} CACHE PATH "Path to llvm/include")
-    set(LLVM_PATH ${LLVM_PATH} CACHE PATH "Path to LLVM source tree")
-    set(LLVM_MAIN_SRC_DIR ${LLVM_PATH})
-    set(LLVM_CMAKE_PATH "${LLVM_PATH}/cmake/modules")
-  elseif(LLVM_CONFIG_PATH)
-    message(STATUS "Found LLVM_CONFIG_PATH as ${LLVM_CONFIG_PATH}")
-    set(CONFIG_COMMAND ${LLVM_CONFIG_PATH}
-      "--includedir"
-      "--prefix"
-      "--src-root")
-    execute_process(
-      COMMAND ${CONFIG_COMMAND}
-      RESULT_VARIABLE HAD_ERROR
-      OUTPUT_VARIABLE CONFIG_OUTPUT
-    )
-    if(NOT HAD_ERROR)
-      string(REGEX REPLACE
-        "[ \t]*[\r\n]+[ \t]*" ";"
-        CONFIG_OUTPUT ${CONFIG_OUTPUT})
-    else()
-      string(REPLACE ";" " " CONFIG_COMMAND_STR "${CONFIG_COMMAND}")
-      message(STATUS "${CONFIG_COMMAND_STR}")
-      message(FATAL_ERROR "llvm-config failed with status ${HAD_ERROR}")
-    endif()
+set(LIBCXXABI_SOURCE_DIR  ${CMAKE_CURRENT_SOURCE_DIR})
+set(LIBCXXABI_BINARY_DIR  ${CMAKE_CURRENT_BINARY_DIR})
+set(LIBCXXABI_LIBCXX_PATH "${CMAKE_CURRENT_LIST_DIR}/../libcxx" CACHE PATH
+        "Specify path to libc++ source.")
 
-    list(GET CONFIG_OUTPUT 0 INCLUDE_DIR)
-    list(GET CONFIG_OUTPUT 1 LLVM_OBJ_ROOT)
-    list(GET CONFIG_OUTPUT 2 MAIN_SRC_DIR)
-
-    set(LLVM_INCLUDE_DIR ${INCLUDE_DIR} CACHE PATH "Path to llvm/include")
-    set(LLVM_BINARY_DIR ${LLVM_OBJ_ROOT} CACHE PATH "Path to LLVM build tree")
-    set(LLVM_MAIN_SRC_DIR ${MAIN_SRC_DIR} CACHE PATH "Path to LLVM source tree")
-    set(LLVM_LIT_PATH "${LLVM_PATH}/utils/lit/lit.py")
-
-    # --cmakedir is supported since llvm r291218 (4.0 release)
-    execute_process(
-      COMMAND ${LLVM_CONFIG_PATH} --cmakedir
-      RESULT_VARIABLE HAD_ERROR
-      OUTPUT_VARIABLE CONFIG_OUTPUT
-      ERROR_QUIET)
-    if(NOT HAD_ERROR)
-      string(STRIP "${CONFIG_OUTPUT}" LLVM_CMAKE_PATH)
-    else()
-      set(LLVM_CMAKE_PATH
-          "${LLVM_BINARY_DIR}/lib${LLVM_LIBDIR_SUFFIX}/cmake/llvm")
-    endif()
-  else()
-    message(FATAL_ERROR "llvm-config not found and LLVM_MAIN_SRC_DIR not defined. "
-                        "Reconfigure with -DLLVM_CONFIG_PATH=path/to/llvm-config "
-                        "or -DLLVM_PATH=path/to/llvm-source-root.")
-  endif()
-
-  if(EXISTS ${LLVM_CMAKE_PATH})
-    list(APPEND CMAKE_MODULE_PATH "${LLVM_CMAKE_PATH}")
-    include("${LLVM_CMAKE_PATH}/AddLLVM.cmake")
-    include("${LLVM_CMAKE_PATH}/HandleLLVMOptions.cmake")
-  else()
-    message(FATAL_ERROR "Not found: ${LLVM_CMAKE_PATH}")
-  endif()
+if (CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR OR LIBCXXABI_STANDALONE_BUILD)
+  project(libcxxabi CXX C)
 
   set(PACKAGE_NAME libcxxabi)
-  set(PACKAGE_VERSION 5.0.0svn)
+  set(PACKAGE_VERSION 11.0.0git)
   set(PACKAGE_STRING "${PACKAGE_NAME} ${PACKAGE_VERSION}")
   set(PACKAGE_BUGREPORT "llvm-bugs@lists.llvm.org")
 
-  if (NOT DEFINED LLVM_INCLUDE_TESTS)
-    set(LLVM_INCLUDE_TESTS ON)
-  endif()
+  # Add the CMake module path of libcxx so we can reuse HandleOutOfTreeLLVM.cmake
+  set(LIBCXXABI_LIBCXX_CMAKE_PATH "${LIBCXXABI_LIBCXX_PATH}/cmake/Modules")
+  list(APPEND CMAKE_MODULE_PATH "${LIBCXXABI_LIBCXX_CMAKE_PATH}")
 
-  if(EXISTS ${LLVM_MAIN_SRC_DIR}/utils/lit/lit.py)
-    set(LLVM_LIT ${LLVM_MAIN_SRC_DIR}/utils/lit/lit.py)
-  else()
-    # Seek installed Lit.
-    find_program(LLVM_LIT "lit.py" ${LLVM_MAIN_SRC_DIR}/utils/lit
-      DOC "Path to lit.py")
-  endif()
-
-  if(LLVM_LIT)
-    # Define the default arguments to use with 'lit', and an option for the user
-    # to override.
-    set(LIT_ARGS_DEFAULT "-sv")
-    if (MSVC OR XCODE)
-      set(LIT_ARGS_DEFAULT "${LIT_ARGS_DEFAULT} --no-progress-bar")
-    endif()
-    set(LLVM_LIT_ARGS "${LIT_ARGS_DEFAULT}" CACHE STRING "Default options for lit")
-
-    # On Win32 hosts, provide an option to specify the path to the GnuWin32 tools.
-    if( WIN32 AND NOT CYGWIN )
-      set(LLVM_LIT_TOOLS_DIR "" CACHE PATH "Path to GnuWin32 tools")
-    endif()
-  else()
-    set(LLVM_INCLUDE_TESTS OFF)
-  endif()
-
-  set(LIBCXXABI_LIBDIR_SUFFIX "${LLVM_LIBDIR_SUFFIX}" CACHE STRING
-      "Define suffix of library directory name (32/64)")
-
+  # In a standalone build, we don't have llvm to automatically generate the
+  # llvm-lit script for us.  So we need to provide an explicit directory that
+  # the configurator should write the script into.
   set(LIBCXXABI_STANDALONE_BUILD 1)
-else()
-  set(LLVM_MAIN_SRC_DIR "${CMAKE_SOURCE_DIR}" CACHE PATH "Path to LLVM source tree")
-  set(LLVM_LIT "${CMAKE_SOURCE_DIR}/utils/lit/lit.py")
-  set(LIBCXXABI_LIBDIR_SUFFIX ${LLVM_LIBDIR_SUFFIX})
+  set(LLVM_LIT_OUTPUT_DIR "${LIBCXXABI_BINARY_DIR}/bin")
+
+  # Find the LLVM sources and simulate LLVM CMake options.
+  include(HandleOutOfTreeLLVM)
 endif()
+
+if (LIBCXXABI_STANDALONE_BUILD)
+  find_package(Python3 COMPONENTS Interpreter)
+  if(NOT Python3_Interpreter_FOUND)
+    message(WARNING "Python3 not found, using python2 as a fallback")
+    find_package(Python2 COMPONENTS Interpreter REQUIRED)
+    if(Python2_VERSION VERSION_LESS 2.7)
+      message(SEND_ERROR "Python 2.7 or newer is required")
+    endif()
+
+    # Treat python2 as python3
+    add_executable(Python3::Interpreter IMPORTED)
+    set_target_properties(Python3::Interpreter PROPERTIES
+      IMPORTED_LOCATION ${Python2_EXECUTABLE})
+    set(Python3_EXECUTABLE ${Python2_EXECUTABLE})
+  endif()
+endif()
+
+# Require out of source build.
+include(MacroEnsureOutOfSourceBuild)
+MACRO_ENSURE_OUT_OF_SOURCE_BUILD(
+ "${PROJECT_NAME} requires an out of source build. Please create a separate
+ build directory and run 'cmake /path/to/${PROJECT_NAME} [options]' there."
+ )
 
 #===============================================================================
 # Setup CMake Options
 #===============================================================================
+include(CMakeDependentOption)
 include(HandleCompilerRT)
 
 # Define options.
-option(LIBCXXABI_ENABLE_EXCEPTIONS "Use exceptions." ON)
+option(LIBCXXABI_ENABLE_EXCEPTIONS
+  "Provide support for exceptions in the runtime.
+  When disabled, libc++abi does not support stack unwinding and other exceptions-related features." ON)
 option(LIBCXXABI_ENABLE_ASSERTIONS "Enable assertions independent of build mode." ON)
 option(LIBCXXABI_ENABLE_PEDANTIC "Compile with pedantic enabled." ON)
+option(LIBCXXABI_ENABLE_PIC "Build Position-Independent Code, even in static library" ON)
 option(LIBCXXABI_ENABLE_WERROR "Fail and stop if a warning is triggered." OFF)
 option(LIBCXXABI_USE_LLVM_UNWINDER "Build and use the LLVM unwinder." OFF)
 option(LIBCXXABI_ENABLE_STATIC_UNWINDER "Statically link the LLVM unwinder." OFF)
 option(LIBCXXABI_USE_COMPILER_RT "Use compiler-rt instead of libgcc" OFF)
 option(LIBCXXABI_ENABLE_THREADS "Build with threads enabled" ON)
 option(LIBCXXABI_HAS_PTHREAD_API "Ignore auto-detection and force use of pthread API" OFF)
+option(LIBCXXABI_HAS_WIN32_THREAD_API "Ignore auto-detection and force use of win32 thread API" OFF)
 option(LIBCXXABI_HAS_EXTERNAL_THREAD_API
   "Build libc++abi with an externalized threading API.
   This option may only be set to ON when LIBCXXABI_ENABLE_THREADS=ON." OFF)
 option(LIBCXXABI_BUILD_EXTERNAL_THREAD_LIBRARY
   "Build libc++abi with an externalized threading library.
    This option may only be set to ON when LIBCXXABI_ENABLE_THREADS=ON" OFF)
+option(LIBCXXABI_ENABLE_FORGIVING_DYNAMIC_CAST
+"Make dynamic_cast more forgiving when type_info's mistakenly have hidden \
+visibility, and thus multiple type_infos can exist for a single type. \
+When the dynamic_cast would normally fail, this option will cause the \
+library to try comparing the type_info names to see if they are equal \
+instead." OFF)
 
-# FIXME: This option should default to off. Unfortunatly GCC 4.9 fails to link
-# programs to due undefined references to new/delete in libc++abi. Once this
-# has been fixed or worked around the default value should be changed.
 option(LIBCXXABI_ENABLE_NEW_DELETE_DEFINITIONS
-    "Build libc++abi with definitions for operator new/delete. Normally libc++
-    provides these definitions" ON)
+  "Build libc++abi with definitions for operator new/delete. These are normally
+   defined in libc++abi, but it is also possible to define them in libc++, in
+   which case the definition in libc++abi should be turned off." ON)
 option(LIBCXXABI_BUILD_32_BITS "Build 32 bit libc++abi." ${LLVM_BUILD_32_BITS})
 option(LIBCXXABI_INCLUDE_TESTS "Generate build targets for the libc++abi unit tests." ${LLVM_INCLUDE_TESTS})
+set(LIBCXXABI_LIBDIR_SUFFIX "${LLVM_LIBDIR_SUFFIX}" CACHE STRING
+    "Define suffix of library directory name (32/64)")
+option(LIBCXXABI_INSTALL_LIBRARY "Install the libc++abi library." ON)
 set(LIBCXXABI_TARGET_TRIPLE "" CACHE STRING "Target triple for cross compiling.")
 set(LIBCXXABI_GCC_TOOLCHAIN "" CACHE PATH "GCC toolchain for cross compiling.")
 set(LIBCXXABI_SYSROOT "" CACHE PATH "Sysroot for cross compiling.")
 set(LIBCXXABI_LIBCXX_LIBRARY_PATH "" CACHE PATH "The path to libc++ library.")
+set(LIBCXXABI_LIBRARY_VERSION "1.0" CACHE STRING
+"Version of libc++abi. This will be reflected in the name of the shared \
+library produced. For example, -DLIBCXXABI_LIBRARY_VERSION=x.y will \
+result in the library being named libc++abi.x.y.dylib, along with the \
+usual symlinks pointing to that.")
 
 # Default to building a shared library so that the default options still test
 # the libc++abi that is being built. There are two problems with testing a
@@ -172,58 +131,42 @@ set(LIBCXXABI_LIBCXX_LIBRARY_PATH "" CACHE PATH "The path to libc++ library.")
 option(LIBCXXABI_ENABLE_SHARED "Build libc++abi as a shared library." ON)
 option(LIBCXXABI_ENABLE_STATIC "Build libc++abi as a static library." ON)
 
+cmake_dependent_option(LIBCXXABI_INSTALL_STATIC_LIBRARY
+  "Install the static libc++abi library." ON
+  "LIBCXXABI_ENABLE_STATIC;LIBCXXABI_INSTALL_LIBRARY" OFF)
+cmake_dependent_option(LIBCXXABI_INSTALL_SHARED_LIBRARY
+  "Install the shared libc++abi library." ON
+  "LIBCXXABI_ENABLE_SHARED;LIBCXXABI_INSTALL_LIBRARY" OFF)
+
+cmake_dependent_option(LIBCXXABI_STATICALLY_LINK_UNWINDER_IN_STATIC_LIBRARY
+  "Statically link the LLVM unwinder to static library" ON
+  "LIBCXXABI_ENABLE_STATIC_UNWINDER;LIBCXXABI_ENABLE_STATIC" OFF)
+cmake_dependent_option(LIBCXXABI_STATICALLY_LINK_UNWINDER_IN_SHARED_LIBRARY
+  "Statically link the LLVM unwinder to shared library" ON
+  "LIBCXXABI_ENABLE_STATIC_UNWINDER;LIBCXXABI_ENABLE_SHARED" OFF)
+
 option(LIBCXXABI_BAREMETAL "Build libc++abi for baremetal targets." OFF)
 # The default terminate handler attempts to demangle uncaught exceptions, which
 # causes extra I/O and demangling code to be pulled in.
 option(LIBCXXABI_SILENT_TERMINATE "Set this to make the terminate handler default to a silent alternative" OFF)
+option(LIBCXXABI_NON_DEMANGLING_TERMINATE "Set this to make the terminate handler
+avoid demangling" OFF)
 
 if (NOT LIBCXXABI_ENABLE_SHARED AND NOT LIBCXXABI_ENABLE_STATIC)
   message(FATAL_ERROR "libc++abi must be built as either a shared or static library.")
 endif()
 
-if (LLVM_EXTERNAL_LIBCXX_SOURCE_DIR)
-  set(LIBCXXABI_LIBCXX_SRC_DIRS ${LLVM_EXTERNAL_LIBCXX_SOURCE_DIR})
-else()
-  set(LIBCXXABI_LIBCXX_SRC_DIRS
-    "${LLVM_MAIN_SRC_DIR}/projects/libcxx"
-    "${LLVM_MAIN_SRC_DIR}/runtimes/libcxx"
-    )
-endif()
+set(LIBCXXABI_LIBCXX_INCLUDES "${LIBCXXABI_LIBCXX_PATH}/include" CACHE PATH
+    "Specify path to libc++ includes.")
+message(STATUS "Libc++abi will be using libc++ includes from ${LIBCXXABI_LIBCXX_INCLUDES}")
 
-set(LIBCXXABI_LIBCXX_INCLUDE_DIRS "")
-foreach(dir ${LIBCXXABI_LIBCXX_SRC_DIRS})
-  list(APPEND LIBCXXABI_LIBCXX_INCLUDE_DIRS "${dir}/include")
-endforeach()
+option(LIBCXXABI_HERMETIC_STATIC_LIBRARY
+  "Do not export any symbols from the static library." OFF)
 
-find_path(
-  LIBCXXABI_LIBCXX_INCLUDES
-  vector
-  PATHS ${LIBCXXABI_LIBCXX_INCLUDES}
-        ${LIBCXXABI_LIBCXX_PATH}/include
-        ${CMAKE_BINARY_DIR}/${LIBCXXABI_LIBCXX_INCLUDES}
-        ${LIBCXXABI_LIBCXX_INCLUDE_DIRS}
-        ${LLVM_INCLUDE_DIR}/c++/v1
-  )
-
-set(LIBCXXABI_LIBCXX_INCLUDES "${LIBCXXABI_LIBCXX_INCLUDES}" CACHE PATH
-    "Specify path to libc++ includes." FORCE)
-
-find_path(
-  LIBCXXABI_LIBCXX_PATH
-  utils/libcxx/test/__init__.py
-  PATHS ${LIBCXXABI_LIBCXX_PATH}
-        ${LIBCXXABI_LIBCXX_INCLUDES}/../
-        ${LIBCXXABI_LIBCXX_SRC_DIRS}
-  NO_DEFAULT_PATH
-  )
-
-if (LIBCXXABI_LIBCXX_PATH STREQUAL "LIBCXXABI_LIBCXX_PATH-NOTFOUND")
-  message(WARNING "LIBCXXABI_LIBCXX_PATH was not specified and couldn't be infered.")
-  set(LIBCXXABI_LIBCXX_PATH "")
-endif()
-
-set(LIBCXXABI_LIBCXX_PATH "${LIBCXXABI_LIBCXX_PATH}" CACHE PATH
-    "Specify path to libc++ source." FORCE)
+set(LIBCXXABI_TEST_CONFIG "${CMAKE_CURRENT_SOURCE_DIR}/test/lit.site.cfg.in" CACHE STRING
+    "The Lit testing configuration to use when running the tests.")
+set(LIBCXXABI_TEST_PARAMS "" CACHE STRING
+    "A list of parameters to run the Lit test suite with.")
 
 #===============================================================================
 # Configure System
@@ -236,23 +179,32 @@ set(CMAKE_MODULE_PATH
   ${CMAKE_MODULE_PATH}
   )
 
-set(LIBCXXABI_COMPILER    ${CMAKE_CXX_COMPILER})
-set(LIBCXXABI_SOURCE_DIR  ${CMAKE_CURRENT_SOURCE_DIR})
-set(LIBCXXABI_BINARY_DIR  ${CMAKE_CURRENT_BINARY_DIR})
-if (LLVM_LIBRARY_OUTPUT_INTDIR)
+if(LLVM_ENABLE_PER_TARGET_RUNTIME_DIR AND NOT APPLE)
+  set(LIBCXXABI_LIBRARY_DIR ${LLVM_LIBRARY_OUTPUT_INTDIR}/${LLVM_DEFAULT_TARGET_TRIPLE}/c++)
+  set(LIBCXXABI_INSTALL_LIBRARY_DIR lib${LLVM_LIBDIR_SUFFIX}/${LLVM_DEFAULT_TARGET_TRIPLE}/c++)
+  if(LIBCXX_LIBDIR_SUBDIR)
+    string(APPEND LIBCXXABI_LIBRARY_DIR /${LIBCXXABI_LIBDIR_SUBDIR})
+    string(APPEND LIBCXXABI_INSTALL_LIBRARY_DIR /${LIBCXXABI_LIBDIR_SUBDIR})
+  endif()
+elseif(LLVM_LIBRARY_OUTPUT_INTDIR)
   set(LIBCXXABI_LIBRARY_DIR ${LLVM_LIBRARY_OUTPUT_INTDIR})
+  set(LIBCXXABI_INSTALL_LIBRARY_DIR lib${LIBCXXABI_LIBDIR_SUFFIX})
 else()
   set(LIBCXXABI_LIBRARY_DIR ${CMAKE_BINARY_DIR}/lib${LIBCXXABI_LIBDIR_SUFFIX})
+  set(LIBCXXABI_INSTALL_LIBRARY_DIR lib${LIBCXXABI_LIBDIR_SUFFIX})
 endif()
+
+set(LIBCXXABI_INSTALL_PREFIX "" CACHE STRING "Define libc++abi destination prefix.")
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${LIBCXXABI_LIBRARY_DIR})
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${LIBCXXABI_LIBRARY_DIR})
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${LIBCXXABI_LIBRARY_DIR})
 
 # By default, for non-standalone builds, libcxx and libcxxabi share a library
 # directory.
 if (NOT LIBCXXABI_LIBCXX_LIBRARY_PATH)
   set(LIBCXXABI_LIBCXX_LIBRARY_PATH "${LIBCXXABI_LIBRARY_DIR}" CACHE PATH
-      "The path to libc++ library.")
+      "The path to libc++ library." FORCE)
 endif()
 
 # Check that we can build with 32 bits if requested.
@@ -264,39 +216,45 @@ elseif(LIBCXXABI_BUILD_32_BITS)
   message(FATAL_ERROR "LIBCXXABI_BUILD_32_BITS=ON is not supported on this platform.")
 endif()
 
-#===============================================================================
-# Setup Compiler Flags
-#===============================================================================
-
-# Get required flags.
-macro(append_if list condition var)
-  if (${condition})
-    list(APPEND ${list} ${var})
-  endif()
-endmacro()
-
-macro(add_target_flags_if condition var)
-  if (${condition})
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${var}")
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${var}")
-    list(APPEND LIBCXXABI_COMPILE_FLAGS ${var})
-    list(APPEND LIBCXXABI_LINK_FLAGS ${var})
-  endif()
-endmacro()
+# Declare libc++abi configuration variables.
+# They are intended for use as follows:
+# LIBCXXABI_C_FLAGS: General flags for both the c++ compiler and linker.
+# LIBCXXABI_CXX_FLAGS: General flags for both the c++ compiler and linker.
+# LIBCXXABI_COMPILE_FLAGS: Compile only flags.
+# LIBCXXABI_LINK_FLAGS: Linker only flags.
+# LIBCXXABI_LIBRARIES: libraries libc++abi is linked to.
 
 set(LIBCXXABI_C_FLAGS "")
 set(LIBCXXABI_CXX_FLAGS "")
 set(LIBCXXABI_COMPILE_FLAGS "")
 set(LIBCXXABI_LINK_FLAGS "")
+set(LIBCXXABI_LIBRARIES "")
+
+# Include macros for adding and removing libc++abi flags.
+include(HandleLibcxxabiFlags)
+
+#===============================================================================
+# Setup Compiler Flags
+#===============================================================================
 
 # Configure target flags
 add_target_flags_if(LIBCXXABI_BUILD_32_BITS "-m32")
-add_target_flags_if(LIBCXXABI_TARGET_TRIPLE
-          "--target=${LIBCXXABI_TARGET_TRIPLE}")
-add_target_flags_if(LIBCXXABI_GCC_TOOLCHAIN
-         "--gcc-toolchain=${LIBCXXABI_GCC_TOOLCHAIN}")
-add_target_flags_if(LIBCXXABI_SYSROOT
-          "--sysroot=${LIBCXXABI_SYSROOT}")
+
+if(LIBCXXABI_TARGET_TRIPLE)
+  add_target_flags("--target=${LIBCXXABI_TARGET_TRIPLE}")
+elseif(CMAKE_CXX_COMPILER_TARGET)
+  set(LIBCXXABI_TARGET_TRIPLE "${CMAKE_CXX_COMPILER_TARGET}")
+endif()
+if(LIBCXX_GCC_TOOLCHAIN)
+  add_target_flags("--gcc-toolchain=${LIBCXXABI_GCC_TOOLCHAIN}")
+elseif(CMAKE_CXX_COMPILER_EXTERNAL_TOOLCHAIN)
+  set(LIBCXXABI_GCC_TOOLCHAIN "${CMAKE_CXX_COMPILER_EXTERNAL_TOOLCHAIN}")
+endif()
+if(LIBCXXABI_SYSROOT)
+  add_target_flags("--sysroot=${LIBCXXABI_SYSROOT}")
+elseif(CMAKE_SYSROOT)
+  set(LIBCXXABI_SYSROOT "${CMAKE_SYSROOT}")
+endif()
 
 if (LIBCXXABI_TARGET_TRIPLE)
   set(TARGET_TRIPLE "${LIBCXXABI_TARGET_TRIPLE}")
@@ -307,71 +265,89 @@ include(config-ix)
 
 if (LIBCXXABI_HAS_NOSTDINCXX_FLAG)
   list(APPEND LIBCXXABI_COMPILE_FLAGS -nostdinc++)
+  # cmake 3.14 and above remove system include paths that are explicitly
+  # passed on the command line.  We build with -nostdinc++ and explicitly add
+  # just the libcxx system include paths with -I on the command line.
+  # Setting CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES effectively prevents cmake
+  # from removing these.
+  # See: https://gitlab.kitware.com/cmake/cmake/issues/19227
+  set(CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES "")
   # Remove -stdlib flags to prevent them from causing an unused flag warning.
+  string(REPLACE "--stdlib=libc++" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+  string(REPLACE "--stdlib=libstdc++" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
   string(REPLACE "-stdlib=libc++" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
   string(REPLACE "-stdlib=libstdc++" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
-endif()
-
-if (LIBCXXABI_USE_COMPILER_RT)
-  list(APPEND LIBCXXABI_LINK_FLAGS "-rtlib=compiler-rt")
 endif()
 
 # Let the library headers know they are currently being used to build the
 # library.
 add_definitions(-D_LIBCXXABI_BUILDING_LIBRARY)
 
+# libcxxabi needs to, for various reasons, include the libcpp headers as if
+# it is being built as part of libcxx.
+add_definitions(-D_LIBCPP_BUILDING_LIBRARY)
+
 # Disable DLL annotations on Windows for static builds.
 if (WIN32 AND LIBCXXABI_ENABLE_STATIC AND NOT LIBCXXABI_ENABLE_SHARED)
-  add_definitions(-D_LIBCXXABI_DISABLE_DLL_IMPORT_EXPORT)
+  if (LIBCXX_ENABLE_SHARED AND LIBCXX_ENABLE_STATIC_ABI_LIBRARY)
+    # Building libcxxabi statically, but intending for it to be statically
+    # linked into a shared libcxx; keep dllexport enabled within libcxxabi,
+    # as the symbols will need to be exported from libcxx.
+  else()
+    # Regular static build; disable dllexports.
+    add_definitions(-D_LIBCXXABI_DISABLE_VISIBILITY_ANNOTATIONS)
+  endif()
 endif()
 
-append_if(LIBCXXABI_COMPILE_FLAGS LIBCXXABI_HAS_WERROR_FLAG -Werror=return-type)
+add_compile_flags_if_supported(-Werror=return-type)
 
 # Get warning flags
-append_if(LIBCXXABI_COMPILE_FLAGS LIBCXXABI_HAS_W_FLAG -W)
-append_if(LIBCXXABI_COMPILE_FLAGS LIBCXXABI_HAS_WALL_FLAG -Wall)
-append_if(LIBCXXABI_COMPILE_FLAGS LIBCXXABI_HAS_WCHAR_SUBSCRIPTS_FLAG -Wchar-subscripts)
-append_if(LIBCXXABI_COMPILE_FLAGS LIBCXXABI_HAS_WCONVERSION_FLAG -Wconversion)
-append_if(LIBCXXABI_COMPILE_FLAGS LIBCXXABI_HAS_WMISMATCHED_TAGS_FLAG -Wmismatched-tags)
-append_if(LIBCXXABI_COMPILE_FLAGS LIBCXXABI_HAS_WMISSING_BRACES_FLAG -Wmissing-braces)
-append_if(LIBCXXABI_COMPILE_FLAGS LIBCXXABI_HAS_WNEWLINE_EOF_FLAG -Wnewline-eof)
-append_if(LIBCXXABI_COMPILE_FLAGS LIBCXXABI_HAS_WUNUSED_FUNCTION_FLAG -Wunused-function)
-append_if(LIBCXXABI_COMPILE_FLAGS LIBCXXABI_HAS_WSHADOW_FLAG -Wshadow)
-append_if(LIBCXXABI_COMPILE_FLAGS LIBCXXABI_HAS_WSHORTEN_64_TO_32_FLAG -Wshorten-64-to-32)
-append_if(LIBCXXABI_COMPILE_FLAGS LIBCXXABI_HAS_WSIGN_COMPARE_FLAG -Wsign-compare)
-append_if(LIBCXXABI_COMPILE_FLAGS LIBCXXABI_HAS_WSIGN_CONVERSION_FLAG -Wsign-conversion)
-append_if(LIBCXXABI_COMPILE_FLAGS LIBCXXABI_HAS_WSTRICT_ALIASING_FLAG -Wstrict-aliasing=2)
-append_if(LIBCXXABI_COMPILE_FLAGS LIBCXXABI_HAS_WSTRICT_OVERFLOW_FLAG -Wstrict-overflow=4)
-append_if(LIBCXXABI_COMPILE_FLAGS LIBCXXABI_HAS_WUNUSED_PARAMETER_FLAG -Wunused-parameter)
-append_if(LIBCXXABI_COMPILE_FLAGS LIBCXXABI_HAS_WUNUSED_VARIABLE_FLAG -Wunused-variable)
-append_if(LIBCXXABI_COMPILE_FLAGS LIBCXXABI_HAS_WWRITE_STRINGS_FLAG -Wwrite-strings)
-append_if(LIBCXXABI_COMPILE_FLAGS LIBCXXABI_HAS_WUNDEF_FLAG -Wundef)
+add_compile_flags_if_supported(-W)
+add_compile_flags_if_supported(-Wall)
+add_compile_flags_if_supported(-Wchar-subscripts)
+add_compile_flags_if_supported(-Wconversion)
+add_compile_flags_if_supported(-Wmismatched-tags)
+add_compile_flags_if_supported(-Wmissing-braces)
+add_compile_flags_if_supported(-Wnewline-eof)
+add_compile_flags_if_supported(-Wunused-function)
+add_compile_flags_if_supported(-Wshadow)
+add_compile_flags_if_supported(-Wshorten-64-to-32)
+add_compile_flags_if_supported(-Wsign-compare)
+add_compile_flags_if_supported(-Wsign-conversion)
+add_compile_flags_if_supported(-Wstrict-aliasing=2)
+add_compile_flags_if_supported(-Wstrict-overflow=4)
+add_compile_flags_if_supported(-Wunused-parameter)
+add_compile_flags_if_supported(-Wunused-variable)
+add_compile_flags_if_supported(-Wwrite-strings)
+add_compile_flags_if_supported(-Wundef)
+
+add_compile_flags_if_supported(-Wno-suggest-override)
 
 if (LIBCXXABI_ENABLE_WERROR)
-  append_if(LIBCXXABI_COMPILE_FLAGS LIBCXXABI_HAS_WERROR_FLAG -Werror)
-  append_if(LIBCXXABI_COMPILE_FLAGS LIBCXXABI_HAS_WX_FLAG -WX)
+  add_compile_flags_if_supported(-Werror)
+  add_compile_flags_if_supported(-WX)
 else()
-  append_if(LIBCXXABI_COMPILE_FLAGS LIBCXXABI_HAS_WNO_ERROR_FLAG -Wno-error)
-  append_if(LIBCXXABI_COMPILE_FLAGS LIBCXXABI_HAS_NO_WX_FLAG -WX-)
+  add_compile_flags_if_supported(-Wno-error)
+  add_compile_flags_if_supported(-WX-)
 endif()
 if (LIBCXXABI_ENABLE_PEDANTIC)
-  append_if(LIBCXXABI_COMPILE_FLAGS LIBCXXABI_HAS_PEDANTIC_FLAG -pedantic)
+  add_compile_flags_if_supported(-pedantic)
 endif()
 
 # Get feature flags.
-append_if(LIBCXXABI_CXX_FLAGS LIBCXXABI_HAS_FSTRICT_ALIASING_FLAG -fstrict-aliasing)
+add_compile_flags_if_supported(-fstrict-aliasing)
 
 # Exceptions
 if (LIBCXXABI_ENABLE_EXCEPTIONS)
   # Catches C++ exceptions only and tells the compiler to assume that extern C
   # functions never throw a C++ exception.
-  append_if(LIBCXXABI_CXX_FLAGS LIBCXXABI_HAS_EHSC_FLAG -EHsc)
-  append_if(LIBCXXABI_C_FLAGS LIBCXXABI_HAS_FUNWIND_TABLES -funwind-tables)
+  add_compile_flags_if_supported(-EHsc)
+  # Do we really need to be run through the C compiler ?
+  add_c_compile_flags_if_supported(-funwind-tables)
 else()
-  add_definitions(-D_LIBCXXABI_NO_EXCEPTIONS)
-  append_if(LIBCXXABI_CXX_FLAGS LIBCXXABI_HAS_NO_EXCEPTIONS_FLAG -fno-exceptions)
-  append_if(LIBCXXABI_CXX_FLAGS LIBCXXABI_HAS_NO_EHS_FLAG -EHs-)
-  append_if(LIBCXXABI_CXX_FLAGS LIBCXXABI_HAS_NO_EHA_FLAG -EHa-)
+  add_compile_flags_if_supported(-fno-exceptions)
+  add_compile_flags_if_supported(-EHs-)
+  add_compile_flags_if_supported(-EHa-)
 endif()
 
 # Assert
@@ -391,15 +367,16 @@ else()
     list(APPEND LIBCXXABI_COMPILE_FLAGS -DNDEBUG)
   endif()
 endif()
-# Static library
-if (NOT LIBCXXABI_ENABLE_SHARED)
-  list(APPEND LIBCXXABI_COMPILE_FLAGS -D_LIBCPP_BUILD_STATIC)
-endif()
 
 # Threading
 if (NOT LIBCXXABI_ENABLE_THREADS)
   if (LIBCXXABI_HAS_PTHREAD_API)
     message(FATAL_ERROR "LIBCXXABI_HAS_PTHREAD_API can only"
+                        " be set to ON when LIBCXXABI_ENABLE_THREADS"
+                        " is also set to ON.")
+  endif()
+  if (LIBCXXABI_HAS_WIN32_THREAD_API)
+    message(FATAL_ERROR "LIBCXXABI_HAS_WIN32_THREAD_API can only"
                         " be set to ON when LIBCXXABI_ENABLE_THREADS"
                         " is also set to ON.")
   endif()
@@ -414,12 +391,18 @@ if (NOT LIBCXXABI_ENABLE_THREADS)
                         " is also set to ON.")
   endif()
   add_definitions(-D_LIBCXXABI_HAS_NO_THREADS)
+  add_definitions(-D_LIBCPP_HAS_NO_THREADS)
 endif()
 
 if (LIBCXXABI_HAS_EXTERNAL_THREAD_API)
   if (LIBCXXABI_HAS_PTHREAD_API)
     message(FATAL_ERROR "The options LIBCXXABI_HAS_EXTERNAL_THREAD_API"
                         " and LIBCXXABI_HAS_PTHREAD_API cannot be both"
+                        " set to ON at the same time.")
+  endif()
+  if (LIBCXXABI_HAS_WIN32_THREAD_API)
+    message(FATAL_ERROR "The options LIBCXXABI_HAS_EXTERNAL_THREAD_API"
+                        " and LIBCXXABI_HAS_WIN32_THREAD_API cannot be both"
                         " set to ON at the same time.")
   endif()
   if (LIBCXXABI_BUILD_EXTERNAL_THREAD_LIBRARY)
@@ -429,9 +412,24 @@ if (LIBCXXABI_HAS_EXTERNAL_THREAD_API)
   endif()
 endif()
 
+if (LIBCXXABI_HAS_PTHREAD_API)
+  if (LIBCXXABI_HAS_WIN32_THREAD_API)
+    message(FATAL_ERROR "The options LIBCXXABI_HAS_PTHREAD_API"
+            "and LIBCXXABI_HAS_WIN32_THREAD_API cannot be both"
+            "set to ON at the same time.")
+  endif()
+endif()
+
+if (LLVM_ENABLE_MODULES)
+  # Ignore that the rest of the modules flags are now unused.
+  add_compile_flags_if_supported(-Wno-unused-command-line-argument)
+  add_compile_flags(-fno-modules)
+endif()
+
 set(LIBCXXABI_HAS_UNDEFINED_SYMBOLS OFF)
 if ((NOT LIBCXXABI_ENABLE_NEW_DELETE_DEFINITIONS)
-    OR (LIBCXXABI_BUILD_EXTERNAL_THREAD_LIBRARY AND LIBCXXABI_ENABLE_SHARED))
+    OR (LIBCXXABI_BUILD_EXTERNAL_THREAD_LIBRARY AND LIBCXXABI_ENABLE_SHARED)
+    OR MINGW)
   set(LIBCXXABI_HAS_UNDEFINED_SYMBOLS ON)
 endif()
 
@@ -449,6 +447,10 @@ if (LIBCXXABI_HAS_PTHREAD_API)
   add_definitions(-D_LIBCPP_HAS_THREAD_API_PTHREAD)
 endif()
 
+if (LIBCXXABI_HAS_WIN32_THREAD_API)
+  add_definitions(-D_LIBCPP_HAS_THREAD_API_WIN32)
+endif()
+
 if (LIBCXXABI_HAS_EXTERNAL_THREAD_API)
   add_definitions(-D_LIBCPP_HAS_THREAD_API_EXTERNAL)
 endif()
@@ -456,6 +458,13 @@ endif()
 if (LIBCXXABI_BUILD_EXTERNAL_THREAD_LIBRARY)
   add_definitions(-D_LIBCPP_HAS_THREAD_LIBRARY_EXTERNAL)
 endif()
+
+# Prevent libc++abi from having library dependencies on libc++
+add_definitions(-D_LIBCPP_DISABLE_EXTERN_TEMPLATE)
+
+# Bring back `std::unexpected`, which is removed in C++17, to support
+# pre-C++17.
+add_definitions(-D_LIBCPP_ENABLE_CXX17_REMOVED_UNEXPECTED_FUNCTIONS)
 
 if (MSVC)
   add_definitions(-D_CRT_SECURE_NO_WARNINGS)
@@ -470,8 +479,18 @@ if (LIBCXXABI_SILENT_TERMINATE)
   add_definitions(-DLIBCXXABI_SILENT_TERMINATE)
 endif()
 
+if (LIBCXXABI_NON_DEMANGLING_TERMINATE)
+  add_definitions(-DLIBCXXABI_NON_DEMANGLING_TERMINATE)
+endif()
+
 if (LIBCXXABI_BAREMETAL)
     add_definitions(-DLIBCXXABI_BAREMETAL)
+endif()
+
+if (LIBCXXABI_HAS_COMMENT_LIB_PRAGMA)
+  if (LIBCXXABI_HAS_PTHREAD_LIB)
+    add_definitions(-D_LIBCXXABI_LINK_PTHREAD_LIB)
+  endif()
 endif()
 
 string(REPLACE ";" " " LIBCXXABI_CXX_FLAGS "${LIBCXXABI_CXX_FLAGS}")
@@ -489,31 +508,16 @@ set(LIBCXXABI_LIBUNWIND_PATH "${LIBCXXABI_LIBUNWIND_PATH}" CACHE PATH
 
 include_directories(include)
 if (LIBCXXABI_USE_LLVM_UNWINDER OR LLVM_NATIVE_ARCH MATCHES ARM)
-  find_path(
-    LIBCXXABI_LIBUNWIND_INCLUDES_INTERNAL
-    libunwind.h
+  find_path(LIBCXXABI_LIBUNWIND_INCLUDES_INTERNAL libunwind.h
     PATHS ${LIBCXXABI_LIBUNWIND_INCLUDES}
           ${LIBCXXABI_LIBUNWIND_PATH}/include
           ${CMAKE_BINARY_DIR}/${LIBCXXABI_LIBUNWIND_INCLUDES}
           ${LLVM_MAIN_SRC_DIR}/projects/libunwind/include
           ${LLVM_MAIN_SRC_DIR}/runtimes/libunwind/include
+          ${LLVM_MAIN_SRC_DIR}/../libunwind/include
     NO_DEFAULT_PATH
+    NO_CMAKE_FIND_ROOT_PATH
   )
-
-  find_path(
-    LIBCXXABI_LIBUNWIND_SOURCES
-    libunwind_ext.h
-    PATHS ${LIBCXXABI_LIBUNWIND_PATH}/src/
-          ${LIBCXXABI_LIBUNWIND_INCLUDES}/../src/
-          ${LLVM_MAIN_SRC_DIR}/projects/libunwind/src/
-          ${LLVM_MAIN_SRC_DIR}/runtimes/libunwind/src/
-    NO_DEFAULT_PATH
-  )
-
-  if (LIBCXXABI_LIBUNWIND_SOURCES STREQUAL "LIBCXXABI_LIBUNWIND_SOURCES-NOTFOUND")
-    message(WARNING "LIBCXXABI_LIBUNWIND_SOURCES was not specified and couldn't be infered.")
-    set(LIBCXXABI_LIBUNWIND_SOURCES "")
-  endif()
 
   if (LIBCXXABI_LIBUNWIND_INCLUDES_INTERNAL STREQUAL "LIBCXXABI_LIBUNWIND_INCLUDES_INTERNAL-NOTFOUND")
     set(LIBCXXABI_LIBUNWIND_INCLUDES_INTERNAL "")
@@ -522,28 +526,13 @@ if (LIBCXXABI_USE_LLVM_UNWINDER OR LLVM_NATIVE_ARCH MATCHES ARM)
   if (NOT LIBCXXABI_LIBUNWIND_INCLUDES_INTERNAL STREQUAL "")
     include_directories("${LIBCXXABI_LIBUNWIND_INCLUDES_INTERNAL}")
   endif()
-
-  if (NOT LIBCXXABI_LIBUNWIND_SOURCES STREQUAL "")
-    include_directories("${LIBCXXABI_LIBUNWIND_SOURCES}")
-  endif()
 endif()
 
 # Add source code. This also contains all of the logic for deciding linker flags
 # soname, etc...
 add_subdirectory(src)
 
-if (NOT LIBCXXABI_INCLUDE_TESTS OR (LIBCXXABI_STANDALONE_BUILD AND NOT LIBCXXABI_ENABLE_SHARED))
-  # We can't reasonably test the system C++ library with a static libc++abi.
-  # We either need to be able to replace libc++abi at run time (with a shared
-  # libc++abi), or we need to be able to replace the C++ runtime (with a non-
-  # standalone build).
-  message(WARNING "The libc++abi tests aren't valid when libc++abi is built "
-                  "standalone (i.e. outside of llvm/projects/libcxxabi ) and "
-                  "is built without a shared library.  Either build a shared "
-                  "library, build libc++abi at the same time as you build "
-                  "libc++, or do without testing.  No check target will be "
-                  "available!")
-else()
+if (LIBCXXABI_INCLUDE_TESTS)
   add_subdirectory(test)
   add_subdirectory(fuzz)
 endif()

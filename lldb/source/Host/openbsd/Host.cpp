@@ -1,13 +1,11 @@
-//===-- source/Host/openbsd/Host.cpp ----------------------------*- C++ -*-===//
+//===-- source/Host/openbsd/Host.cpp --------------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
-// C Includes
 #include <sys/types.h>
 
 #include <sys/signal.h>
@@ -19,25 +17,16 @@
 
 #include <stdio.h>
 
-// C++ Includes
-// Other libraries and framework includes
-// Project includes
-#include "lldb/Core/Module.h"
-#include "lldb/Core/StreamFile.h"
 #include "lldb/Host/Host.h"
 #include "lldb/Host/HostInfo.h"
-#include "lldb/Target/Platform.h"
-#include "lldb/Target/Process.h"
-#include "lldb/Utility/DataExtractor.h"
-#include "lldb/Utility/Endian.h"
-#include "lldb/Utility/Error.h"
-#include "lldb/Utility/Log.h"
-#include "lldb/Utility/StreamString.h"
-
-#include "lldb/Utility/CleanUp.h"
 #include "lldb/Utility/DataBufferHeap.h"
 #include "lldb/Utility/DataExtractor.h"
+#include "lldb/Utility/Endian.h"
+#include "lldb/Utility/Log.h"
 #include "lldb/Utility/NameMatches.h"
+#include "lldb/Utility/ProcessInfo.h"
+#include "lldb/Utility/Status.h"
+#include "lldb/Utility/StreamString.h"
 
 #include "llvm/Support/Host.h"
 
@@ -48,16 +37,21 @@ extern char **environ;
 using namespace lldb;
 using namespace lldb_private;
 
-size_t Host::GetEnvironment(StringList &env) {
+namespace lldb_private {
+class ProcessLaunchInfo;
+}
+
+Environment Host::GetEnvironment() {
+  Environment env;
   char *v;
   char **var = environ;
   for (; var != NULL && *var != NULL; ++var) {
     v = strchr(*var, (int)'-');
     if (v == NULL)
       continue;
-    env.AppendString(v);
+    env.insert(v);
   }
-  return env.GetSize();
+  return env;
 }
 
 static bool
@@ -77,7 +71,7 @@ GetOpenBSDProcessArgs(const ProcessInstanceInfoMatch *match_info_ptr,
 
       cstr = data.GetCStr(&offset);
       if (cstr) {
-        process_info.GetExecutableFile().SetFile(cstr, false);
+        process_info.GetExecutableFile().SetFile(cstr, FileSpec::Style::native);
 
         if (!(match_info_ptr == NULL ||
               NameMatches(
@@ -146,8 +140,8 @@ static bool GetOpenBSDProcessUserAndGroup(ProcessInstanceInfo &process_info) {
   return false;
 }
 
-uint32_t Host::FindProcesses(const ProcessInstanceInfoMatch &match_info,
-                             ProcessInstanceInfoList &process_infos) {
+uint32_t Host::FindProcessesImpl(const ProcessInstanceInfoMatch &match_info,
+                                 ProcessInstanceInfoList &process_infos) {
   std::vector<struct kinfo_proc> kinfos;
 
   int mib[3] = {CTL_KERN, KERN_PROC, KERN_PROC_ALL};
@@ -199,11 +193,11 @@ uint32_t Host::FindProcesses(const ProcessInstanceInfoMatch &match_info,
         GetOpenBSDProcessArgs(&match_info, process_info)) {
       GetOpenBSDProcessCPUType(process_info);
       if (match_info.Matches(process_info))
-        process_infos.Append(process_info);
+        process_infos.push_back(process_info);
     }
   }
 
-  return process_infos.GetSize();
+  return process_infos.size();
 }
 
 bool Host::GetProcessInfo(lldb::pid_t pid, ProcessInstanceInfo &process_info) {
@@ -220,6 +214,6 @@ bool Host::GetProcessInfo(lldb::pid_t pid, ProcessInstanceInfo &process_info) {
   return false;
 }
 
-Error Host::ShellExpandArguments(ProcessLaunchInfo &launch_info) {
-  return Error("unimplemented");
+Status Host::ShellExpandArguments(ProcessLaunchInfo &launch_info) {
+  return Status("unimplemented");
 }

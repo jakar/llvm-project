@@ -1,9 +1,8 @@
 //===-- LeonFeatures.td - Describe the Leon Features -------*- tablegen -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -17,9 +16,9 @@
 
 //support to casa instruction; for leon3 subtarget only
 def UMACSMACSupport : SubtargetFeature<
-  "hasumacsmac", 
-  "HasUmacSmac", 
-  "true", 
+  "hasumacsmac",
+  "HasUmacSmac",
+  "true",
   "Enable UMAC and SMAC for LEON3 and LEON4 processors"
 >;
 
@@ -31,39 +30,17 @@ def UMACSMACSupport : SubtargetFeature<
 
 //support to casa instruction; for leon3 subtarget only
 def LeonCASA : SubtargetFeature<
-  "hasleoncasa", 
-  "HasLeonCasa", 
-  "true", 
+  "hasleoncasa",
+  "HasLeonCasa",
+  "true",
   "Enable CASA instruction for LEON3 and LEON4 processors"
 >;
 
-
-def ReplaceSDIV : SubtargetFeature<
-  "replacesdiv",
-  "PerformSDIVReplace",
-  "true",
-  "AT697E erratum fix: Do not emit SDIV, emit SDIVCC instead"
->;
-          
 def InsertNOPLoad: SubtargetFeature<
   "insertnopload",
   "InsertNOPLoad",
   "true",
-  "LEON3 erratum fix: Insert a NOP instruction after every single-cycle load instruction when the next instruction is another load/store instruction" 
->;
-
-def FixFSMULD : SubtargetFeature<
-  "fixfsmuld",
-  "FixFSMULD",
-  "true",
-  "LEON erratum fix: Do not use FSMULD" 
->;
-
-def ReplaceFMULS : SubtargetFeature<
-  "replacefmuls",
-  "ReplaceFMULS",
-  "true",
-  "LEON erratum fix: Replace FMULS instruction with FMULD and relevant conversion instructions" 
+  "LEON3 erratum fix: Insert a NOP instruction after every single-cycle load instruction when the next instruction is another load/store instruction"
 >;
 
 def DetectRoundChange : SubtargetFeature<
@@ -78,5 +55,9 @@ def FixAllFDIVSQRT : SubtargetFeature<
   "fixallfdivsqrt",
   "FixAllFDIVSQRT",
   "true",
-  "LEON erratum fix: Fix FDIVS/FDIVD/FSQRTS/FSQRTD instructions with NOPs and floating-point store" 
+  "LEON erratum fix: Fix FDIVS/FDIVD/FSQRTS/FSQRTD instructions with NOPs and floating-point store"
 >;
+
+def LeonCycleCounter
+  : SubtargetFeature<"leoncyclecounter", "HasLeonCycleCounter", "true",
+                     "Use the Leon cycle counter register">;

@@ -1,20 +1,18 @@
 //===-- lldb-private-defines.h ----------------------------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef liblldb_lldb_private_defines_h_
-#define liblldb_lldb_private_defines_h_
+#ifndef LLDB_LLDB_PRIVATE_DEFINES_H
+#define LLDB_LLDB_PRIVATE_DEFINES_H
 
 #if defined(__cplusplus)
 
 // Include Compiler.h here so we don't define LLVM_FALLTHROUGH and then
-// Compiler.h
-// later tries to redefine it.
+// Compiler.h later tries to redefine it.
 #include "llvm/Support/Compiler.h"
 
 #ifndef LLVM_FALLTHROUGH
@@ -24,7 +22,7 @@
 #endif
 
 /// \macro LLVM_FALLTHROUGH
-/// \brief Marks an empty statement preceding a deliberate switch fallthrough.
+/// Marks an empty statement preceding a deliberate switch fallthrough.
 #if __has_cpp_attribute(clang::fallthrough)
 #define LLVM_FALLTHROUGH [[clang::fallthrough]]
 #else
@@ -35,4 +33,4 @@
 
 #endif // #if defined(__cplusplus)
 
-#endif // liblldb_lldb_private_defines_h_
+#endif // LLDB_LLDB_PRIVATE_DEFINES_H

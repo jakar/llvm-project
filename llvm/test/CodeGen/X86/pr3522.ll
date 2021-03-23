@@ -1,9 +1,9 @@
 ; REQUIRES: asserts
-; RUN: llc < %s -march=x86 -stats 2>&1 | not grep "instructions sunk"
+; RUN: llc < %s -stats 2>&1 | not grep "instructions sunk"
 ; PR3522
 
 target triple = "i386-pc-linux-gnu"
-@.str = external constant [13 x i8]		; <[13 x i8]*> [#uses=1]
+@.str = external dso_local constant [13 x i8]		; <[13 x i8]*> [#uses=1]
 
 define void @_ada_c34018a() personality i32 (...)* @__gxx_personality_v0 {
 entry:

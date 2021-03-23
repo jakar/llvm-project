@@ -1,9 +1,8 @@
 //===----- CGCXXABI.cpp - Interface to C++ ABIs ---------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -14,6 +13,7 @@
 
 #include "CGCXXABI.h"
 #include "CGCleanup.h"
+#include "clang/AST/Attr.h"
 
 using namespace clang;
 using namespace CodeGen;
@@ -27,41 +27,6 @@ void CGCXXABI::ErrorUnsupportedABI(CodeGenFunction &CGF, StringRef S) {
   Diags.Report(CGF.getContext().getFullLoc(CGF.CurCodeDecl->getLocation()),
                DiagID)
     << S;
-}
-
-bool CGCXXABI::canCopyArgument(const CXXRecordDecl *RD) const {
-  // If RD has a non-trivial move or copy constructor, we cannot copy the
-  // argument.
-  if (RD->hasNonTrivialCopyConstructor() || RD->hasNonTrivialMoveConstructor())
-    return false;
-
-  // If RD has a non-trivial destructor, we cannot copy the argument.
-  if (RD->hasNonTrivialDestructor())
-    return false;
-
-  // We can only copy the argument if there exists at least one trivial,
-  // non-deleted copy or move constructor.
-  // FIXME: This assumes that all lazily declared copy and move constructors are
-  // not deleted.  This assumption might not be true in some corner cases.
-  bool CopyDeleted = false;
-  bool MoveDeleted = false;
-  for (const CXXConstructorDecl *CD : RD->ctors()) {
-    if (CD->isCopyConstructor() || CD->isMoveConstructor()) {
-      assert(CD->isTrivial());
-      // We had at least one undeleted trivial copy or move ctor.  Return
-      // directly.
-      if (!CD->isDeleted())
-        return true;
-      if (CD->isCopyConstructor())
-        CopyDeleted = true;
-      else
-        MoveDeleted = true;
-    }
-  }
-
-  // If all trivial copy and move constructors are deleted, we cannot copy the
-  // argument.
-  return !(CopyDeleted && MoveDeleted);
 }
 
 llvm::Constant *CGCXXABI::GetBogusMemberPointer(QualType T) {
@@ -80,10 +45,10 @@ CGCallee CGCXXABI::EmitLoadOfMemberFunctionPointer(
   ErrorUnsupportedABI(CGF, "calls through member pointers");
 
   ThisPtrForCall = This.getPointer();
-  const FunctionProtoType *FPT = 
+  const FunctionProtoType *FPT =
     MPT->getPointeeType()->getAs<FunctionProtoType>();
-  const CXXRecordDecl *RD = 
-    cast<CXXRecordDecl>(MPT->getClass()->getAs<RecordType>()->getDecl());
+  const auto *RD =
+      cast<CXXRecordDecl>(MPT->getClass()->castAs<RecordType>()->getDecl());
   llvm::FunctionType *FTy = CGM.getTypes().GetFunctionType(
       CGM.getTypes().arrangeCXXMethodType(RD, FPT, /*FD=*/nullptr));
   llvm::Constant *FnPtr = llvm::Constant::getNullValue(FTy->getPointerTo());
@@ -159,10 +124,10 @@ void CGCXXABI::buildThisParam(CodeGenFunction &CGF, FunctionArgList &params) {
 
   // FIXME: I'm not entirely sure I like using a fake decl just for code
   // generation. Maybe we can come up with a better way?
-  ImplicitParamDecl *ThisDecl
-    = ImplicitParamDecl::Create(CGM.getContext(), nullptr, MD->getLocation(),
-                                &CGM.getContext().Idents.get("this"),
-                                MD->getThisType(CGM.getContext()));
+  auto *ThisDecl = ImplicitParamDecl::Create(
+      CGM.getContext(), nullptr, MD->getLocation(),
+      &CGM.getContext().Idents.get("this"), MD->getThisType(),
+      ImplicitParamDecl::CXXThis);
   params.push_back(ThisDecl);
   CGF.CXXABIThisDecl = ThisDecl;
 
@@ -170,24 +135,29 @@ void CGCXXABI::buildThisParam(CodeGenFunction &CGF, FunctionArgList &params) {
   // down to whether we know it's a complete object or not.
   auto &Layout = CGF.getContext().getASTRecordLayout(MD->getParent());
   if (MD->getParent()->getNumVBases() == 0 || // avoid vcall in common case
-      MD->getParent()->hasAttr<FinalAttr>() ||
-      !isThisCompleteObject(CGF.CurGD)) {
+      MD->getParent()->isEffectivelyFinal() ||
+      isThisCompleteObject(CGF.CurGD)) {
     CGF.CXXABIThisAlignment = Layout.getAlignment();
   } else {
     CGF.CXXABIThisAlignment = Layout.getNonVirtualAlignment();
   }
 }
 
-void CGCXXABI::EmitThisParam(CodeGenFunction &CGF) {
+llvm::Value *CGCXXABI::loadIncomingCXXThis(CodeGenFunction &CGF) {
+  return CGF.Builder.CreateLoad(CGF.GetAddrOfLocalVar(getThisDecl(CGF)),
+                                "this");
+}
+
+void CGCXXABI::setCXXABIThisValue(CodeGenFunction &CGF, llvm::Value *ThisPtr) {
   /// Initialize the 'this' slot.
   assert(getThisDecl(CGF) && "no 'this' variable for function");
-  CGF.CXXABIThisValue
-    = CGF.Builder.CreateLoad(CGF.GetAddrOfLocalVar(getThisDecl(CGF)),
-                             "this");
+  CGF.CXXABIThisValue = ThisPtr;
 }
 
 void CGCXXABI::EmitReturnFromThunk(CodeGenFunction &CGF,
                                    RValue RV, QualType ResultType) {
+  assert(!CGF.hasAggregateEvaluationKind(ResultType) &&
+         "cannot handle aggregates");
   CGF.EmitReturnOfRValue(RV, ResultType);
 }
 
@@ -281,28 +251,6 @@ llvm::Constant *CGCXXABI::getMemberPointerAdjustment(const CastExpr *E) {
                                           E->path_end());
 }
 
-CharUnits CGCXXABI::getMemberPointerPathAdjustment(const APValue &MP) {
-  // TODO: Store base specifiers in APValue member pointer paths so we can
-  // easily reuse CGM.GetNonVirtualBaseClassOffset().
-  const ValueDecl *MPD = MP.getMemberPointerDecl();
-  CharUnits ThisAdjustment = CharUnits::Zero();
-  ArrayRef<const CXXRecordDecl*> Path = MP.getMemberPointerPath();
-  bool DerivedMember = MP.isMemberPointerToDerivedMember();
-  const CXXRecordDecl *RD = cast<CXXRecordDecl>(MPD->getDeclContext());
-  for (unsigned I = 0, N = Path.size(); I != N; ++I) {
-    const CXXRecordDecl *Base = RD;
-    const CXXRecordDecl *Derived = Path[I];
-    if (DerivedMember)
-      std::swap(Base, Derived);
-    ThisAdjustment +=
-      getContext().getASTRecordLayout(Derived).getBaseClassOffset(Base);
-    RD = Path[I];
-  }
-  if (DerivedMember)
-    ThisAdjustment = -ThisAdjustment;
-  return ThisAdjustment;
-}
-
 llvm::BasicBlock *
 CGCXXABI::EmitCtorCompleteObjectHandler(CodeGenFunction &CGF,
                                         const CXXRecordDecl *RD) {
@@ -311,6 +259,20 @@ CGCXXABI::EmitCtorCompleteObjectHandler(CodeGenFunction &CGF,
 
   ErrorUnsupportedABI(CGF, "complete object detection in ctor");
   return nullptr;
+}
+
+void CGCXXABI::setCXXDestructorDLLStorage(llvm::GlobalValue *GV,
+                                          const CXXDestructorDecl *Dtor,
+                                          CXXDtorType DT) const {
+  // Assume the base C++ ABI has no special rules for destructor variants.
+  CGM.setDLLImportDLLExport(GV, Dtor);
+}
+
+llvm::GlobalValue::LinkageTypes CGCXXABI::getCXXDestructorLinkage(
+    GVALinkage Linkage, const CXXDestructorDecl *Dtor, CXXDtorType DT) const {
+  // Delegate back to CGM by default.
+  return CGM.getLLVMLinkageForDeclarator(Dtor, Linkage,
+                                         /*IsConstantVariable=*/false);
 }
 
 bool CGCXXABI::NeedsVTTParameter(GlobalDecl GD) {
@@ -330,4 +292,21 @@ CatchTypeInfo CGCXXABI::getCatchAllTypeInfo() {
 
 std::vector<CharUnits> CGCXXABI::getVBPtrOffsets(const CXXRecordDecl *RD) {
   return std::vector<CharUnits>();
+}
+
+CGCXXABI::AddedStructorArgCounts CGCXXABI::addImplicitConstructorArgs(
+    CodeGenFunction &CGF, const CXXConstructorDecl *D, CXXCtorType Type,
+    bool ForVirtualBase, bool Delegating, CallArgList &Args) {
+  AddedStructorArgs AddedArgs =
+      getImplicitConstructorArgs(CGF, D, Type, ForVirtualBase, Delegating);
+  for (size_t i = 0; i < AddedArgs.Prefix.size(); ++i) {
+    Args.insert(Args.begin() + 1 + i,
+                CallArg(RValue::get(AddedArgs.Prefix[i].Value),
+                        AddedArgs.Prefix[i].Type));
+  }
+  for (const auto &arg : AddedArgs.Suffix) {
+    Args.add(RValue::get(arg.Value), arg.Type);
+  }
+  return AddedStructorArgCounts(AddedArgs.Prefix.size(),
+                                AddedArgs.Suffix.size());
 }

@@ -1,8 +1,12 @@
 ; Test the ASan's stack layout.
 ; More tests in tests/Transforms/Utils/ASanStackFrameLayoutTest.cpp
-; RUN: opt < %s -asan -asan-module -asan-stack-dynamic-alloca=0 -asan-use-after-scope -S \
+; RUN: opt < %s -asan -asan-module -asan-stack-dynamic-alloca=0 -asan-use-after-scope -S -enable-new-pm=0 \
 ; RUN:     | FileCheck %s --check-prefixes=CHECK,CHECK-STATIC
-; RUN: opt < %s -asan -asan-module -asan-stack-dynamic-alloca=1 -asan-use-after-scope -S \
+; RUN: opt < %s -passes='asan-pipeline' -asan-stack-dynamic-alloca=0 -asan-use-after-scope -S \
+; RUN:     | FileCheck %s --check-prefixes=CHECK,CHECK-STATIC
+; RUN: opt < %s -asan -asan-module -asan-stack-dynamic-alloca=1 -asan-use-after-scope -S -enable-new-pm=0 \
+; RUN:     | FileCheck %s --check-prefixes=CHECK,CHECK-DYNAMIC
+; RUN: opt < %s -passes='asan-pipeline' -asan-stack-dynamic-alloca=1 -asan-use-after-scope -S \
 ; RUN:     | FileCheck %s --check-prefixes=CHECK,CHECK-DYNAMIC
 
 target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64-S128"
@@ -22,6 +26,7 @@ entry:
 ; CHECK-LABEL: Func1
 
 ; CHECK-STATIC: alloca [192 x i8]
+; CHECK-STATIC: %asan_local_stack_base = alloca i64
 ; CHECK-DYNAMIC: alloca i8, i64 192
 
 ; CHECK-NOT: alloca
@@ -43,6 +48,7 @@ entry:
 ; CHECK-LABEL: Func2
 
 ; CHECK-STATIC: alloca [864 x i8]
+; CHECK-STATIC: %asan_local_stack_base = alloca i64
 ; CHECK-DYNAMIC: alloca i8, i64 864
 
 ; CHECK-NOT: alloca
@@ -65,6 +71,7 @@ entry:
 ; CHECK-LABEL: Func3
 
 ; CHECK-STATIC: alloca [768 x i8]
+; CHECK-STATIC: %asan_local_stack_base = alloca i64
 ; CHECK-DYNAMIC: alloca i8, i64 768
 
 ; CHECK-NOT: alloca

@@ -2,28 +2,27 @@
 #
 #===- git-clang-format - ClangFormat Git Integration ---------*- python -*--===#
 #
-#                     The LLVM Compiler Infrastructure
-#
-# This file is distributed under the University of Illinois Open Source
-# License. See LICENSE.TXT for details.
+# Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+# See https://llvm.org/LICENSE.txt for license information.
+# SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 #
 #===------------------------------------------------------------------------===#
 
-r"""                                                                             
-clang-format git integration                                                     
-============================                                                     
-                                                                                 
-This file provides a clang-format integration for git. Put it somewhere in your  
-path and ensure that it is executable. Then, "git clang-format" will invoke      
-clang-format on the changes in current files or a specific commit.               
-                                                                                 
-For further details, run:                                                        
-git clang-format -h                                                              
-                                                                                 
-Requires Python 2.7                                                              
-"""               
+r"""
+clang-format git integration
+============================
 
-from __future__ import print_function
+This file provides a clang-format integration for git. Put it somewhere in your
+path and ensure that it is executable. Then, "git clang-format" will invoke
+clang-format on the changes in current files or a specific commit.
+
+For further details, run:
+git clang-format -h
+
+Requires Python 2.7 or Python 3
+"""
+
+from __future__ import absolute_import, division, print_function
 import argparse
 import collections
 import contextlib
@@ -46,7 +45,7 @@ second <commit> that differ from the first <commit>.
 The following git-config settings set the default of the corresponding option:
   clangFormat.binary
   clangFormat.commit
-  clangFormat.extension
+  clangFormat.extensions
   clangFormat.style
 '''
 
@@ -78,12 +77,14 @@ def main():
       'c', 'h',  # C
       'm',  # ObjC
       'mm',  # ObjC++
-      'cc', 'cp', 'cpp', 'c++', 'cxx', 'hpp',  # C++
+      'cc', 'cp', 'cpp', 'c++', 'cxx', 'hh', 'hpp', 'hxx',  # C++
+      'cu', 'cuh',  # CUDA
       # Other languages that clang-format supports
       'proto', 'protodevel',  # Protocol Buffers
       'java',  # Java
       'js',  # JavaScript
       'ts',  # TypeScript
+      'cs',  # C Sharp
       ])
 
   p = argparse.ArgumentParser(
@@ -147,7 +148,8 @@ def main():
       for filename in changed_lines:
         print('    %s' % filename)
   if not changed_lines:
-    print('no modified files to format')
+    if opts.verbose >= 0:
+      print('no modified files to format')
     return
   # The computed diff outputs absolute paths, so we must cd before accessing
   # those files.
@@ -191,7 +193,12 @@ def load_git_config(non_string_options=None):
   out = {}
   for entry in run('git', 'config', '--list', '--null').split('\0'):
     if entry:
-      name, value = entry.split('\n', 1)
+      if '\n' in entry:
+        name, value = entry.split('\n', 1)
+      else:
+        # A setting with no '=' ('\n' with --null) is implicitly 'true'
+        name = entry
+        value = 'true'
       if name in non_string_options:
         value = run('git', 'config', non_string_options[name], name)
       out[name] = value
@@ -258,7 +265,7 @@ def get_object_type(value):
   stdout, stderr = p.communicate()
   if p.returncode != 0:
     return None
-  return stdout.strip()
+  return convert_string(stdout.strip())
 
 
 def compute_diff_and_extract_lines(commits, files):
@@ -301,6 +308,7 @@ def extract_lines(patch_file):
   list of line `Range`s."""
   matches = {}
   for line in patch_file:
+    line = convert_string(line)
     match = re.search(r'^\+\+\+\ [^/]+/(.*)', line)
     if match:
       filename = match.group(1).rstrip('\r\n')
@@ -323,6 +331,8 @@ def filter_by_extension(dictionary, allowed_extensions):
   allowed_extensions = frozenset(allowed_extensions)
   for filename in list(dictionary.keys()):
     base_ext = filename.rsplit('.', 1)
+    if len(base_ext) == 1 and '' in allowed_extensions:
+        continue
     if len(base_ext) == 1 or base_ext[1].lower() not in allowed_extensions:
       del dictionary[filename]
 
@@ -385,7 +395,7 @@ def create_tree(input_lines, mode):
   with temporary_index_file():
     p = subprocess.Popen(cmd, stdin=subprocess.PIPE)
     for line in input_lines:
-      p.stdin.write('%s\0' % line)
+      p.stdin.write(to_bytes('%s\0' % line))
     p.stdin.close()
     if p.wait() != 0:
       die('`%s` failed' % ' '.join(cmd))
@@ -440,7 +450,7 @@ def clang_format_to_blob(filename, line_ranges, revision=None,
     die('`%s` failed' % ' '.join(clang_format_cmd))
   if git_show and git_show.wait() != 0:
     die('`%s` failed' % ' '.join(git_show_cmd))
-  return stdout.rstrip('\r\n')
+  return convert_string(stdout).rstrip('\r\n')
 
 
 @contextlib.contextmanager
@@ -527,6 +537,10 @@ def run(*args, **kwargs):
   p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                        stdin=subprocess.PIPE)
   stdout, stderr = p.communicate(input=stdin)
+
+  stdout = convert_string(stdout)
+  stderr = convert_string(stderr)
+
   if p.returncode == 0:
     if stderr:
       if verbose:
@@ -546,6 +560,27 @@ def die(message):
   print('error:', message, file=sys.stderr)
   sys.exit(2)
 
+
+def to_bytes(str_input):
+    # Encode to UTF-8 to get binary data.
+    if isinstance(str_input, bytes):
+        return str_input
+    return str_input.encode('utf-8')
+
+
+def to_string(bytes_input):
+    if isinstance(bytes_input, str):
+        return bytes_input
+    return bytes_input.encode('utf-8')
+
+
+def convert_string(bytes_input):
+    try:
+        return to_string(bytes_input.decode('utf-8'))
+    except AttributeError: # 'str' object has no attribute 'decode'.
+        return str(bytes_input)
+    except UnicodeError:
+        return str(bytes_input)
 
 if __name__ == '__main__':
   main()

@@ -1,24 +1,25 @@
 //===- polly/PolyhedralInfo.h - PolyhedralInfo class definition -*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 ///
 /// This file contains the declaration of the PolyhedralInfo class, which will
 /// provide an interface to expose polyhedral analysis information of Polly.
 ///
-/// This is work in progress. We will add more API's as an when deemed required.
+/// This is work in progress. We will add more API's as and when deemed
+/// required.
 //===----------------------------------------------------------------------===///
 
 #ifndef POLLY_POLYHEDRAL_INFO_H
 #define POLLY_POLYHEDRAL_INFO_H
 
 #include "llvm/Pass.h"
+#include "isl/aff_type.h"
 #include "isl/ctx.h"
-#include "isl/union_map.h"
+#include "isl/union_map_type.h"
 
 namespace llvm {
 class Loop;
@@ -27,7 +28,7 @@ class Loop;
 namespace polly {
 
 class Scop;
-class ScopInfoWrapperPass;
+class ScopInfo;
 class DependenceInfoWrapperPass;
 
 class PolyhedralInfo : public llvm::FunctionPass {
@@ -87,10 +88,9 @@ private:
   bool checkParallel(llvm::Loop *L,
                      __isl_give isl_pw_aff **MinDepDistPtr = nullptr) const;
 
-  ScopInfoWrapperPass *SI;
+  ScopInfo *SI;
   DependenceInfoWrapperPass *DI;
 };
-
 } // end namespace polly
 
 namespace llvm {

@@ -1,9 +1,8 @@
 //===- CoverageSummaryInfo.cpp - Coverage summary for function/file -------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -17,8 +16,37 @@
 using namespace llvm;
 using namespace coverage;
 
+static void sumBranches(size_t &NumBranches, size_t &CoveredBranches,
+                        const ArrayRef<CountedRegion> &Branches) {
+  for (const auto &BR : Branches) {
+    // Skip folded branches.
+    if (BR.Folded)
+      continue;
+
+    // "True" Condition Branches.
+    ++NumBranches;
+    if (BR.ExecutionCount > 0)
+      ++CoveredBranches;
+    // "False" Condition Branches.
+    ++NumBranches;
+    if (BR.FalseExecutionCount > 0)
+      ++CoveredBranches;
+  }
+}
+
+static void sumBranchExpansions(size_t &NumBranches, size_t &CoveredBranches,
+                                const CoverageMapping &CM,
+                                ArrayRef<ExpansionRecord> Expansions) {
+  for (const auto &Expansion : Expansions) {
+    auto CE = CM.getCoverageForExpansion(Expansion);
+    sumBranches(NumBranches, CoveredBranches, CE.getBranches());
+    sumBranchExpansions(NumBranches, CoveredBranches, CM, CE.getExpansions());
+  }
+}
+
 FunctionCoverageSummary
-FunctionCoverageSummary::get(const coverage::FunctionRecord &Function) {
+FunctionCoverageSummary::get(const CoverageMapping &CM,
+                             const coverage::FunctionRecord &Function) {
   // Compute the region coverage.
   size_t NumCodeRegions = 0, CoveredRegions = 0;
   for (auto &CR : Function.CountedRegions) {
@@ -31,53 +59,52 @@ FunctionCoverageSummary::get(const coverage::FunctionRecord &Function) {
 
   // Compute the line coverage
   size_t NumLines = 0, CoveredLines = 0;
-  for (unsigned FileID = 0, E = Function.Filenames.size(); FileID < E;
-       ++FileID) {
-    // Find the line start and end of the function's source code
-    // in that particular file
-    unsigned LineStart = std::numeric_limits<unsigned>::max();
-    unsigned LineEnd = 0;
-    for (auto &CR : Function.CountedRegions) {
-      if (CR.FileID != FileID)
-        continue;
-      LineStart = std::min(LineStart, CR.LineStart);
-      LineEnd = std::max(LineEnd, CR.LineEnd);
-    }
-    unsigned LineCount = LineEnd - LineStart + 1;
-
-    // Get counters
-    llvm::SmallVector<uint64_t, 16> ExecutionCounts;
-    ExecutionCounts.resize(LineCount, 0);
-    for (auto &CR : Function.CountedRegions) {
-      if (CR.FileID != FileID)
-        continue;
-      // Ignore the lines that were skipped by the preprocessor.
-      auto ExecutionCount = CR.ExecutionCount;
-      if (CR.Kind == CounterMappingRegion::SkippedRegion) {
-        LineCount -= CR.LineEnd - CR.LineStart + 1;
-        ExecutionCount = 1;
-      }
-      for (unsigned I = CR.LineStart; I <= CR.LineEnd; ++I)
-        ExecutionCounts[I - LineStart] = ExecutionCount;
-    }
-    CoveredLines += LineCount - std::count(ExecutionCounts.begin(),
-                                           ExecutionCounts.end(), 0);
-    NumLines += LineCount;
+  CoverageData CD = CM.getCoverageForFunction(Function);
+  for (const auto &LCS : getLineCoverageStats(CD)) {
+    if (!LCS.isMapped())
+      continue;
+    ++NumLines;
+    if (LCS.getExecutionCount())
+      ++CoveredLines;
   }
+
+  // Compute the branch coverage, including branches from expansions.
+  size_t NumBranches = 0, CoveredBranches = 0;
+  sumBranches(NumBranches, CoveredBranches, CD.getBranches());
+  sumBranchExpansions(NumBranches, CoveredBranches, CM, CD.getExpansions());
+
   return FunctionCoverageSummary(
       Function.Name, Function.ExecutionCount,
       RegionCoverageInfo(CoveredRegions, NumCodeRegions),
-      LineCoverageInfo(CoveredLines, NumLines));
+      LineCoverageInfo(CoveredLines, NumLines),
+      BranchCoverageInfo(CoveredBranches, NumBranches));
 }
 
-void FunctionCoverageSummary::update(const FunctionCoverageSummary &Summary) {
-  ExecutionCount += Summary.ExecutionCount;
-  RegionCoverage.Covered =
-      std::max(RegionCoverage.Covered, Summary.RegionCoverage.Covered);
-  RegionCoverage.NotCovered =
-      std::min(RegionCoverage.NotCovered, Summary.RegionCoverage.NotCovered);
-  LineCoverage.Covered =
-      std::max(LineCoverage.Covered, Summary.LineCoverage.Covered);
-  LineCoverage.NotCovered =
-      std::min(LineCoverage.NotCovered, Summary.LineCoverage.NotCovered);
+FunctionCoverageSummary
+FunctionCoverageSummary::get(const InstantiationGroup &Group,
+                             ArrayRef<FunctionCoverageSummary> Summaries) {
+  std::string Name;
+  if (Group.hasName()) {
+    Name = std::string(Group.getName());
+  } else {
+    llvm::raw_string_ostream OS(Name);
+    OS << "Definition at line " << Group.getLine() << ", column "
+       << Group.getColumn();
+  }
+
+  FunctionCoverageSummary Summary(Name);
+  Summary.ExecutionCount = Group.getTotalExecutionCount();
+  Summary.RegionCoverage = Summaries[0].RegionCoverage;
+  Summary.LineCoverage = Summaries[0].LineCoverage;
+  Summary.BranchCoverage = Summaries[0].BranchCoverage;
+  for (const auto &FCS : Summaries.drop_front()) {
+    Summary.RegionCoverage.merge(FCS.RegionCoverage);
+    Summary.LineCoverage.merge(FCS.LineCoverage);
+
+    // Sum branch coverage across instantiation groups for the summary rather
+    // than "merge" the maximum count. This is a clearer view into whether all
+    // created branches are covered.
+    Summary.BranchCoverage += FCS.BranchCoverage;
+  }
+  return Summary;
 }

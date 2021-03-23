@@ -1,10 +1,9 @@
 // -*- C++ -*-
 //===-------------------------- unordered_map -----------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is dual licensed under the MIT and the University of Illinois Open
-// Source Licenses. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -44,6 +43,9 @@ public:
     typedef /unspecified/ local_iterator;
     typedef /unspecified/ const_local_iterator;
 
+    typedef unspecified                             node_type;            // C++17
+    typedef INSERT_RETURN_TYPE<iterator, node_type> insert_return_type;   // C++17
+
     unordered_map()
         noexcept(
             is_nothrow_default_constructible<hasher>::value &&
@@ -77,12 +79,12 @@ public:
       unordered_map(InputIterator f, InputIterator l, size_type n, const allocator_type& a)
       : unordered_map(f, l, n, hasher(), key_equal(), a) {}  // C++14
     template <class InputIterator>
-      unordered_map(InputIterator f, InputIterator l, size_type n, const hasher& hf, 
+      unordered_map(InputIterator f, InputIterator l, size_type n, const hasher& hf,
         const allocator_type& a)
       : unordered_map(f, l, n, hf, key_equal(), a) {}  // C++14
     unordered_map(initializer_list<value_type> il, size_type n, const allocator_type& a)
       : unordered_map(il, n, hasher(), key_equal(), a) {}  // C++14
-    unordered_map(initializer_list<value_type> il, size_type n, const hasher& hf, 
+    unordered_map(initializer_list<value_type> il, size_type n, const hasher& hf,
       const allocator_type& a)
       : unordered_map(il, n, hf, key_equal(), a) {}  // C++14
     ~unordered_map();
@@ -122,6 +124,11 @@ public:
         void insert(InputIterator first, InputIterator last);
     void insert(initializer_list<value_type>);
 
+    node_type extract(const_iterator position);                                       // C++17
+    node_type extract(const key_type& x);                                             // C++17
+    insert_return_type insert(node_type&& nh);                                        // C++17
+    iterator           insert(const_iterator hint, node_type&& nh);                   // C++17
+
     template <class... Args>
         pair<iterator, bool> try_emplace(const key_type& k, Args&&... args);          // C++17
     template <class... Args>
@@ -145,6 +152,15 @@ public:
     iterator erase(const_iterator first, const_iterator last);
     void clear() noexcept;
 
+    template<class H2, class P2>
+      void merge(unordered_map<Key, T, H2, P2, Allocator>& source);         // C++17
+    template<class H2, class P2>
+      void merge(unordered_map<Key, T, H2, P2, Allocator>&& source);        // C++17
+    template<class H2, class P2>
+      void merge(unordered_multimap<Key, T, H2, P2, Allocator>& source);    // C++17
+    template<class H2, class P2>
+      void merge(unordered_multimap<Key, T, H2, P2, Allocator>&& source);   // C++17
+
     void swap(unordered_map&)
         noexcept(
             (!allocator_type::propagate_on_container_swap::value ||
@@ -157,9 +173,22 @@ public:
 
     iterator       find(const key_type& k);
     const_iterator find(const key_type& k) const;
+    template<typename K>
+        iterator find(const K& x);              // C++20
+    template<typename K>
+        const_iterator find(const K& x) const;  // C++20
     size_type count(const key_type& k) const;
+    template<typename K>
+        size_type count(const K& k) const; // C++20
+    bool contains(const key_type& k) const; // C++20
+    template<typename K>
+        bool contains(const K& k) const; // C++20
     pair<iterator, iterator>             equal_range(const key_type& k);
     pair<const_iterator, const_iterator> equal_range(const key_type& k) const;
+    template<typename K>
+        pair<iterator, iterator>             equal_range(const K& k); // C++20
+    template<typename K>
+        pair<const_iterator, const_iterator> equal_range(const K& k) const; // C++20
 
     mapped_type& operator[](const key_type& k);
     mapped_type& operator[](key_type&& k);
@@ -226,6 +255,8 @@ public:
     typedef /unspecified/ local_iterator;
     typedef /unspecified/ const_local_iterator;
 
+    typedef unspecified node_type;    // C++17
+
     unordered_multimap()
         noexcept(
             is_nothrow_default_constructible<hasher>::value &&
@@ -259,12 +290,12 @@ public:
       unordered_multimap(InputIterator f, InputIterator l, size_type n, const allocator_type& a)
       : unordered_multimap(f, l, n, hasher(), key_equal(), a) {}  // C++14
     template <class InputIterator>
-      unordered_multimap(InputIterator f, InputIterator l, size_type n, const hasher& hf, 
+      unordered_multimap(InputIterator f, InputIterator l, size_type n, const hasher& hf,
         const allocator_type& a)
       : unordered_multimap(f, l, n, hf, key_equal(), a) {}  // C++14
     unordered_multimap(initializer_list<value_type> il, size_type n, const allocator_type& a)
       : unordered_multimap(il, n, hasher(), key_equal(), a) {}  // C++14
-    unordered_multimap(initializer_list<value_type> il, size_type n, const hasher& hf, 
+    unordered_multimap(initializer_list<value_type> il, size_type n, const hasher& hf,
       const allocator_type& a)
       : unordered_multimap(il, n, hf, key_equal(), a) {}  // C++14
     ~unordered_multimap();
@@ -304,11 +335,25 @@ public:
         void insert(InputIterator first, InputIterator last);
     void insert(initializer_list<value_type>);
 
+    node_type extract(const_iterator position);                // C++17
+    node_type extract(const key_type& x);                      // C++17
+    iterator insert(node_type&& nh);                           // C++17
+    iterator insert(const_iterator hint, node_type&& nh);      // C++17
+
     iterator erase(const_iterator position);
     iterator erase(iterator position);  // C++14
     size_type erase(const key_type& k);
     iterator erase(const_iterator first, const_iterator last);
     void clear() noexcept;
+
+    template<class H2, class P2>
+      void merge(unordered_multimap<Key, T, H2, P2, Allocator>& source);    // C++17
+    template<class H2, class P2>
+      void merge(unordered_multimap<Key, T, H2, P2, Allocator>&& source);   // C++17
+    template<class H2, class P2>
+      void merge(unordered_map<Key, T, H2, P2, Allocator>& source);         // C++17
+    template<class H2, class P2>
+      void merge(unordered_map<Key, T, H2, P2, Allocator>&& source);        // C++17
 
     void swap(unordered_multimap&)
         noexcept(
@@ -322,9 +367,22 @@ public:
 
     iterator       find(const key_type& k);
     const_iterator find(const key_type& k) const;
+    template<typename K>
+        iterator find(const K& x);              // C++20
+    template<typename K>
+        const_iterator find(const K& x) const;  // C++20
     size_type count(const key_type& k) const;
+    template<typename K>
+        size_type count(const K& k) const; // C++20
+    bool contains(const key_type& k) const; // C++20
+    template<typename K>
+        bool contains(const K& k) const; // C++20
     pair<iterator, iterator>             equal_range(const key_type& k);
     pair<const_iterator, const_iterator> equal_range(const key_type& k) const;
+    template<typename K>
+        pair<iterator, iterator>             equal_range(const K& k); // C++20
+    template<typename K>
+        pair<const_iterator, const_iterator> equal_range(const K& k) const; // C++20
 
     size_type bucket_count() const noexcept;
     size_type max_bucket_count() const noexcept;
@@ -351,6 +409,14 @@ template <class Key, class T, class Hash, class Pred, class Alloc>
               unordered_multimap<Key, T, Hash, Pred, Alloc>& y)
               noexcept(noexcept(x.swap(y)));
 
+template <class K, class T, class H, class P, class A, class Predicate>
+    typename unordered_map<K, T, H, P, A>::size_type
+    erase_if(unordered_map<K, T, H, P, A>& c, Predicate pred);       // C++20
+
+template <class K, class T, class H, class P, class A, class Predicate>
+    typename unordered_multimap<K, T, H, P, A>::size_type
+    erase_if(unordered_multimap<K, T, H, P, A>& c, Predicate pred);  // C++20
+
 template <class Key, class T, class Hash, class Pred, class Alloc>
     bool
     operator==(const unordered_multimap<Key, T, Hash, Pred, Alloc>& x,
@@ -367,9 +433,12 @@ template <class Key, class T, class Hash, class Pred, class Alloc>
 
 #include <__config>
 #include <__hash_table>
+#include <__node_handle>
 #include <functional>
+#include <iterator> // __libcpp_erase_if_container
 #include <stdexcept>
 #include <tuple>
+#include <version>
 
 #include <__debug>
 
@@ -379,7 +448,8 @@ template <class Key, class T, class Hash, class Pred, class Alloc>
 
 _LIBCPP_BEGIN_NAMESPACE_STD
 
-template <class _Key, class _Cp, class _Hash, bool _IsEmpty>
+template <class _Key, class _Cp, class _Hash, class _Pred,
+          bool = is_empty<_Hash>::value && !__libcpp_is_final<_Hash>::value>
 class __unordered_map_hasher
     : private _Hash
 {
@@ -396,10 +466,16 @@ public:
     const _Hash& hash_function() const _NOEXCEPT {return *this;}
     _LIBCPP_INLINE_VISIBILITY
     size_t operator()(const _Cp& __x) const
-        {return static_cast<const _Hash&>(*this)(__x.__cc.first);}
+        {return static_cast<const _Hash&>(*this)(__x.__get_value().first);}
     _LIBCPP_INLINE_VISIBILITY
     size_t operator()(const _Key& __x) const
         {return static_cast<const _Hash&>(*this)(__x);}
+#if _LIBCPP_STD_VER > 17
+    template <typename _K2, typename = _EnableIf<__is_transparent<_Hash, _K2>::value && __is_transparent<_Pred, _K2>::value>>
+    _LIBCPP_INLINE_VISIBILITY
+    size_t operator()(const _K2& __x) const
+        {return static_cast<const _Hash&>(*this)(__x);}
+#endif
     void swap(__unordered_map_hasher&__y)
         _NOEXCEPT_(__is_nothrow_swappable<_Hash>::value)
     {
@@ -408,8 +484,8 @@ public:
     }
 };
 
-template <class _Key, class _Cp, class _Hash>
-class __unordered_map_hasher<_Key, _Cp, _Hash, false>
+template <class _Key, class _Cp, class _Hash, class _Pred>
+class __unordered_map_hasher<_Key, _Cp, _Hash, _Pred, false>
 {
     _Hash __hash_;
 public:
@@ -425,10 +501,16 @@ public:
     const _Hash& hash_function() const _NOEXCEPT {return __hash_;}
     _LIBCPP_INLINE_VISIBILITY
     size_t operator()(const _Cp& __x) const
-        {return __hash_(__x.__cc.first);}
+        {return __hash_(__x.__get_value().first);}
     _LIBCPP_INLINE_VISIBILITY
     size_t operator()(const _Key& __x) const
         {return __hash_(__x);}
+#if _LIBCPP_STD_VER > 17
+    template <typename _K2, typename = _EnableIf<__is_transparent<_Hash, _K2>::value && __is_transparent<_Pred, _K2>::value>>
+    _LIBCPP_INLINE_VISIBILITY
+    size_t operator()(const _K2& __x) const
+        {return __hash_(__x);}
+#endif
     void swap(__unordered_map_hasher&__y)
         _NOEXCEPT_(__is_nothrow_swappable<_Hash>::value)
     {
@@ -437,17 +519,18 @@ public:
     }
 };
 
-template <class _Key, class _Cp, class _Hash, bool __b>
+template <class _Key, class _Cp, class _Hash, class _Pred, bool __b>
 inline _LIBCPP_INLINE_VISIBILITY
 void
-swap(__unordered_map_hasher<_Key, _Cp, _Hash, __b>& __x,
-     __unordered_map_hasher<_Key, _Cp, _Hash, __b>& __y)
+swap(__unordered_map_hasher<_Key, _Cp, _Hash, _Pred, __b>& __x,
+     __unordered_map_hasher<_Key, _Cp, _Hash, _Pred, __b>& __y)
     _NOEXCEPT_(_NOEXCEPT_(__x.swap(__y)))
 {
     __x.swap(__y);
 }
 
-template <class _Key, class _Cp, class _Pred, bool _IsEmpty>
+template <class _Key, class _Cp, class _Pred, class _Hash,
+          bool = is_empty<_Pred>::value && !__libcpp_is_final<_Pred>::value>
 class __unordered_map_equal
     : private _Pred
 {
@@ -464,13 +547,31 @@ public:
     const _Pred& key_eq() const _NOEXCEPT {return *this;}
     _LIBCPP_INLINE_VISIBILITY
     bool operator()(const _Cp& __x, const _Cp& __y) const
-        {return static_cast<const _Pred&>(*this)(__x.__cc.first, __y.__cc.first);}
+        {return static_cast<const _Pred&>(*this)(__x.__get_value().first, __y.__get_value().first);}
     _LIBCPP_INLINE_VISIBILITY
     bool operator()(const _Cp& __x, const _Key& __y) const
-        {return static_cast<const _Pred&>(*this)(__x.__cc.first, __y);}
+        {return static_cast<const _Pred&>(*this)(__x.__get_value().first, __y);}
     _LIBCPP_INLINE_VISIBILITY
     bool operator()(const _Key& __x, const _Cp& __y) const
-        {return static_cast<const _Pred&>(*this)(__x, __y.__cc.first);}
+        {return static_cast<const _Pred&>(*this)(__x, __y.__get_value().first);}
+#if _LIBCPP_STD_VER > 17
+    template <typename _K2, typename = _EnableIf<__is_transparent<_Hash, _K2>::value && __is_transparent<_Pred, _K2>::value>>
+    _LIBCPP_INLINE_VISIBILITY
+    bool operator()(const _Cp& __x, const _K2& __y) const
+        {return static_cast<const _Pred&>(*this)(__x.__get_value().first, __y);}
+    template <typename _K2, typename = _EnableIf<__is_transparent<_Hash, _K2>::value && __is_transparent<_Pred, _K2>::value>>
+    _LIBCPP_INLINE_VISIBILITY
+    bool operator()(const _K2& __x, const _Cp& __y) const
+        {return static_cast<const _Pred&>(*this)(__x, __y.__get_value().first);}
+    template <typename _K2, typename = _EnableIf<__is_transparent<_Hash, _K2>::value && __is_transparent<_Pred, _K2>::value>>
+    _LIBCPP_INLINE_VISIBILITY
+    bool operator()(const _Key& __x, const _K2& __y) const
+        {return static_cast<const _Pred&>(*this)(__x, __y);}
+    template <typename _K2, typename = _EnableIf<__is_transparent<_Hash, _K2>::value && __is_transparent<_Pred, _K2>::value>>
+    _LIBCPP_INLINE_VISIBILITY
+    bool operator()(const _K2& __x, const _Key& __y) const
+        {return static_cast<const _Pred&>(*this)(__x, __y);}
+#endif
     void swap(__unordered_map_equal&__y)
         _NOEXCEPT_(__is_nothrow_swappable<_Pred>::value)
     {
@@ -479,8 +580,8 @@ public:
     }
 };
 
-template <class _Key, class _Cp, class _Pred>
-class __unordered_map_equal<_Key, _Cp, _Pred, false>
+template <class _Key, class _Cp, class _Pred, class _Hash>
+class __unordered_map_equal<_Key, _Cp, _Pred, _Hash, false>
 {
     _Pred __pred_;
 public:
@@ -496,13 +597,31 @@ public:
     const _Pred& key_eq() const _NOEXCEPT {return __pred_;}
     _LIBCPP_INLINE_VISIBILITY
     bool operator()(const _Cp& __x, const _Cp& __y) const
-        {return __pred_(__x.__cc.first, __y.__cc.first);}
+        {return __pred_(__x.__get_value().first, __y.__get_value().first);}
     _LIBCPP_INLINE_VISIBILITY
     bool operator()(const _Cp& __x, const _Key& __y) const
-        {return __pred_(__x.__cc.first, __y);}
+        {return __pred_(__x.__get_value().first, __y);}
     _LIBCPP_INLINE_VISIBILITY
     bool operator()(const _Key& __x, const _Cp& __y) const
-        {return __pred_(__x, __y.__cc.first);}
+        {return __pred_(__x, __y.__get_value().first);}
+#if _LIBCPP_STD_VER > 17
+    template <typename _K2, typename = _EnableIf<__is_transparent<_Hash, _K2>::value && __is_transparent<_Pred, _K2>::value>>
+    _LIBCPP_INLINE_VISIBILITY
+    bool operator()(const _Cp& __x, const _K2& __y) const
+        {return __pred_(__x.__get_value().first, __y);}
+    template <typename _K2, typename = _EnableIf<__is_transparent<_Hash, _K2>::value && __is_transparent<_Pred, _K2>::value>>
+    _LIBCPP_INLINE_VISIBILITY
+    bool operator()(const _K2& __x, const _Cp& __y) const
+        {return __pred_(__x, __y.__get_value().first);}
+    template <typename _K2, typename = _EnableIf<__is_transparent<_Hash, _K2>::value && __is_transparent<_Pred, _K2>::value>>
+    _LIBCPP_INLINE_VISIBILITY
+    bool operator()(const _Key& __x, const _K2& __y) const
+        {return __pred_(__x, __y);}
+    template <typename _K2, typename = _EnableIf<__is_transparent<_Hash, _K2>::value && __is_transparent<_Pred, _K2>::value>>
+    _LIBCPP_INLINE_VISIBILITY
+    bool operator()(const _K2& __x, const _Key& __y) const
+        {return __pred_(__x, __y);}
+#endif
     void swap(__unordered_map_equal&__y)
         _NOEXCEPT_(__is_nothrow_swappable<_Pred>::value)
     {
@@ -511,11 +630,11 @@ public:
     }
 };
 
-template <class _Key, class _Cp, class _Pred, bool __b>
+template <class _Key, class _Cp, class _Pred, class _Hash, bool __b>
 inline _LIBCPP_INLINE_VISIBILITY
 void
-swap(__unordered_map_equal<_Key, _Cp, _Pred, __b>& __x,
-     __unordered_map_equal<_Key, _Cp, _Pred, __b>& __y)
+swap(__unordered_map_equal<_Key, _Cp, _Pred, _Hash, __b>& __x,
+     __unordered_map_equal<_Key, _Cp, _Pred, _Hash, __b>& __y)
     _NOEXCEPT_(_NOEXCEPT_(__x.swap(__y)))
 {
     __x.swap(__y);
@@ -572,9 +691,9 @@ public:
     void operator()(pointer __p) _NOEXCEPT
     {
         if (__second_constructed)
-            __alloc_traits::destroy(__na_, _VSTD::addressof(__p->__value_.__cc.second));
+            __alloc_traits::destroy(__na_, _VSTD::addressof(__p->__value_.__get_value().second));
         if (__first_constructed)
-            __alloc_traits::destroy(__na_, _VSTD::addressof(__p->__value_.__cc.first));
+            __alloc_traits::destroy(__na_, _VSTD::addressof(__p->__value_.__get_value().first));
         if (__p)
             __alloc_traits::deallocate(__na_, __p, 1);
     }
@@ -582,23 +701,67 @@ public:
 
 #ifndef _LIBCPP_CXX03_LANG
 template <class _Key, class _Tp>
-union __hash_value_type
+struct __hash_value_type
 {
     typedef _Key                                     key_type;
     typedef _Tp                                      mapped_type;
     typedef pair<const key_type, mapped_type>        value_type;
-    typedef pair<key_type, mapped_type>              __nc_value_type;
+    typedef pair<key_type&, mapped_type&>            __nc_ref_pair_type;
+    typedef pair<key_type&&, mapped_type&&>          __nc_rref_pair_type;
 
+private:
     value_type __cc;
-    __nc_value_type __nc;
+
+public:
+    _LIBCPP_INLINE_VISIBILITY
+    value_type& __get_value()
+    {
+#if _LIBCPP_STD_VER > 14
+        return *_VSTD::launder(_VSTD::addressof(__cc));
+#else
+        return __cc;
+#endif
+    }
+
+    _LIBCPP_INLINE_VISIBILITY
+    const value_type& __get_value() const
+    {
+#if _LIBCPP_STD_VER > 14
+        return *_VSTD::launder(_VSTD::addressof(__cc));
+#else
+        return __cc;
+#endif
+    }
+
+    _LIBCPP_INLINE_VISIBILITY
+    __nc_ref_pair_type __ref()
+    {
+        value_type& __v = __get_value();
+        return __nc_ref_pair_type(const_cast<key_type&>(__v.first), __v.second);
+    }
+
+    _LIBCPP_INLINE_VISIBILITY
+    __nc_rref_pair_type __move()
+    {
+        value_type& __v = __get_value();
+        return __nc_rref_pair_type(
+            _VSTD::move(const_cast<key_type&>(__v.first)),
+            _VSTD::move(__v.second));
+    }
 
     _LIBCPP_INLINE_VISIBILITY
     __hash_value_type& operator=(const __hash_value_type& __v)
-        {__nc = __v.__cc; return *this;}
+    {
+        __ref() = __v.__get_value();
+        return *this;
+    }
 
     _LIBCPP_INLINE_VISIBILITY
     __hash_value_type& operator=(__hash_value_type&& __v)
-        {__nc = _VSTD::move(__v.__nc); return *this;}
+    {
+        __ref() = __v.__move();
+        return *this;
+    }
 
     template <class _ValueTp,
               class = typename enable_if<
@@ -606,8 +769,10 @@ union __hash_value_type
                  >::type
              >
     _LIBCPP_INLINE_VISIBILITY
-    __hash_value_type& operator=(_ValueTp&& __v) {
-        __nc = _VSTD::forward<_ValueTp>(__v); return *this;
+    __hash_value_type& operator=(_ValueTp&& __v)
+    {
+        __ref() = _VSTD::forward<_ValueTp>(__v);
+        return *this;
     }
 
 private:
@@ -628,7 +793,14 @@ struct __hash_value_type
     typedef _Tp                                      mapped_type;
     typedef pair<const key_type, mapped_type>        value_type;
 
+private:
     value_type __cc;
+
+public:
+    _LIBCPP_INLINE_VISIBILITY
+    value_type& __get_value() { return __cc; }
+    _LIBCPP_INLINE_VISIBILITY
+    const value_type& __get_value() const { return __cc; }
 
 private:
    ~__hash_value_type();
@@ -657,9 +829,9 @@ public:
     __hash_map_iterator(_HashIterator __i) _NOEXCEPT : __i_(__i) {}
 
     _LIBCPP_INLINE_VISIBILITY
-    reference operator*() const {return __i_->__cc;}
+    reference operator*() const {return __i_->__get_value();}
     _LIBCPP_INLINE_VISIBILITY
-    pointer operator->() const {return pointer_traits<pointer>::pointer_to(__i_->__cc);}
+    pointer operator->() const {return pointer_traits<pointer>::pointer_to(__i_->__get_value());}
 
     _LIBCPP_INLINE_VISIBILITY
     __hash_map_iterator& operator++() {++__i_; return *this;}
@@ -711,9 +883,9 @@ public:
                 : __i_(__i.__i_) {}
 
     _LIBCPP_INLINE_VISIBILITY
-    reference operator*() const {return __i_->__cc;}
+    reference operator*() const {return __i_->__get_value();}
     _LIBCPP_INLINE_VISIBILITY
-    pointer operator->() const {return pointer_traits<pointer>::pointer_to(__i_->__cc);}
+    pointer operator->() const {return pointer_traits<pointer>::pointer_to(__i_->__get_value());}
 
     _LIBCPP_INLINE_VISIBILITY
     __hash_map_const_iterator& operator++() {++__i_; return *this;}
@@ -738,6 +910,9 @@ public:
     template <class> friend class _LIBCPP_TEMPLATE_VIS __hash_const_local_iterator;
 };
 
+template <class _Key, class _Tp, class _Hash, class _Pred, class _Alloc>
+class unordered_multimap;
+
 template <class _Key, class _Tp, class _Hash = hash<_Key>, class _Pred = equal_to<_Key>,
           class _Alloc = allocator<pair<const _Key, _Tp> > >
 class _LIBCPP_TEMPLATE_VIS unordered_map
@@ -746,22 +921,21 @@ public:
     // types
     typedef _Key                                           key_type;
     typedef _Tp                                            mapped_type;
-    typedef _Hash                                          hasher;
-    typedef _Pred                                          key_equal;
-    typedef _Alloc                                         allocator_type;
+    typedef __identity_t<_Hash>                            hasher;
+    typedef __identity_t<_Pred>                            key_equal;
+    typedef __identity_t<_Alloc>                           allocator_type;
     typedef pair<const key_type, mapped_type>              value_type;
-    typedef pair<key_type, mapped_type>                    __nc_value_type;
     typedef value_type&                                    reference;
     typedef const value_type&                              const_reference;
     static_assert((is_same<value_type, typename allocator_type::value_type>::value),
                   "Invalid allocator::value_type");
 
 private:
-    typedef __hash_value_type<key_type, mapped_type>                 __value_type;
-    typedef __unordered_map_hasher<key_type, __value_type, hasher>   __hasher;
-    typedef __unordered_map_equal<key_type, __value_type, key_equal> __key_equal;
+    typedef __hash_value_type<key_type, mapped_type>                          __value_type;
+    typedef __unordered_map_hasher<key_type, __value_type, hasher, key_equal> __hasher;
+    typedef __unordered_map_equal<key_type, __value_type, key_equal, hasher>  __key_equal;
     typedef typename __rebind_alloc_helper<allocator_traits<allocator_type>,
-                                                 __value_type>::type __allocator_type;
+                                                 __value_type>::type          __allocator_type;
 
     typedef __hash_table<__value_type, __hasher,
                          __key_equal,  __allocator_type>   __table;
@@ -791,11 +965,21 @@ public:
     typedef __hash_map_iterator<typename __table::local_iterator> local_iterator;
     typedef __hash_map_const_iterator<typename __table::const_local_iterator> const_local_iterator;
 
+#if _LIBCPP_STD_VER > 14
+    typedef __map_node_handle<__node, allocator_type> node_type;
+    typedef __insert_return_type<iterator, node_type> insert_return_type;
+#endif
+
+    template <class _Key2, class _Tp2, class _Hash2, class _Pred2, class _Alloc2>
+        friend class _LIBCPP_TEMPLATE_VIS unordered_map;
+    template <class _Key2, class _Tp2, class _Hash2, class _Pred2, class _Alloc2>
+        friend class _LIBCPP_TEMPLATE_VIS unordered_multimap;
+
     _LIBCPP_INLINE_VISIBILITY
     unordered_map()
         _NOEXCEPT_(is_nothrow_default_constructible<__table>::value)
         {
-#if _LIBCPP_DEBUG_LEVEL >= 2
+#if _LIBCPP_DEBUG_LEVEL == 2
             __get_db()->__insert_c(this);
 #endif
         }
@@ -844,18 +1028,22 @@ public:
       : unordered_map(__first, __last, __n, hasher(), key_equal(), __a) {}
     template <class _InputIterator>
     _LIBCPP_INLINE_VISIBILITY
-      unordered_map(_InputIterator __first, _InputIterator __last, size_type __n, const hasher& __hf, 
+      unordered_map(_InputIterator __first, _InputIterator __last, size_type __n, const hasher& __hf,
         const allocator_type& __a)
       : unordered_map(__first, __last, __n, __hf, key_equal(), __a) {}
     _LIBCPP_INLINE_VISIBILITY
     unordered_map(initializer_list<value_type> __il, size_type __n, const allocator_type& __a)
       : unordered_map(__il, __n, hasher(), key_equal(), __a) {}
     _LIBCPP_INLINE_VISIBILITY
-    unordered_map(initializer_list<value_type> __il, size_type __n, const hasher& __hf, 
+    unordered_map(initializer_list<value_type> __il, size_type __n, const hasher& __hf,
       const allocator_type& __a)
       : unordered_map(__il, __n, __hf, key_equal(), __a) {}
 #endif
-    // ~unordered_map() = default;
+    _LIBCPP_INLINE_VISIBILITY
+    ~unordered_map() {
+        static_assert(sizeof(__diagnose_unordered_container_requirements<_Key, _Hash, _Pred>(0)), "");
+    }
+
     _LIBCPP_INLINE_VISIBILITY
     unordered_map& operator=(const unordered_map& __u)
     {
@@ -885,7 +1073,7 @@ public:
     allocator_type get_allocator() const _NOEXCEPT
         {return allocator_type(__table_.__node_alloc());}
 
-    _LIBCPP_INLINE_VISIBILITY
+    _LIBCPP_NODISCARD_AFTER_CXX17 _LIBCPP_INLINE_VISIBILITY
     bool      empty() const _NOEXCEPT {return __table_.size() == 0;}
     _LIBCPP_INLINE_VISIBILITY
     size_type size() const _NOEXCEPT  {return __table_.size();}
@@ -910,7 +1098,7 @@ public:
         {return __table_.__insert_unique(__x);}
 
     iterator insert(const_iterator __p, const value_type& __x) {
-#if _LIBCPP_DEBUG_LEVEL >= 2
+#if _LIBCPP_DEBUG_LEVEL == 2
         _LIBCPP_ASSERT(__get_const_db()->__find_c_from_i(&__p) == this,
             "unordered_map::insert(const_iterator, const value_type&) called with an iterator not"
             " referring to this unordered_map");
@@ -934,7 +1122,7 @@ public:
         {return __table_.__insert_unique(_VSTD::move(__x));}
 
     iterator insert(const_iterator __p, value_type&& __x) {
-#if _LIBCPP_DEBUG_LEVEL >= 2
+#if _LIBCPP_DEBUG_LEVEL == 2
         _LIBCPP_ASSERT(__get_const_db()->__find_c_from_i(&__p) == this,
             "unordered_map::insert(const_iterator, const value_type&) called with an iterator not"
             " referring to this unordered_map");
@@ -955,7 +1143,7 @@ public:
         _LIBCPP_INLINE_VISIBILITY
         iterator insert(const_iterator __p, _Pp&& __x)
         {
-#if _LIBCPP_DEBUG_LEVEL >= 2
+#if _LIBCPP_DEBUG_LEVEL == 2
             _LIBCPP_ASSERT(__get_const_db()->__find_c_from_i(&__p) == this,
                 "unordered_map::insert(const_iterator, value_type&&) called with an iterator not"
                 " referring to this unordered_map");
@@ -974,7 +1162,7 @@ public:
     template <class... _Args>
     _LIBCPP_INLINE_VISIBILITY
     iterator emplace_hint(const_iterator __p, _Args&&... __args) {
-#if _LIBCPP_DEBUG_LEVEL >= 2
+#if _LIBCPP_DEBUG_LEVEL == 2
         _LIBCPP_ASSERT(__get_const_db()->__find_c_from_i(&__p) == this,
             "unordered_map::emplace_hint(const_iterator, args...) called with an iterator not"
             " referring to this unordered_map");
@@ -991,7 +1179,7 @@ public:
         _LIBCPP_INLINE_VISIBILITY
         pair<iterator, bool> try_emplace(const key_type& __k, _Args&&... __args)
     {
-        return __table_.__emplace_unique_key_args(__k, _VSTD::piecewise_construct,
+        return __table_.__emplace_unique_key_args(__k, piecewise_construct,
             _VSTD::forward_as_tuple(__k),
             _VSTD::forward_as_tuple(_VSTD::forward<_Args>(__args)...));
     }
@@ -1000,7 +1188,7 @@ public:
         _LIBCPP_INLINE_VISIBILITY
         pair<iterator, bool> try_emplace(key_type&& __k, _Args&&... __args)
     {
-        return __table_.__emplace_unique_key_args(__k, _VSTD::piecewise_construct,
+        return __table_.__emplace_unique_key_args(__k, piecewise_construct,
             _VSTD::forward_as_tuple(_VSTD::move(__k)),
             _VSTD::forward_as_tuple(_VSTD::forward<_Args>(__args)...));
     }
@@ -1009,7 +1197,7 @@ public:
         _LIBCPP_INLINE_VISIBILITY
         iterator try_emplace(const_iterator __h, const key_type& __k, _Args&&... __args)
     {
-#if _LIBCPP_DEBUG_LEVEL >= 2
+#if _LIBCPP_DEBUG_LEVEL == 2
         _LIBCPP_ASSERT(__get_const_db()->__find_c_from_i(&__h) == this,
             "unordered_map::try_emplace(const_iterator, key, args...) called with an iterator not"
             " referring to this unordered_map");
@@ -1023,7 +1211,7 @@ public:
         _LIBCPP_INLINE_VISIBILITY
         iterator try_emplace(const_iterator __h, key_type&& __k, _Args&&... __args)
     {
-#if _LIBCPP_DEBUG_LEVEL >= 2
+#if _LIBCPP_DEBUG_LEVEL == 2
         _LIBCPP_ASSERT(__get_const_db()->__find_c_from_i(&__h) == this,
             "unordered_map::try_emplace(const_iterator, key, args...) called with an iterator not"
             " referring to this unordered_map");
@@ -1084,7 +1272,70 @@ public:
     iterator erase(const_iterator __first, const_iterator __last)
         {return __table_.erase(__first.__i_, __last.__i_);}
     _LIBCPP_INLINE_VISIBILITY
-    void clear() _NOEXCEPT {__table_.clear();}
+        void clear() _NOEXCEPT {__table_.clear();}
+
+#if _LIBCPP_STD_VER > 14
+    _LIBCPP_INLINE_VISIBILITY
+    insert_return_type insert(node_type&& __nh)
+    {
+        _LIBCPP_ASSERT(__nh.empty() || __nh.get_allocator() == get_allocator(),
+            "node_type with incompatible allocator passed to unordered_map::insert()");
+        return __table_.template __node_handle_insert_unique<
+            node_type, insert_return_type>(_VSTD::move(__nh));
+    }
+    _LIBCPP_INLINE_VISIBILITY
+    iterator insert(const_iterator __hint, node_type&& __nh)
+    {
+        _LIBCPP_ASSERT(__nh.empty() || __nh.get_allocator() == get_allocator(),
+            "node_type with incompatible allocator passed to unordered_map::insert()");
+        return __table_.template __node_handle_insert_unique<node_type>(
+            __hint.__i_, _VSTD::move(__nh));
+    }
+    _LIBCPP_INLINE_VISIBILITY
+    node_type extract(key_type const& __key)
+    {
+        return __table_.template __node_handle_extract<node_type>(__key);
+    }
+    _LIBCPP_INLINE_VISIBILITY
+    node_type extract(const_iterator __it)
+    {
+        return __table_.template __node_handle_extract<node_type>(
+            __it.__i_);
+    }
+
+    template <class _H2, class _P2>
+    _LIBCPP_INLINE_VISIBILITY
+    void merge(unordered_map<key_type, mapped_type, _H2, _P2, allocator_type>& __source)
+    {
+        _LIBCPP_ASSERT(__source.get_allocator() == get_allocator(),
+                       "merging container with incompatible allocator");
+        return __table_.__node_handle_merge_unique(__source.__table_);
+    }
+    template <class _H2, class _P2>
+    _LIBCPP_INLINE_VISIBILITY
+    void merge(unordered_map<key_type, mapped_type, _H2, _P2, allocator_type>&& __source)
+    {
+        _LIBCPP_ASSERT(__source.get_allocator() == get_allocator(),
+                       "merging container with incompatible allocator");
+        return __table_.__node_handle_merge_unique(__source.__table_);
+    }
+    template <class _H2, class _P2>
+    _LIBCPP_INLINE_VISIBILITY
+    void merge(unordered_multimap<key_type, mapped_type, _H2, _P2, allocator_type>& __source)
+    {
+        _LIBCPP_ASSERT(__source.get_allocator() == get_allocator(),
+                       "merging container with incompatible allocator");
+        return __table_.__node_handle_merge_unique(__source.__table_);
+    }
+    template <class _H2, class _P2>
+    _LIBCPP_INLINE_VISIBILITY
+    void merge(unordered_multimap<key_type, mapped_type, _H2, _P2, allocator_type>&& __source)
+    {
+        _LIBCPP_ASSERT(__source.get_allocator() == get_allocator(),
+                       "merging container with incompatible allocator");
+        return __table_.__node_handle_merge_unique(__source.__table_);
+    }
+#endif
 
     _LIBCPP_INLINE_VISIBILITY
     void swap(unordered_map& __u)
@@ -1102,14 +1353,51 @@ public:
     iterator       find(const key_type& __k)       {return __table_.find(__k);}
     _LIBCPP_INLINE_VISIBILITY
     const_iterator find(const key_type& __k) const {return __table_.find(__k);}
+
+    #if _LIBCPP_STD_VER > 17
+        template <typename _K2>
+        _LIBCPP_INLINE_VISIBILITY
+        _EnableIf<__is_transparent<hasher, _K2>::value && __is_transparent<key_equal, _K2>::value, iterator>
+        find(const _K2& __k)       {return __table_.find(__k);}
+        template <typename _K2>
+        _LIBCPP_INLINE_VISIBILITY
+        _EnableIf<__is_transparent<hasher, _K2>::value && __is_transparent<key_equal, _K2>::value, const_iterator>
+        find(const _K2& __k) const {return __table_.find(__k);}
+    #endif // _LIBCPP_STD_VER > 17
+
     _LIBCPP_INLINE_VISIBILITY
     size_type count(const key_type& __k) const {return __table_.__count_unique(__k);}
+    #if _LIBCPP_STD_VER > 17
+        template <typename _K2>
+        _LIBCPP_INLINE_VISIBILITY
+        _EnableIf<__is_transparent<hasher, _K2>::value && __is_transparent<key_equal, _K2>::value, size_type>
+        count(const _K2& __k) const {return __table_.__count_unique(__k);}
+    #endif // _LIBCPP_STD_VER > 17
+    #if _LIBCPP_STD_VER > 17
+        _LIBCPP_INLINE_VISIBILITY
+        bool contains(const key_type& __k) const {return find(__k) != end();}
+
+        template <typename _K2>
+        _LIBCPP_INLINE_VISIBILITY
+        _EnableIf<__is_transparent<hasher, _K2>::value && __is_transparent<key_equal, _K2>::value, bool>
+        contains(const _K2& __k) const {return find(__k) != end();}
+    #endif // _LIBCPP_STD_VER > 17
     _LIBCPP_INLINE_VISIBILITY
     pair<iterator, iterator>             equal_range(const key_type& __k)
         {return __table_.__equal_range_unique(__k);}
     _LIBCPP_INLINE_VISIBILITY
     pair<const_iterator, const_iterator> equal_range(const key_type& __k) const
         {return __table_.__equal_range_unique(__k);}
+    #if _LIBCPP_STD_VER > 17
+        template <typename _K2>
+        _LIBCPP_INLINE_VISIBILITY
+        _EnableIf<__is_transparent<hasher, _K2>::value && __is_transparent<key_equal, _K2>::value, pair<iterator, iterator>>
+        equal_range(const _K2& __k)       {return __table_.__equal_range_unique(__k);}
+        template <typename _K2>
+        _LIBCPP_INLINE_VISIBILITY
+        _EnableIf<__is_transparent<hasher, _K2>::value && __is_transparent<key_equal, _K2>::value, pair<const_iterator, const_iterator>>
+        equal_range(const _K2& __k) const {return __table_.__equal_range_unique(__k);}
+    #endif // _LIBCPP_STD_VER > 17
 
     mapped_type& operator[](const key_type& __k);
 #ifndef _LIBCPP_CXX03_LANG
@@ -1154,7 +1442,7 @@ public:
     _LIBCPP_INLINE_VISIBILITY
     void reserve(size_type __n) {__table_.reserve(__n);}
 
-#if _LIBCPP_DEBUG_LEVEL >= 2
+#if _LIBCPP_DEBUG_LEVEL == 2
 
     bool __dereferenceable(const const_iterator* __i) const
         {return __table_.__dereferenceable(&__i->__i_);}
@@ -1165,7 +1453,7 @@ public:
     bool __subscriptable(const const_iterator* __i, ptrdiff_t __n) const
         {return __table_.__addable(&__i->__i_, __n);}
 
-#endif  // _LIBCPP_DEBUG_LEVEL >= 2
+#endif  // _LIBCPP_DEBUG_LEVEL == 2
 
 private:
 
@@ -1174,12 +1462,79 @@ private:
 #endif
 };
 
+#ifndef _LIBCPP_HAS_NO_DEDUCTION_GUIDES
+template<class _InputIterator,
+         class _Hash = hash<__iter_key_type<_InputIterator>>,
+         class _Pred = equal_to<__iter_key_type<_InputIterator>>,
+         class _Allocator = allocator<__iter_to_alloc_type<_InputIterator>>,
+         class = _EnableIf<!__is_allocator<_Hash>::value>,
+         class = _EnableIf<!is_integral<_Hash>::value>,
+         class = _EnableIf<!__is_allocator<_Pred>::value>,
+         class = _EnableIf<__is_allocator<_Allocator>::value>>
+unordered_map(_InputIterator, _InputIterator, typename allocator_traits<_Allocator>::size_type = 0,
+              _Hash = _Hash(), _Pred = _Pred(), _Allocator = _Allocator())
+  -> unordered_map<__iter_key_type<_InputIterator>, __iter_mapped_type<_InputIterator>, _Hash, _Pred, _Allocator>;
+
+template<class _Key, class _Tp, class _Hash = hash<remove_const_t<_Key>>,
+         class _Pred = equal_to<remove_const_t<_Key>>,
+         class _Allocator = allocator<pair<const _Key, _Tp>>,
+         class = _EnableIf<!__is_allocator<_Hash>::value>,
+         class = _EnableIf<!is_integral<_Hash>::value>,
+         class = _EnableIf<!__is_allocator<_Pred>::value>,
+         class = _EnableIf<__is_allocator<_Allocator>::value>>
+unordered_map(initializer_list<pair<_Key, _Tp>>, typename allocator_traits<_Allocator>::size_type = 0,
+              _Hash = _Hash(), _Pred = _Pred(), _Allocator = _Allocator())
+  -> unordered_map<remove_const_t<_Key>, _Tp, _Hash, _Pred, _Allocator>;
+
+template<class _InputIterator, class _Allocator,
+         class = _EnableIf<__is_allocator<_Allocator>::value>>
+unordered_map(_InputIterator, _InputIterator, typename allocator_traits<_Allocator>::size_type, _Allocator)
+  -> unordered_map<__iter_key_type<_InputIterator>, __iter_mapped_type<_InputIterator>,
+                   hash<__iter_key_type<_InputIterator>>, equal_to<__iter_key_type<_InputIterator>>, _Allocator>;
+
+template<class _InputIterator, class _Allocator,
+         class = _EnableIf<__is_allocator<_Allocator>::value>>
+unordered_map(_InputIterator, _InputIterator, _Allocator)
+  -> unordered_map<__iter_key_type<_InputIterator>, __iter_mapped_type<_InputIterator>,
+                   hash<__iter_key_type<_InputIterator>>, equal_to<__iter_key_type<_InputIterator>>, _Allocator>;
+
+template<class _InputIterator, class _Hash, class _Allocator,
+         class = _EnableIf<!__is_allocator<_Hash>::value>,
+         class = _EnableIf<!is_integral<_Hash>::value>,
+         class = _EnableIf<__is_allocator<_Allocator>::value>>
+unordered_map(_InputIterator, _InputIterator, typename allocator_traits<_Allocator>::size_type, _Hash, _Allocator)
+  -> unordered_map<__iter_key_type<_InputIterator>, __iter_mapped_type<_InputIterator>,
+                   _Hash, equal_to<__iter_key_type<_InputIterator>>, _Allocator>;
+
+template<class _Key, class _Tp, class _Allocator,
+         class = _EnableIf<__is_allocator<_Allocator>::value>>
+unordered_map(initializer_list<pair<_Key, _Tp>>, typename allocator_traits<_Allocator>::size_type, _Allocator)
+  -> unordered_map<remove_const_t<_Key>, _Tp,
+                   hash<remove_const_t<_Key>>,
+                   equal_to<remove_const_t<_Key>>, _Allocator>;
+
+template<class _Key, class _Tp, class _Allocator,
+         class = _EnableIf<__is_allocator<_Allocator>::value>>
+unordered_map(initializer_list<pair<_Key, _Tp>>, _Allocator)
+  -> unordered_map<remove_const_t<_Key>, _Tp,
+                   hash<remove_const_t<_Key>>,
+                   equal_to<remove_const_t<_Key>>, _Allocator>;
+
+template<class _Key, class _Tp, class _Hash, class _Allocator,
+         class = _EnableIf<!__is_allocator<_Hash>::value>,
+         class = _EnableIf<!is_integral<_Hash>::value>,
+         class = _EnableIf<__is_allocator<_Allocator>::value>>
+unordered_map(initializer_list<pair<_Key, _Tp>>, typename allocator_traits<_Allocator>::size_type, _Hash, _Allocator)
+  -> unordered_map<remove_const_t<_Key>, _Tp, _Hash,
+                   equal_to<remove_const_t<_Key>>, _Allocator>;
+#endif
+
 template <class _Key, class _Tp, class _Hash, class _Pred, class _Alloc>
 unordered_map<_Key, _Tp, _Hash, _Pred, _Alloc>::unordered_map(
         size_type __n, const hasher& __hf, const key_equal& __eql)
     : __table_(__hf, __eql)
 {
-#if _LIBCPP_DEBUG_LEVEL >= 2
+#if _LIBCPP_DEBUG_LEVEL == 2
     __get_db()->__insert_c(this);
 #endif
     __table_.rehash(__n);
@@ -1191,7 +1546,7 @@ unordered_map<_Key, _Tp, _Hash, _Pred, _Alloc>::unordered_map(
         const allocator_type& __a)
     : __table_(__hf, __eql, typename __table::allocator_type(__a))
 {
-#if _LIBCPP_DEBUG_LEVEL >= 2
+#if _LIBCPP_DEBUG_LEVEL == 2
     __get_db()->__insert_c(this);
 #endif
     __table_.rehash(__n);
@@ -1203,7 +1558,7 @@ unordered_map<_Key, _Tp, _Hash, _Pred, _Alloc>::unordered_map(
         const allocator_type& __a)
     : __table_(typename __table::allocator_type(__a))
 {
-#if _LIBCPP_DEBUG_LEVEL >= 2
+#if _LIBCPP_DEBUG_LEVEL == 2
     __get_db()->__insert_c(this);
 #endif
 }
@@ -1213,7 +1568,7 @@ template <class _InputIterator>
 unordered_map<_Key, _Tp, _Hash, _Pred, _Alloc>::unordered_map(
         _InputIterator __first, _InputIterator __last)
 {
-#if _LIBCPP_DEBUG_LEVEL >= 2
+#if _LIBCPP_DEBUG_LEVEL == 2
     __get_db()->__insert_c(this);
 #endif
     insert(__first, __last);
@@ -1226,7 +1581,7 @@ unordered_map<_Key, _Tp, _Hash, _Pred, _Alloc>::unordered_map(
         const hasher& __hf, const key_equal& __eql)
     : __table_(__hf, __eql)
 {
-#if _LIBCPP_DEBUG_LEVEL >= 2
+#if _LIBCPP_DEBUG_LEVEL == 2
     __get_db()->__insert_c(this);
 #endif
     __table_.rehash(__n);
@@ -1240,7 +1595,7 @@ unordered_map<_Key, _Tp, _Hash, _Pred, _Alloc>::unordered_map(
         const hasher& __hf, const key_equal& __eql, const allocator_type& __a)
     : __table_(__hf, __eql, typename __table::allocator_type(__a))
 {
-#if _LIBCPP_DEBUG_LEVEL >= 2
+#if _LIBCPP_DEBUG_LEVEL == 2
     __get_db()->__insert_c(this);
 #endif
     __table_.rehash(__n);
@@ -1252,7 +1607,7 @@ unordered_map<_Key, _Tp, _Hash, _Pred, _Alloc>::unordered_map(
         const unordered_map& __u)
     : __table_(__u.__table_)
 {
-#if _LIBCPP_DEBUG_LEVEL >= 2
+#if _LIBCPP_DEBUG_LEVEL == 2
     __get_db()->__insert_c(this);
 #endif
     __table_.rehash(__u.bucket_count());
@@ -1264,7 +1619,7 @@ unordered_map<_Key, _Tp, _Hash, _Pred, _Alloc>::unordered_map(
         const unordered_map& __u, const allocator_type& __a)
     : __table_(__u.__table_, typename __table::allocator_type(__a))
 {
-#if _LIBCPP_DEBUG_LEVEL >= 2
+#if _LIBCPP_DEBUG_LEVEL == 2
     __get_db()->__insert_c(this);
 #endif
     __table_.rehash(__u.bucket_count());
@@ -1280,7 +1635,7 @@ unordered_map<_Key, _Tp, _Hash, _Pred, _Alloc>::unordered_map(
     _NOEXCEPT_(is_nothrow_move_constructible<__table>::value)
     : __table_(_VSTD::move(__u.__table_))
 {
-#if _LIBCPP_DEBUG_LEVEL >= 2
+#if _LIBCPP_DEBUG_LEVEL == 2
     __get_db()->__insert_c(this);
     __get_db()->swap(this, &__u);
 #endif
@@ -1291,18 +1646,18 @@ unordered_map<_Key, _Tp, _Hash, _Pred, _Alloc>::unordered_map(
         unordered_map&& __u, const allocator_type& __a)
     : __table_(_VSTD::move(__u.__table_), typename __table::allocator_type(__a))
 {
-#if _LIBCPP_DEBUG_LEVEL >= 2
+#if _LIBCPP_DEBUG_LEVEL == 2
     __get_db()->__insert_c(this);
 #endif
     if (__a != __u.get_allocator())
     {
         iterator __i = __u.begin();
         while (__u.size() != 0) {
-            __table_.__emplace_unique(_VSTD::move(
-                __u.__table_.remove((__i++).__i_)->__value_.__nc));
+            __table_.__emplace_unique(
+                __u.__table_.remove((__i++).__i_)->__value_.__move());
         }
     }
-#if _LIBCPP_DEBUG_LEVEL >= 2
+#if _LIBCPP_DEBUG_LEVEL == 2
     else
         __get_db()->swap(this, &__u);
 #endif
@@ -1312,7 +1667,7 @@ template <class _Key, class _Tp, class _Hash, class _Pred, class _Alloc>
 unordered_map<_Key, _Tp, _Hash, _Pred, _Alloc>::unordered_map(
         initializer_list<value_type> __il)
 {
-#if _LIBCPP_DEBUG_LEVEL >= 2
+#if _LIBCPP_DEBUG_LEVEL == 2
     __get_db()->__insert_c(this);
 #endif
     insert(__il.begin(), __il.end());
@@ -1324,7 +1679,7 @@ unordered_map<_Key, _Tp, _Hash, _Pred, _Alloc>::unordered_map(
         const key_equal& __eql)
     : __table_(__hf, __eql)
 {
-#if _LIBCPP_DEBUG_LEVEL >= 2
+#if _LIBCPP_DEBUG_LEVEL == 2
     __get_db()->__insert_c(this);
 #endif
     __table_.rehash(__n);
@@ -1337,7 +1692,7 @@ unordered_map<_Key, _Tp, _Hash, _Pred, _Alloc>::unordered_map(
         const key_equal& __eql, const allocator_type& __a)
     : __table_(__hf, __eql, typename __table::allocator_type(__a))
 {
-#if _LIBCPP_DEBUG_LEVEL >= 2
+#if _LIBCPP_DEBUG_LEVEL == 2
     __get_db()->__insert_c(this);
 #endif
     __table_.rehash(__n);
@@ -1384,8 +1739,8 @@ _Tp&
 unordered_map<_Key, _Tp, _Hash, _Pred, _Alloc>::operator[](const key_type& __k)
 {
     return __table_.__emplace_unique_key_args(__k,
-        std::piecewise_construct, std::forward_as_tuple(__k),
-                                  std::forward_as_tuple()).first->__cc.second;
+        piecewise_construct, _VSTD::forward_as_tuple(__k),
+                             _VSTD::forward_as_tuple()).first->__get_value().second;
 }
 
 template <class _Key, class _Tp, class _Hash, class _Pred, class _Alloc>
@@ -1393,8 +1748,8 @@ _Tp&
 unordered_map<_Key, _Tp, _Hash, _Pred, _Alloc>::operator[](key_type&& __k)
 {
     return __table_.__emplace_unique_key_args(__k,
-        std::piecewise_construct, std::forward_as_tuple(std::move(__k)),
-                                  std::forward_as_tuple()).first->__cc.second;
+        piecewise_construct, _VSTD::forward_as_tuple(_VSTD::move(__k)),
+                             _VSTD::forward_as_tuple()).first->__get_value().second;
 }
 #else // _LIBCPP_CXX03_LANG
 
@@ -1404,11 +1759,11 @@ unordered_map<_Key, _Tp, _Hash, _Pred, _Alloc>::__construct_node_with_key(const 
 {
     __node_allocator& __na = __table_.__node_alloc();
     __node_holder __h(__node_traits::allocate(__na, 1), _Dp(__na));
-    __node_traits::construct(__na, _VSTD::addressof(__h->__value_.__cc.first), __k);
+    __node_traits::construct(__na, _VSTD::addressof(__h->__value_.__get_value().first), __k);
     __h.get_deleter().__first_constructed = true;
-    __node_traits::construct(__na, _VSTD::addressof(__h->__value_.__cc.second));
+    __node_traits::construct(__na, _VSTD::addressof(__h->__value_.__get_value().second));
     __h.get_deleter().__second_constructed = true;
-    return _LIBCPP_EXPLICIT_MOVE(__h);  // explicitly moved for C++03
+    return __h;
 }
 
 template <class _Key, class _Tp, class _Hash, class _Pred, class _Alloc>
@@ -1431,10 +1786,8 @@ _Tp&
 unordered_map<_Key, _Tp, _Hash, _Pred, _Alloc>::at(const key_type& __k)
 {
     iterator __i = find(__k);
-#ifndef _LIBCPP_NO_EXCEPTIONS
     if (__i == end())
-        throw out_of_range("unordered_map::at: key not found");
-#endif  // _LIBCPP_NO_EXCEPTIONS
+        __throw_out_of_range("unordered_map::at: key not found");
     return __i->second;
 }
 
@@ -1443,10 +1796,8 @@ const _Tp&
 unordered_map<_Key, _Tp, _Hash, _Pred, _Alloc>::at(const key_type& __k) const
 {
     const_iterator __i = find(__k);
-#ifndef _LIBCPP_NO_EXCEPTIONS
     if (__i == end())
-        throw out_of_range("unordered_map::at: key not found");
-#endif  // _LIBCPP_NO_EXCEPTIONS
+        __throw_out_of_range("unordered_map::at: key not found");
     return __i->second;
 }
 
@@ -1459,6 +1810,17 @@ swap(unordered_map<_Key, _Tp, _Hash, _Pred, _Alloc>& __x,
 {
     __x.swap(__y);
 }
+
+#if _LIBCPP_STD_VER > 17
+template <class _Key, class _Tp, class _Hash, class _Pred, class _Alloc,
+          class _Predicate>
+inline _LIBCPP_INLINE_VISIBILITY
+    typename unordered_map<_Key, _Tp, _Hash, _Pred, _Alloc>::size_type
+    erase_if(unordered_map<_Key, _Tp, _Hash, _Pred, _Alloc>& __c,
+             _Predicate __pred) {
+  return _VSTD::__libcpp_erase_if_container(__c, __pred);
+}
+#endif
 
 template <class _Key, class _Tp, class _Hash, class _Pred, class _Alloc>
 bool
@@ -1496,22 +1858,21 @@ public:
     // types
     typedef _Key                                           key_type;
     typedef _Tp                                            mapped_type;
-    typedef _Hash                                          hasher;
-    typedef _Pred                                          key_equal;
-    typedef _Alloc                                         allocator_type;
+    typedef __identity_t<_Hash>                            hasher;
+    typedef __identity_t<_Pred>                            key_equal;
+    typedef __identity_t<_Alloc>                           allocator_type;
     typedef pair<const key_type, mapped_type>              value_type;
-    typedef pair<key_type, mapped_type>                    __nc_value_type;
     typedef value_type&                                    reference;
     typedef const value_type&                              const_reference;
     static_assert((is_same<value_type, typename allocator_type::value_type>::value),
                   "Invalid allocator::value_type");
 
 private:
-    typedef __hash_value_type<key_type, mapped_type>                 __value_type;
-    typedef __unordered_map_hasher<key_type, __value_type, hasher>   __hasher;
-    typedef __unordered_map_equal<key_type, __value_type, key_equal> __key_equal;
+    typedef __hash_value_type<key_type, mapped_type>                          __value_type;
+    typedef __unordered_map_hasher<key_type, __value_type, hasher, key_equal> __hasher;
+    typedef __unordered_map_equal<key_type, __value_type, key_equal, hasher>  __key_equal;
     typedef typename __rebind_alloc_helper<allocator_traits<allocator_type>,
-                                                 __value_type>::type __allocator_type;
+                                                 __value_type>::type          __allocator_type;
 
     typedef __hash_table<__value_type, __hasher,
                          __key_equal,  __allocator_type>   __table;
@@ -1539,11 +1900,20 @@ public:
     typedef __hash_map_iterator<typename __table::local_iterator> local_iterator;
     typedef __hash_map_const_iterator<typename __table::const_local_iterator> const_local_iterator;
 
+#if _LIBCPP_STD_VER > 14
+    typedef __map_node_handle<__node, allocator_type> node_type;
+#endif
+
+    template <class _Key2, class _Tp2, class _Hash2, class _Pred2, class _Alloc2>
+        friend class _LIBCPP_TEMPLATE_VIS unordered_map;
+    template <class _Key2, class _Tp2, class _Hash2, class _Pred2, class _Alloc2>
+        friend class _LIBCPP_TEMPLATE_VIS unordered_multimap;
+
     _LIBCPP_INLINE_VISIBILITY
     unordered_multimap()
         _NOEXCEPT_(is_nothrow_default_constructible<__table>::value)
         {
-#if _LIBCPP_DEBUG_LEVEL >= 2
+#if _LIBCPP_DEBUG_LEVEL == 2
             __get_db()->__insert_c(this);
 #endif
         }
@@ -1593,18 +1963,22 @@ public:
       : unordered_multimap(__first, __last, __n, hasher(), key_equal(), __a) {}
     template <class _InputIterator>
     _LIBCPP_INLINE_VISIBILITY
-      unordered_multimap(_InputIterator __first, _InputIterator __last, size_type __n, const hasher& __hf, 
+      unordered_multimap(_InputIterator __first, _InputIterator __last, size_type __n, const hasher& __hf,
         const allocator_type& __a)
       : unordered_multimap(__first, __last, __n, __hf, key_equal(), __a) {}
     _LIBCPP_INLINE_VISIBILITY
     unordered_multimap(initializer_list<value_type> __il, size_type __n, const allocator_type& __a)
       : unordered_multimap(__il, __n, hasher(), key_equal(), __a) {}
     _LIBCPP_INLINE_VISIBILITY
-    unordered_multimap(initializer_list<value_type> __il, size_type __n, const hasher& __hf, 
+    unordered_multimap(initializer_list<value_type> __il, size_type __n, const hasher& __hf,
       const allocator_type& __a)
       : unordered_multimap(__il, __n, __hf, key_equal(), __a) {}
 #endif
-    // ~unordered_multimap() = default;
+    _LIBCPP_INLINE_VISIBILITY
+    ~unordered_multimap() {
+        static_assert(sizeof(__diagnose_unordered_container_requirements<_Key, _Hash, _Pred>(0)), "");
+    }
+
     _LIBCPP_INLINE_VISIBILITY
     unordered_multimap& operator=(const unordered_multimap& __u)
     {
@@ -1634,7 +2008,7 @@ public:
     allocator_type get_allocator() const _NOEXCEPT
         {return allocator_type(__table_.__node_alloc());}
 
-    _LIBCPP_INLINE_VISIBILITY
+    _LIBCPP_NODISCARD_AFTER_CXX17 _LIBCPP_INLINE_VISIBILITY
     bool      empty() const _NOEXCEPT {return __table_.size() == 0;}
     _LIBCPP_INLINE_VISIBILITY
     size_type size() const _NOEXCEPT  {return __table_.size();}
@@ -1712,6 +2086,69 @@ public:
     _LIBCPP_INLINE_VISIBILITY
     void clear() _NOEXCEPT {__table_.clear();}
 
+#if _LIBCPP_STD_VER > 14
+    _LIBCPP_INLINE_VISIBILITY
+    iterator insert(node_type&& __nh)
+    {
+        _LIBCPP_ASSERT(__nh.empty() || __nh.get_allocator() == get_allocator(),
+            "node_type with incompatible allocator passed to unordered_multimap::insert()");
+        return __table_.template __node_handle_insert_multi<node_type>(
+            _VSTD::move(__nh));
+    }
+    _LIBCPP_INLINE_VISIBILITY
+    iterator insert(const_iterator __hint, node_type&& __nh)
+    {
+        _LIBCPP_ASSERT(__nh.empty() || __nh.get_allocator() == get_allocator(),
+            "node_type with incompatible allocator passed to unordered_multimap::insert()");
+        return __table_.template __node_handle_insert_multi<node_type>(
+            __hint.__i_, _VSTD::move(__nh));
+    }
+    _LIBCPP_INLINE_VISIBILITY
+    node_type extract(key_type const& __key)
+    {
+        return __table_.template __node_handle_extract<node_type>(__key);
+    }
+    _LIBCPP_INLINE_VISIBILITY
+    node_type extract(const_iterator __it)
+    {
+        return __table_.template __node_handle_extract<node_type>(
+            __it.__i_);
+    }
+
+    template <class _H2, class _P2>
+    _LIBCPP_INLINE_VISIBILITY
+    void merge(unordered_multimap<key_type, mapped_type, _H2, _P2, allocator_type>& __source)
+    {
+        _LIBCPP_ASSERT(__source.get_allocator() == get_allocator(),
+                       "merging container with incompatible allocator");
+        return __table_.__node_handle_merge_multi(__source.__table_);
+    }
+    template <class _H2, class _P2>
+    _LIBCPP_INLINE_VISIBILITY
+    void merge(unordered_multimap<key_type, mapped_type, _H2, _P2, allocator_type>&& __source)
+    {
+        _LIBCPP_ASSERT(__source.get_allocator() == get_allocator(),
+                       "merging container with incompatible allocator");
+        return __table_.__node_handle_merge_multi(__source.__table_);
+    }
+    template <class _H2, class _P2>
+    _LIBCPP_INLINE_VISIBILITY
+    void merge(unordered_map<key_type, mapped_type, _H2, _P2, allocator_type>& __source)
+    {
+        _LIBCPP_ASSERT(__source.get_allocator() == get_allocator(),
+                       "merging container with incompatible allocator");
+        return __table_.__node_handle_merge_multi(__source.__table_);
+    }
+    template <class _H2, class _P2>
+    _LIBCPP_INLINE_VISIBILITY
+    void merge(unordered_map<key_type, mapped_type, _H2, _P2, allocator_type>&& __source)
+    {
+        _LIBCPP_ASSERT(__source.get_allocator() == get_allocator(),
+                       "merging container with incompatible allocator");
+        return __table_.__node_handle_merge_multi(__source.__table_);
+    }
+#endif
+
     _LIBCPP_INLINE_VISIBILITY
     void swap(unordered_multimap& __u)
         _NOEXCEPT_(__is_nothrow_swappable<__table>::value)
@@ -1728,14 +2165,49 @@ public:
     iterator       find(const key_type& __k)       {return __table_.find(__k);}
     _LIBCPP_INLINE_VISIBILITY
     const_iterator find(const key_type& __k) const {return __table_.find(__k);}
+    #if _LIBCPP_STD_VER > 17
+        template <typename _K2>
+        _LIBCPP_INLINE_VISIBILITY
+        _EnableIf<__is_transparent<hasher, _K2>::value && __is_transparent<key_equal, _K2>::value, iterator>
+        find(const _K2& __k)       {return __table_.find(__k);}
+        template <typename _K2>
+        _LIBCPP_INLINE_VISIBILITY
+        _EnableIf<__is_transparent<hasher, _K2>::value && __is_transparent<key_equal, _K2>::value, const_iterator>
+        find(const _K2& __k) const {return __table_.find(__k);}
+    #endif // _LIBCPP_STD_VER > 17
     _LIBCPP_INLINE_VISIBILITY
     size_type count(const key_type& __k) const {return __table_.__count_multi(__k);}
+    #if _LIBCPP_STD_VER > 17
+        template <typename _K2>
+        _LIBCPP_INLINE_VISIBILITY
+        _EnableIf<__is_transparent<hasher, _K2>::value && __is_transparent<key_equal, _K2>::value, size_type>
+        count(const _K2& __k) const {return __table_.__count_multi(__k);}
+    #endif // _LIBCPP_STD_VER > 17
+    #if _LIBCPP_STD_VER > 17
+        _LIBCPP_INLINE_VISIBILITY
+        bool contains(const key_type& __k) const {return find(__k) != end();}
+
+        template <typename _K2>
+        _LIBCPP_INLINE_VISIBILITY
+        _EnableIf<__is_transparent<hasher, _K2>::value && __is_transparent<key_equal, _K2>::value, bool>
+        contains(const _K2& __k) const {return find(__k) != end();}
+    #endif // _LIBCPP_STD_VER > 17
     _LIBCPP_INLINE_VISIBILITY
     pair<iterator, iterator>             equal_range(const key_type& __k)
         {return __table_.__equal_range_multi(__k);}
     _LIBCPP_INLINE_VISIBILITY
     pair<const_iterator, const_iterator> equal_range(const key_type& __k) const
         {return __table_.__equal_range_multi(__k);}
+    #if _LIBCPP_STD_VER > 17
+        template <typename _K2>
+        _LIBCPP_INLINE_VISIBILITY
+        _EnableIf<__is_transparent<hasher, _K2>::value && __is_transparent<key_equal, _K2>::value, pair<iterator, iterator>>
+        equal_range(const _K2& __k)       {return __table_.__equal_range_multi(__k);}
+        template <typename _K2>
+        _LIBCPP_INLINE_VISIBILITY
+        _EnableIf<__is_transparent<hasher, _K2>::value && __is_transparent<key_equal, _K2>::value, pair<const_iterator, const_iterator>>
+        equal_range(const _K2& __k) const {return __table_.__equal_range_multi(__k);}
+    #endif // _LIBCPP_STD_VER > 17
 
     _LIBCPP_INLINE_VISIBILITY
     size_type bucket_count() const _NOEXCEPT {return __table_.bucket_count();}
@@ -1773,7 +2245,7 @@ public:
     _LIBCPP_INLINE_VISIBILITY
     void reserve(size_type __n) {__table_.reserve(__n);}
 
-#if _LIBCPP_DEBUG_LEVEL >= 2
+#if _LIBCPP_DEBUG_LEVEL == 2
 
     bool __dereferenceable(const const_iterator* __i) const
         {return __table_.__dereferenceable(&__i->__i_);}
@@ -1784,17 +2256,84 @@ public:
     bool __subscriptable(const const_iterator* __i, ptrdiff_t __n) const
         {return __table_.__addable(&__i->__i_, __n);}
 
-#endif  // _LIBCPP_DEBUG_LEVEL >= 2
+#endif  // _LIBCPP_DEBUG_LEVEL == 2
 
 
 };
+
+#ifndef _LIBCPP_HAS_NO_DEDUCTION_GUIDES
+template<class _InputIterator,
+         class _Hash = hash<__iter_key_type<_InputIterator>>,
+         class _Pred = equal_to<__iter_key_type<_InputIterator>>,
+         class _Allocator = allocator<__iter_to_alloc_type<_InputIterator>>,
+         class = _EnableIf<!__is_allocator<_Hash>::value>,
+         class = _EnableIf<!is_integral<_Hash>::value>,
+         class = _EnableIf<!__is_allocator<_Pred>::value>,
+         class = _EnableIf<__is_allocator<_Allocator>::value>>
+unordered_multimap(_InputIterator, _InputIterator, typename allocator_traits<_Allocator>::size_type = 0,
+                   _Hash = _Hash(), _Pred = _Pred(), _Allocator = _Allocator())
+  -> unordered_multimap<__iter_key_type<_InputIterator>, __iter_mapped_type<_InputIterator>, _Hash, _Pred, _Allocator>;
+
+template<class _Key, class _Tp, class _Hash = hash<remove_const_t<_Key>>,
+         class _Pred = equal_to<remove_const_t<_Key>>,
+         class _Allocator = allocator<pair<const _Key, _Tp>>,
+         class = _EnableIf<!__is_allocator<_Hash>::value>,
+         class = _EnableIf<!is_integral<_Hash>::value>,
+         class = _EnableIf<!__is_allocator<_Pred>::value>,
+         class = _EnableIf<__is_allocator<_Allocator>::value>>
+unordered_multimap(initializer_list<pair<_Key, _Tp>>, typename allocator_traits<_Allocator>::size_type = 0,
+                   _Hash = _Hash(), _Pred = _Pred(), _Allocator = _Allocator())
+  -> unordered_multimap<remove_const_t<_Key>, _Tp, _Hash, _Pred, _Allocator>;
+
+template<class _InputIterator, class _Allocator,
+         class = _EnableIf<__is_allocator<_Allocator>::value>>
+unordered_multimap(_InputIterator, _InputIterator, typename allocator_traits<_Allocator>::size_type, _Allocator)
+  -> unordered_multimap<__iter_key_type<_InputIterator>, __iter_mapped_type<_InputIterator>,
+                        hash<__iter_key_type<_InputIterator>>, equal_to<__iter_key_type<_InputIterator>>, _Allocator>;
+
+template<class _InputIterator, class _Allocator,
+         class = _EnableIf<__is_allocator<_Allocator>::value>>
+unordered_multimap(_InputIterator, _InputIterator, _Allocator)
+  -> unordered_multimap<__iter_key_type<_InputIterator>, __iter_mapped_type<_InputIterator>,
+                        hash<__iter_key_type<_InputIterator>>, equal_to<__iter_key_type<_InputIterator>>, _Allocator>;
+
+template<class _InputIterator, class _Hash, class _Allocator,
+         class = _EnableIf<!__is_allocator<_Hash>::value>,
+         class = _EnableIf<!is_integral<_Hash>::value>,
+         class = _EnableIf<__is_allocator<_Allocator>::value>>
+unordered_multimap(_InputIterator, _InputIterator, typename allocator_traits<_Allocator>::size_type, _Hash, _Allocator)
+  -> unordered_multimap<__iter_key_type<_InputIterator>, __iter_mapped_type<_InputIterator>,
+                        _Hash, equal_to<__iter_key_type<_InputIterator>>, _Allocator>;
+
+template<class _Key, class _Tp, class _Allocator,
+         class = _EnableIf<__is_allocator<_Allocator>::value>>
+unordered_multimap(initializer_list<pair<_Key, _Tp>>, typename allocator_traits<_Allocator>::size_type, _Allocator)
+  -> unordered_multimap<remove_const_t<_Key>, _Tp,
+                        hash<remove_const_t<_Key>>,
+                        equal_to<remove_const_t<_Key>>, _Allocator>;
+
+template<class _Key, class _Tp, class _Allocator,
+         class = _EnableIf<__is_allocator<_Allocator>::value>>
+unordered_multimap(initializer_list<pair<_Key, _Tp>>, _Allocator)
+  -> unordered_multimap<remove_const_t<_Key>, _Tp,
+                        hash<remove_const_t<_Key>>,
+                        equal_to<remove_const_t<_Key>>, _Allocator>;
+
+template<class _Key, class _Tp, class _Hash, class _Allocator,
+         class = _EnableIf<!__is_allocator<_Hash>::value>,
+         class = _EnableIf<!is_integral<_Hash>::value>,
+         class = _EnableIf<__is_allocator<_Allocator>::value>>
+unordered_multimap(initializer_list<pair<_Key, _Tp>>, typename allocator_traits<_Allocator>::size_type, _Hash, _Allocator)
+  -> unordered_multimap<remove_const_t<_Key>, _Tp, _Hash,
+                        equal_to<remove_const_t<_Key>>, _Allocator>;
+#endif
 
 template <class _Key, class _Tp, class _Hash, class _Pred, class _Alloc>
 unordered_multimap<_Key, _Tp, _Hash, _Pred, _Alloc>::unordered_multimap(
         size_type __n, const hasher& __hf, const key_equal& __eql)
     : __table_(__hf, __eql)
 {
-#if _LIBCPP_DEBUG_LEVEL >= 2
+#if _LIBCPP_DEBUG_LEVEL == 2
     __get_db()->__insert_c(this);
 #endif
     __table_.rehash(__n);
@@ -1806,7 +2345,7 @@ unordered_multimap<_Key, _Tp, _Hash, _Pred, _Alloc>::unordered_multimap(
         const allocator_type& __a)
     : __table_(__hf, __eql, typename __table::allocator_type(__a))
 {
-#if _LIBCPP_DEBUG_LEVEL >= 2
+#if _LIBCPP_DEBUG_LEVEL == 2
     __get_db()->__insert_c(this);
 #endif
     __table_.rehash(__n);
@@ -1817,7 +2356,7 @@ template <class _InputIterator>
 unordered_multimap<_Key, _Tp, _Hash, _Pred, _Alloc>::unordered_multimap(
         _InputIterator __first, _InputIterator __last)
 {
-#if _LIBCPP_DEBUG_LEVEL >= 2
+#if _LIBCPP_DEBUG_LEVEL == 2
     __get_db()->__insert_c(this);
 #endif
     insert(__first, __last);
@@ -1830,7 +2369,7 @@ unordered_multimap<_Key, _Tp, _Hash, _Pred, _Alloc>::unordered_multimap(
         const hasher& __hf, const key_equal& __eql)
     : __table_(__hf, __eql)
 {
-#if _LIBCPP_DEBUG_LEVEL >= 2
+#if _LIBCPP_DEBUG_LEVEL == 2
     __get_db()->__insert_c(this);
 #endif
     __table_.rehash(__n);
@@ -1844,7 +2383,7 @@ unordered_multimap<_Key, _Tp, _Hash, _Pred, _Alloc>::unordered_multimap(
         const hasher& __hf, const key_equal& __eql, const allocator_type& __a)
     : __table_(__hf, __eql, typename __table::allocator_type(__a))
 {
-#if _LIBCPP_DEBUG_LEVEL >= 2
+#if _LIBCPP_DEBUG_LEVEL == 2
     __get_db()->__insert_c(this);
 #endif
     __table_.rehash(__n);
@@ -1857,7 +2396,7 @@ unordered_multimap<_Key, _Tp, _Hash, _Pred, _Alloc>::unordered_multimap(
         const allocator_type& __a)
     : __table_(typename __table::allocator_type(__a))
 {
-#if _LIBCPP_DEBUG_LEVEL >= 2
+#if _LIBCPP_DEBUG_LEVEL == 2
     __get_db()->__insert_c(this);
 #endif
 }
@@ -1867,7 +2406,7 @@ unordered_multimap<_Key, _Tp, _Hash, _Pred, _Alloc>::unordered_multimap(
         const unordered_multimap& __u)
     : __table_(__u.__table_)
 {
-#if _LIBCPP_DEBUG_LEVEL >= 2
+#if _LIBCPP_DEBUG_LEVEL == 2
     __get_db()->__insert_c(this);
 #endif
     __table_.rehash(__u.bucket_count());
@@ -1879,7 +2418,7 @@ unordered_multimap<_Key, _Tp, _Hash, _Pred, _Alloc>::unordered_multimap(
         const unordered_multimap& __u, const allocator_type& __a)
     : __table_(__u.__table_, typename __table::allocator_type(__a))
 {
-#if _LIBCPP_DEBUG_LEVEL >= 2
+#if _LIBCPP_DEBUG_LEVEL == 2
     __get_db()->__insert_c(this);
 #endif
     __table_.rehash(__u.bucket_count());
@@ -1895,7 +2434,7 @@ unordered_multimap<_Key, _Tp, _Hash, _Pred, _Alloc>::unordered_multimap(
     _NOEXCEPT_(is_nothrow_move_constructible<__table>::value)
     : __table_(_VSTD::move(__u.__table_))
 {
-#if _LIBCPP_DEBUG_LEVEL >= 2
+#if _LIBCPP_DEBUG_LEVEL == 2
     __get_db()->__insert_c(this);
     __get_db()->swap(this, &__u);
 #endif
@@ -1906,7 +2445,7 @@ unordered_multimap<_Key, _Tp, _Hash, _Pred, _Alloc>::unordered_multimap(
         unordered_multimap&& __u, const allocator_type& __a)
     : __table_(_VSTD::move(__u.__table_), typename __table::allocator_type(__a))
 {
-#if _LIBCPP_DEBUG_LEVEL >= 2
+#if _LIBCPP_DEBUG_LEVEL == 2
     __get_db()->__insert_c(this);
 #endif
     if (__a != __u.get_allocator())
@@ -1915,11 +2454,10 @@ unordered_multimap<_Key, _Tp, _Hash, _Pred, _Alloc>::unordered_multimap(
         while (__u.size() != 0)
         {
             __table_.__insert_multi(
-                      _VSTD::move(__u.__table_.remove((__i++).__i_)->__value_.__nc)
-                                   );
+                __u.__table_.remove((__i++).__i_)->__value_.__move());
         }
     }
-#if _LIBCPP_DEBUG_LEVEL >= 2
+#if _LIBCPP_DEBUG_LEVEL == 2
     else
         __get_db()->swap(this, &__u);
 #endif
@@ -1929,7 +2467,7 @@ template <class _Key, class _Tp, class _Hash, class _Pred, class _Alloc>
 unordered_multimap<_Key, _Tp, _Hash, _Pred, _Alloc>::unordered_multimap(
         initializer_list<value_type> __il)
 {
-#if _LIBCPP_DEBUG_LEVEL >= 2
+#if _LIBCPP_DEBUG_LEVEL == 2
     __get_db()->__insert_c(this);
 #endif
     insert(__il.begin(), __il.end());
@@ -1941,7 +2479,7 @@ unordered_multimap<_Key, _Tp, _Hash, _Pred, _Alloc>::unordered_multimap(
         const key_equal& __eql)
     : __table_(__hf, __eql)
 {
-#if _LIBCPP_DEBUG_LEVEL >= 2
+#if _LIBCPP_DEBUG_LEVEL == 2
     __get_db()->__insert_c(this);
 #endif
     __table_.rehash(__n);
@@ -1954,7 +2492,7 @@ unordered_multimap<_Key, _Tp, _Hash, _Pred, _Alloc>::unordered_multimap(
         const key_equal& __eql, const allocator_type& __a)
     : __table_(__hf, __eql, typename __table::allocator_type(__a))
 {
-#if _LIBCPP_DEBUG_LEVEL >= 2
+#if _LIBCPP_DEBUG_LEVEL == 2
     __get_db()->__insert_c(this);
 #endif
     __table_.rehash(__n);
@@ -2005,6 +2543,17 @@ swap(unordered_multimap<_Key, _Tp, _Hash, _Pred, _Alloc>& __x,
 {
     __x.swap(__y);
 }
+
+#if _LIBCPP_STD_VER > 17
+template <class _Key, class _Tp, class _Hash, class _Pred, class _Alloc,
+          class _Predicate>
+inline _LIBCPP_INLINE_VISIBILITY
+    typename unordered_multimap<_Key, _Tp, _Hash, _Pred, _Alloc>::size_type
+    erase_if(unordered_multimap<_Key, _Tp, _Hash, _Pred, _Alloc>& __c,
+             _Predicate __pred) {
+  return _VSTD::__libcpp_erase_if_container(__c, __pred);
+}
+#endif
 
 template <class _Key, class _Tp, class _Hash, class _Pred, class _Alloc>
 bool

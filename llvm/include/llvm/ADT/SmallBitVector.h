@@ -1,9 +1,8 @@
 //===- llvm/ADT/SmallBitVector.h - 'Normally small' bit vectors -*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -15,8 +14,15 @@
 #define LLVM_ADT_SMALLBITVECTOR_H
 
 #include "llvm/ADT/BitVector.h"
+#include "llvm/ADT/iterator_range.h"
 #include "llvm/Support/MathExtras.h"
+#include <algorithm>
 #include <cassert>
+#include <climits>
+#include <cstddef>
+#include <cstdint>
+#include <limits>
+#include <utility>
 
 namespace llvm {
 
@@ -29,7 +35,7 @@ class SmallBitVector {
   // TODO: In "large" mode, a pointer to a BitVector is used, leading to an
   // unnecessary level of indirection. It would be more efficient to use a
   // pointer to memory containing size, allocation size, and the array of bits.
-  uintptr_t X;
+  uintptr_t X = 1;
 
   enum {
     // The number of bits in this class.
@@ -54,7 +60,8 @@ class SmallBitVector {
                 "Unsupported word size");
 
 public:
-  typedef unsigned size_type;
+  using size_type = unsigned;
+
   // Encapsulation of a single bit.
   class reference {
     SmallBitVector &TheVector;
@@ -84,10 +91,6 @@ public:
   };
 
 private:
-  bool isSmall() const {
-    return X & uintptr_t(1);
-  }
-
   BitVector *getPointer() const {
     assert(!isSmall());
     return reinterpret_cast<BitVector *>(X);
@@ -135,7 +138,7 @@ private:
 
 public:
   /// Creates an empty bitvector.
-  SmallBitVector() : X(1) {}
+  SmallBitVector() = default;
 
   /// Creates a bitvector of specified number of bits. All bits are initialized
   /// to the specified value.
@@ -162,6 +165,23 @@ public:
     if (!isSmall())
       delete getPointer();
   }
+
+  using const_set_bits_iterator = const_set_bits_iterator_impl<SmallBitVector>;
+  using set_iterator = const_set_bits_iterator;
+
+  const_set_bits_iterator set_bits_begin() const {
+    return const_set_bits_iterator(*this);
+  }
+
+  const_set_bits_iterator set_bits_end() const {
+    return const_set_bits_iterator(*this, -1);
+  }
+
+  iterator_range<const_set_bits_iterator> set_bits() const {
+    return make_range(set_bits_begin(), set_bits_end());
+  }
+
+  bool isSmall() const { return X & uintptr_t(1); }
 
   /// Tests whether there are no bits in this bitvector.
   bool empty() const {
@@ -219,7 +239,7 @@ public:
       uintptr_t Bits = getSmallBits();
       if (Bits == 0)
         return -1;
-      return NumBaseBits - countLeadingZeros(Bits);
+      return NumBaseBits - countLeadingZeros(Bits) - 1;
     }
     return getPointer()->find_last();
   }
@@ -242,7 +262,9 @@ public:
         return -1;
 
       uintptr_t Bits = getSmallBits();
-      return NumBaseBits - countLeadingOnes(Bits);
+      // Set unused bits.
+      Bits |= ~uintptr_t(0) << getSmallSize();
+      return NumBaseBits - countLeadingOnes(Bits) - 1;
     }
     return getPointer()->find_last_unset();
   }
@@ -265,11 +287,11 @@ public:
   /// Returns -1 if the next unset bit is not found.
   int find_next_unset(unsigned Prev) const {
     if (isSmall()) {
-      ++Prev;
       uintptr_t Bits = getSmallBits();
       // Mask in previous bits.
-      uintptr_t Mask = (1 << Prev) - 1;
-      Bits |= Mask;
+      Bits |= (uintptr_t(1) << (Prev + 1)) - 1;
+      // Mask in unused bits.
+      Bits |= ~uintptr_t(0) << getSmallSize();
 
       if (Bits == ~uintptr_t(0) || Prev + 1 >= getSmallSize())
         return -1;
@@ -442,6 +464,11 @@ public:
     return (*this)[Idx];
   }
 
+  // Push single bit to end of vector.
+  void push_back(bool Val) {
+    resize(size() + 1, Val);
+  }
+
   /// Test if any common bits are set.
   bool anyCommon(const SmallBitVector &RHS) const {
     if (isSmall() && RHS.isSmall())
@@ -459,10 +486,17 @@ public:
   bool operator==(const SmallBitVector &RHS) const {
     if (size() != RHS.size())
       return false;
-    if (isSmall())
+    if (isSmall() && RHS.isSmall())
       return getSmallBits() == RHS.getSmallBits();
-    else
+    else if (!isSmall() && !RHS.isSmall())
       return *getPointer() == *RHS.getPointer();
+    else {
+      for (size_t i = 0, e = size(); i != e; ++i) {
+        if ((*this)[i] != RHS[i])
+          return false;
+      }
+      return true;
+    }
   }
 
   bool operator!=(const SmallBitVector &RHS) const {
@@ -470,16 +504,19 @@ public:
   }
 
   // Intersection, union, disjoint union.
+  // FIXME BitVector::operator&= does not resize the LHS but this does
   SmallBitVector &operator&=(const SmallBitVector &RHS) {
     resize(std::max(size(), RHS.size()));
-    if (isSmall())
+    if (isSmall() && RHS.isSmall())
       setSmallBits(getSmallBits() & RHS.getSmallBits());
-    else if (!RHS.isSmall())
+    else if (!isSmall() && !RHS.isSmall())
       getPointer()->operator&=(*RHS.getPointer());
     else {
-      SmallBitVector Copy = RHS;
-      Copy.resize(size());
-      getPointer()->operator&=(*Copy.getPointer());
+      size_t i, e;
+      for (i = 0, e = std::min(size(), RHS.size()); i != e; ++i)
+        (*this)[i] = test(i) && RHS.test(i);
+      for (e = size(); i != e; ++i)
+        reset(i);
     }
     return *this;
   }
@@ -519,28 +556,26 @@ public:
 
   SmallBitVector &operator|=(const SmallBitVector &RHS) {
     resize(std::max(size(), RHS.size()));
-    if (isSmall())
+    if (isSmall() && RHS.isSmall())
       setSmallBits(getSmallBits() | RHS.getSmallBits());
-    else if (!RHS.isSmall())
+    else if (!isSmall() && !RHS.isSmall())
       getPointer()->operator|=(*RHS.getPointer());
     else {
-      SmallBitVector Copy = RHS;
-      Copy.resize(size());
-      getPointer()->operator|=(*Copy.getPointer());
+      for (size_t i = 0, e = RHS.size(); i != e; ++i)
+        (*this)[i] = test(i) || RHS.test(i);
     }
     return *this;
   }
 
   SmallBitVector &operator^=(const SmallBitVector &RHS) {
     resize(std::max(size(), RHS.size()));
-    if (isSmall())
+    if (isSmall() && RHS.isSmall())
       setSmallBits(getSmallBits() ^ RHS.getSmallBits());
-    else if (!RHS.isSmall())
+    else if (!isSmall() && !RHS.isSmall())
       getPointer()->operator^=(*RHS.getPointer());
     else {
-      SmallBitVector Copy = RHS;
-      Copy.resize(size());
-      getPointer()->operator^=(*Copy.getPointer());
+      for (size_t i = 0, e = RHS.size(); i != e; ++i)
+        (*this)[i] = test(i) != RHS.test(i);
     }
     return *this;
   }
@@ -627,6 +662,19 @@ public:
       getPointer()->clearBitsNotInMask(Mask, MaskWords);
   }
 
+  void invalid() {
+    assert(empty());
+    X = (uintptr_t)-1;
+  }
+  bool isInvalid() const { return X == (uintptr_t)-1; }
+
+  ArrayRef<uintptr_t> getData(uintptr_t &Store) const {
+    if (!isSmall())
+      return getPointer()->getData();
+    Store = getSmallBits();
+    return makeArrayRef(Store);
+  }
+
 private:
   template <bool AddBits, bool InvertMask>
   void applyMask(const uint32_t *Mask, unsigned MaskWords) {
@@ -664,14 +712,34 @@ operator^(const SmallBitVector &LHS, const SmallBitVector &RHS) {
   return Result;
 }
 
-} // End llvm namespace
+template <> struct DenseMapInfo<SmallBitVector> {
+  static inline SmallBitVector getEmptyKey() { return SmallBitVector(); }
+  static inline SmallBitVector getTombstoneKey() {
+    SmallBitVector V;
+    V.invalid();
+    return V;
+  }
+  static unsigned getHashValue(const SmallBitVector &V) {
+    uintptr_t Store;
+    return DenseMapInfo<std::pair<unsigned, ArrayRef<uintptr_t>>>::getHashValue(
+        std::make_pair(V.size(), V.getData(Store)));
+  }
+  static bool isEqual(const SmallBitVector &LHS, const SmallBitVector &RHS) {
+    if (LHS.isInvalid() || RHS.isInvalid())
+      return LHS.isInvalid() == RHS.isInvalid();
+    return LHS == RHS;
+  }
+};
+} // end namespace llvm
 
 namespace std {
-  /// Implement std::swap in terms of BitVector swap.
-  inline void
-  swap(llvm::SmallBitVector &LHS, llvm::SmallBitVector &RHS) {
-    LHS.swap(RHS);
-  }
+
+/// Implement std::swap in terms of BitVector swap.
+inline void
+swap(llvm::SmallBitVector &LHS, llvm::SmallBitVector &RHS) {
+  LHS.swap(RHS);
 }
 
-#endif
+} // end namespace std
+
+#endif // LLVM_ADT_SMALLBITVECTOR_H

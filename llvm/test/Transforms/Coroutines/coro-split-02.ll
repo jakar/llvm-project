@@ -1,6 +1,8 @@
 ; Tests that coro-split can handle the case when a code after coro.suspend uses
 ; a value produces between coro.save and coro.suspend (%Result.i19)
+; and checks whether stray coro.saves are properly removed
 ; RUN: opt < %s -coro-split -S | FileCheck %s
+; RUN: opt < %s -passes=coro-split -S | FileCheck %s
 
 %"struct.std::coroutine_handle" = type { i8* }
 %"struct.std::coroutine_handle.0" = type { %"struct.std::coroutine_handle" }
@@ -12,6 +14,7 @@ declare void @print(i32)
 define void @a() "coroutine.presplit"="1" {
 entry:
   %ref.tmp7 = alloca %"struct.lean_future<int>::Awaiter", align 8
+  %testval = alloca i32
   %id = call token @llvm.coro.id(i32 0, i8* null, i8* null, i8* null)
   %alloc = call i8* @malloc(i64 16) #3
   %vFrame = call noalias nonnull i8* @llvm.coro.begin(token %id, i8* %alloc)
@@ -24,18 +27,31 @@ entry:
     i8 1, label %exit
   ]
 await.ready:
+  %StrayCoroSave = call token @llvm.coro.save(i8* null)
   %val = load i32, i32* %Result.i19
+  %cast = bitcast i32* %testval to i8*
+  call void @llvm.lifetime.start.p0i8(i64 4, i8* %cast)
+  %test = load i32, i32* %testval
+  call void @print(i32 %test)
+  call void @llvm.lifetime.end.p0i8(i64 4, i8*  %cast)
   call void @print(i32 %val)
-  br label %exit  
+  br label %exit
 exit:
   call i1 @llvm.coro.end(i8* null, i1 false)
   ret void
 }
 
 ; CHECK-LABEL: @a.resume(
+; CHECK:         %testval = alloca i32
 ; CHECK:         getelementptr inbounds %a.Frame
 ; CHECK-NEXT:    getelementptr inbounds %"struct.lean_future<int>::Awaiter"
+; CHECK-NOT:     call token @llvm.coro.save(i8* null)
 ; CHECK-NEXT:    %val = load i32, i32* %Result
+; CHECK-NEXT:    %cast = bitcast i32* %testval to i8*
+; CHECK-NEXT:    call void @llvm.lifetime.start.p0i8(i64 4, i8* %cast)
+; CHECK-NEXT:    %test = load i32, i32* %testval
+; CHECK-NEXT:    call void @print(i32 %test)
+; CHECK-NEXT:    call void @llvm.lifetime.end.p0i8(i64 4, i8* %cast)
 ; CHECK-NEXT:    call void @print(i32 %val)
 ; CHECK-NEXT:    ret void
 
@@ -51,4 +67,6 @@ declare i8 @llvm.coro.suspend(token, i1) #3
 declare void @"\01??3@YAXPEAX@Z"(i8*) local_unnamed_addr #10
 declare i8* @llvm.coro.free(token, i8* nocapture readonly) #2
 declare i1 @llvm.coro.end(i8*, i1) #3
+declare void @llvm.lifetime.start.p0i8(i64, i8* nocapture) #4
+declare void @llvm.lifetime.end.p0i8(i64, i8* nocapture) #4
 

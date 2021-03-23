@@ -1,10 +1,10 @@
-// RUN: llvm-mc -filetype=obj -triple i686-pc-linux-gnu %s -o - | llvm-readobj -r | FileCheck %s
+// RUN: llvm-mc -filetype=obj -triple i686-pc-linux-gnu %s -o - | llvm-readobj -r - | FileCheck %s
 
 	.text
 	.globl	f
 	.type	f,@function
 f:                                      # @f
-# BB#0:                                 # %entry
+# %bb.0:                                # %entry
 	subl	$4, %esp
 	calll	42
 	incl	%eax

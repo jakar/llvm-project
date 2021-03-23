@@ -1,30 +1,48 @@
-add_llvm_library(LLVMDebugInfoCodeView
+add_llvm_component_library(LLVMDebugInfoCodeView
+  AppendingTypeTableBuilder.cpp
   CodeViewError.cpp
   CodeViewRecordIO.cpp
+  ContinuationRecordBuilder.cpp
   CVSymbolVisitor.cpp
-  CVTypeDumper.cpp
   CVTypeVisitor.cpp
+  DebugChecksumsSubsection.cpp
+  DebugCrossExSubsection.cpp
+  DebugCrossImpSubsection.cpp
+  DebugFrameDataSubsection.cpp
+  DebugInlineeLinesSubsection.cpp
+  DebugLinesSubsection.cpp
+  DebugStringTableSubsection.cpp
+  DebugSubsection.cpp
+  DebugSubsectionRecord.cpp
+  DebugSubsectionVisitor.cpp
+  DebugSymbolRVASubsection.cpp
+  DebugSymbolsSubsection.cpp
   EnumTables.cpp
   Formatters.cpp
+  GlobalTypeTableBuilder.cpp
+  LazyRandomTypeCollection.cpp
   Line.cpp
-  ModuleDebugFileChecksumFragment.cpp
-  ModuleDebugFragment.cpp
-  ModuleDebugFragmentRecord.cpp
-  ModuleDebugFragmentVisitor.cpp
-  ModuleDebugInlineeLinesFragment.cpp
-  ModuleDebugLineFragment.cpp
+  MergingTypeTableBuilder.cpp
+  RecordName.cpp
   RecordSerialization.cpp
-  StringTable.cpp
-  SymbolRecordMapping.cpp
+  SimpleTypeSerializer.cpp
+  StringsAndChecksums.cpp
   SymbolDumper.cpp
+  SymbolRecordHelpers.cpp
+  SymbolRecordMapping.cpp
   SymbolSerializer.cpp
-  TypeDatabase.cpp
-  TypeDatabaseVisitor.cpp
   TypeDumpVisitor.cpp
+  TypeIndex.cpp
+  TypeIndexDiscovery.cpp
+  TypeHashing.cpp
+  TypeRecordHelpers.cpp
   TypeRecordMapping.cpp
-  TypeSerializer.cpp
   TypeStreamMerger.cpp
+  TypeTableCollection.cpp
 
   ADDITIONAL_HEADER_DIRS
   ${LLVM_MAIN_INCLUDE_DIR}/llvm/DebugInfo/CodeView
+
+  LINK_COMPONENTS
+  Support
   )

@@ -1,9 +1,8 @@
-//===-- HostProcess.cpp -----------------------------------------*- C++ -*-===//
+//===-- HostProcess.cpp ---------------------------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -21,9 +20,9 @@ HostProcess::HostProcess(lldb::process_t process)
 
 HostProcess::~HostProcess() {}
 
-Error HostProcess::Terminate() { return m_native_process->Terminate(); }
+Status HostProcess::Terminate() { return m_native_process->Terminate(); }
 
-Error HostProcess::GetMainModule(FileSpec &file_spec) const {
+Status HostProcess::GetMainModule(FileSpec &file_spec) const {
   return m_native_process->GetMainModule(file_spec);
 }
 
@@ -33,7 +32,7 @@ lldb::pid_t HostProcess::GetProcessId() const {
 
 bool HostProcess::IsRunning() const { return m_native_process->IsRunning(); }
 
-HostThread
+llvm::Expected<HostThread>
 HostProcess::StartMonitoring(const Host::MonitorChildProcessCallback &callback,
                              bool monitor_signals) {
   return m_native_process->StartMonitoring(callback, monitor_signals);

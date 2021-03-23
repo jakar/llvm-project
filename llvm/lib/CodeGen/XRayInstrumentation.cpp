@@ -1,9 +1,8 @@
-//===-- XRayInstrumentation.cpp - Adds XRay instrumentation to functions. -===//
+//===- XRayInstrumentation.cpp - Adds XRay instrumentation to functions. --===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -14,20 +13,36 @@
 //
 //===---------------------------------------------------------------------===//
 
-#include "llvm/CodeGen/Analysis.h"
+#include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/SmallVector.h"
+#include "llvm/ADT/Triple.h"
+#include "llvm/CodeGen/MachineBasicBlock.h"
+#include "llvm/CodeGen/MachineDominators.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineLoopInfo.h"
-#include "llvm/CodeGen/MachineDominators.h"
-#include "llvm/CodeGen/Passes.h"
-#include "llvm/Support/TargetRegistry.h"
-#include "llvm/Target/TargetInstrInfo.h"
-#include "llvm/Target/TargetSubtargetInfo.h"
+#include "llvm/CodeGen/TargetInstrInfo.h"
+#include "llvm/CodeGen/TargetSubtargetInfo.h"
+#include "llvm/IR/Attributes.h"
+#include "llvm/IR/Function.h"
+#include "llvm/InitializePasses.h"
+#include "llvm/Pass.h"
+#include "llvm/Target/TargetMachine.h"
 
 using namespace llvm;
 
 namespace {
+
+struct InstrumentationOptions {
+  // Whether to emit PATCHABLE_TAIL_CALL.
+  bool HandleTailcall;
+
+  // Whether to emit PATCHABLE_RET/PATCHABLE_FUNCTION_EXIT for all forms of
+  // return, e.g. conditional return.
+  bool HandleAllReturns;
+};
+
 struct XRayInstrumentation : public MachineFunctionPass {
   static char ID;
 
@@ -37,7 +52,6 @@ struct XRayInstrumentation : public MachineFunctionPass {
 
   void getAnalysisUsage(AnalysisUsage &AU) const override {
     AU.setPreservesCFG();
-    AU.addRequired<MachineLoopInfo>();
     AU.addPreserved<MachineLoopInfo>();
     AU.addPreserved<MachineDominatorTree>();
     MachineFunctionPass::getAnalysisUsage(AU);
@@ -53,7 +67,8 @@ private:
   // This is the approach to go on CPUs which have a single RET instruction,
   //   like x86/x86_64.
   void replaceRetWithPatchableRet(MachineFunction &MF,
-                                  const TargetInstrInfo *TII);
+                                  const TargetInstrInfo *TII,
+                                  InstrumentationOptions);
 
   // Prepend the original return instruction with the exit sled code ("patchable
   //   function exit" pseudo-instruction), preserving the original return
@@ -64,24 +79,28 @@ private:
   //   have to call the trampoline and return from it to the original return
   //   instruction of the function being instrumented.
   void prependRetWithPatchableExit(MachineFunction &MF,
-                                   const TargetInstrInfo *TII);
+                                   const TargetInstrInfo *TII,
+                                   InstrumentationOptions);
 };
-} // anonymous namespace
+
+} // end anonymous namespace
 
 void XRayInstrumentation::replaceRetWithPatchableRet(
-    MachineFunction &MF, const TargetInstrInfo *TII) {
+    MachineFunction &MF, const TargetInstrInfo *TII,
+    InstrumentationOptions op) {
   // We look for *all* terminators and returns, then replace those with
   // PATCHABLE_RET instructions.
   SmallVector<MachineInstr *, 4> Terminators;
   for (auto &MBB : MF) {
     for (auto &T : MBB.terminators()) {
       unsigned Opc = 0;
-      if (T.isReturn() && T.getOpcode() == TII->getReturnOpcode()) {
+      if (T.isReturn() &&
+          (op.HandleAllReturns || T.getOpcode() == TII->getReturnOpcode())) {
         // Replace return instructions with:
         //   PATCHABLE_RET <Opcode>, <Operand>...
         Opc = TargetOpcode::PATCHABLE_RET;
       }
-      if (TII->isTailCall(T)) {
+      if (TII->isTailCall(T) && op.HandleTailcall) {
         // Treat the tail call as a return instruction, which has a
         // different-looking sled than the normal return case.
         Opc = TargetOpcode::PATCHABLE_TAIL_CALL;
@@ -92,6 +111,8 @@ void XRayInstrumentation::replaceRetWithPatchableRet(
         for (auto &MO : T.operands())
           MIB.add(MO);
         Terminators.push_back(&T);
+        if (T.shouldUpdateCallSiteInfo())
+          MF.eraseCallSiteInfo(&T);
       }
     }
   }
@@ -101,14 +122,16 @@ void XRayInstrumentation::replaceRetWithPatchableRet(
 }
 
 void XRayInstrumentation::prependRetWithPatchableExit(
-    MachineFunction &MF, const TargetInstrInfo *TII) {
-  for (auto &MBB : MF) {
+    MachineFunction &MF, const TargetInstrInfo *TII,
+    InstrumentationOptions op) {
+  for (auto &MBB : MF)
     for (auto &T : MBB.terminators()) {
       unsigned Opc = 0;
-      if (T.isReturn()) {
+      if (T.isReturn() &&
+          (op.HandleAllReturns || T.getOpcode() == TII->getReturnOpcode())) {
         Opc = TargetOpcode::PATCHABLE_FUNCTION_EXIT;
       }
-      if (TII->isTailCall(T)) {
+      if (TII->isTailCall(T) && op.HandleTailcall) {
         Opc = TargetOpcode::PATCHABLE_TAIL_CALL;
       }
       if (Opc != 0) {
@@ -117,35 +140,67 @@ void XRayInstrumentation::prependRetWithPatchableExit(
         BuildMI(MBB, T, T.getDebugLoc(), TII->get(Opc));
       }
     }
-  }
 }
 
 bool XRayInstrumentation::runOnMachineFunction(MachineFunction &MF) {
-  auto &F = *MF.getFunction();
+  auto &F = MF.getFunction();
   auto InstrAttr = F.getFnAttribute("function-instrument");
-  bool AlwaysInstrument = !InstrAttr.hasAttribute(Attribute::None) &&
-                          InstrAttr.isStringAttribute() &&
+  bool AlwaysInstrument = InstrAttr.isStringAttribute() &&
                           InstrAttr.getValueAsString() == "xray-always";
-  Attribute Attr = F.getFnAttribute("xray-instruction-threshold");
-  unsigned XRayThreshold = 0;
+  bool NeverInstrument = InstrAttr.isStringAttribute() &&
+                         InstrAttr.getValueAsString() == "xray-never";
+  if (NeverInstrument && !AlwaysInstrument)
+    return false;
+  auto ThresholdAttr = F.getFnAttribute("xray-instruction-threshold");
+  auto IgnoreLoopsAttr = F.getFnAttribute("xray-ignore-loops");
+  unsigned int XRayThreshold = 0;
   if (!AlwaysInstrument) {
-    if (Attr.hasAttribute(Attribute::None) || !Attr.isStringAttribute())
+    if (!ThresholdAttr.isStringAttribute())
       return false; // XRay threshold attribute not found.
-    if (Attr.getValueAsString().getAsInteger(10, XRayThreshold))
+    if (ThresholdAttr.getValueAsString().getAsInteger(10, XRayThreshold))
       return false; // Invalid value for threshold.
 
-    // Check if we have a loop.
-    // FIXME: Maybe make this smarter, and see whether the loops are dependent
-    // on inputs or side-effects?
-    MachineLoopInfo &MLI = getAnalysis<MachineLoopInfo>();
-    if (MLI.empty() && F.size() < XRayThreshold)
-      return false; // Function is too small and has no loops.
+    bool IgnoreLoops = IgnoreLoopsAttr.isValid();
+
+    // Count the number of MachineInstr`s in MachineFunction
+    int64_t MICount = 0;
+    for (const auto &MBB : MF)
+      MICount += MBB.size();
+
+    bool TooFewInstrs = MICount < XRayThreshold;
+
+    if (!IgnoreLoops) {
+      // Get MachineDominatorTree or compute it on the fly if it's unavailable
+      auto *MDT = getAnalysisIfAvailable<MachineDominatorTree>();
+      MachineDominatorTree ComputedMDT;
+      if (!MDT) {
+        ComputedMDT.getBase().recalculate(MF);
+        MDT = &ComputedMDT;
+      }
+
+      // Get MachineLoopInfo or compute it on the fly if it's unavailable
+      auto *MLI = getAnalysisIfAvailable<MachineLoopInfo>();
+      MachineLoopInfo ComputedMLI;
+      if (!MLI) {
+        ComputedMLI.getBase().analyze(MDT->getBase());
+        MLI = &ComputedMLI;
+      }
+
+      // Check if we have a loop.
+      // FIXME: Maybe make this smarter, and see whether the loops are dependent
+      // on inputs or side-effects?
+      if (MLI->empty() && TooFewInstrs)
+        return false; // Function is too small and has no loops.
+    } else if (TooFewInstrs) {
+      // Function is too small
+      return false;
+    }
   }
 
   // We look for the first non-empty MachineBasicBlock, so that we can insert
   // the function instrumentation in the appropriate place.
-  auto MBI =
-      find_if(MF, [&](const MachineBasicBlock &MBB) { return !MBB.empty(); });
+  auto MBI = llvm::find_if(
+      MF, [&](const MachineBasicBlock &MBB) { return !MBB.empty(); });
   if (MBI == MF.end())
     return false; // The function is empty.
 
@@ -159,28 +214,47 @@ bool XRayInstrumentation::runOnMachineFunction(MachineFunction &MF) {
     return false;
   }
 
-  // First, insert an PATCHABLE_FUNCTION_ENTER as the first instruction of the
-  // MachineFunction.
-  BuildMI(FirstMBB, FirstMI, FirstMI.getDebugLoc(),
-          TII->get(TargetOpcode::PATCHABLE_FUNCTION_ENTER));
+  if (!F.hasFnAttribute("xray-skip-entry")) {
+    // First, insert an PATCHABLE_FUNCTION_ENTER as the first instruction of the
+    // MachineFunction.
+    BuildMI(FirstMBB, FirstMI, FirstMI.getDebugLoc(),
+            TII->get(TargetOpcode::PATCHABLE_FUNCTION_ENTER));
+  }
 
-  switch (MF.getTarget().getTargetTriple().getArch()) {
-  case Triple::ArchType::arm:
-  case Triple::ArchType::thumb:
-  case Triple::ArchType::aarch64:
-  case Triple::ArchType::ppc64le:
-  case Triple::ArchType::mips:
-  case Triple::ArchType::mipsel:
-  case Triple::ArchType::mips64:
-  case Triple::ArchType::mips64el:
-    // For the architectures which don't have a single return instruction
-    prependRetWithPatchableExit(MF, TII);
-    break;
-  default:
-    // For the architectures that have a single return instruction (such as
-    //   RETQ on x86_64).
-    replaceRetWithPatchableRet(MF, TII);
-    break;
+  if (!F.hasFnAttribute("xray-skip-exit")) {
+    switch (MF.getTarget().getTargetTriple().getArch()) {
+    case Triple::ArchType::arm:
+    case Triple::ArchType::thumb:
+    case Triple::ArchType::aarch64:
+    case Triple::ArchType::mips:
+    case Triple::ArchType::mipsel:
+    case Triple::ArchType::mips64:
+    case Triple::ArchType::mips64el: {
+      // For the architectures which don't have a single return instruction
+      InstrumentationOptions op;
+      op.HandleTailcall = false;
+      op.HandleAllReturns = true;
+      prependRetWithPatchableExit(MF, TII, op);
+      break;
+    }
+    case Triple::ArchType::ppc64le: {
+      // PPC has conditional returns. Turn them into branch and plain returns.
+      InstrumentationOptions op;
+      op.HandleTailcall = false;
+      op.HandleAllReturns = true;
+      replaceRetWithPatchableRet(MF, TII, op);
+      break;
+    }
+    default: {
+      // For the architectures that have a single return instruction (such as
+      //   RETQ on x86_64).
+      InstrumentationOptions op;
+      op.HandleTailcall = true;
+      op.HandleAllReturns = false;
+      replaceRetWithPatchableRet(MF, TII, op);
+      break;
+    }
+    }
   }
   return true;
 }

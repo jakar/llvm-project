@@ -24,12 +24,44 @@ function(translate_msvc_cflags out_flags msvc_flags)
   set(${out_flags} "${clang_flags}" PARENT_SCOPE)
 endfunction()
 
+# Compile a sanitizer test with a freshly built clang
+# for a given architecture, adding the result to the object list.
+#  - obj_list: output list of objects, populated by path
+#              of a generated object file.
+#  - source:   source file of a test.
+#  - arch:     architecture to compile for.
+# sanitizer_test_compile(<obj_list> <source> <arch>
+#                        KIND <custom namespace>
+#                        COMPILE_DEPS <list of compile-time dependencies>
+#                        DEPS <list of dependencies>
+#                        CFLAGS <list of flags>
+# )
+function(sanitizer_test_compile obj_list source arch)
+  cmake_parse_arguments(TEST
+      "" "" "KIND;COMPILE_DEPS;DEPS;CFLAGS" ${ARGN})
+  get_filename_component(basename ${source} NAME)
+  set(output_obj
+    "${CMAKE_CFG_RESOLVED_INTDIR}${obj_list}.${basename}.${arch}${TEST_KIND}.o")
+
+  # Write out architecture-specific flags into TARGET_CFLAGS variable.
+  get_target_flags_for_arch(${arch} TARGET_CFLAGS)
+  set(COMPILE_DEPS ${TEST_COMPILE_DEPS})
+  if(NOT COMPILER_RT_STANDALONE_BUILD)
+    list(APPEND COMPILE_DEPS ${TEST_DEPS})
+  endif()
+  clang_compile(${output_obj} ${source}
+                CFLAGS ${TEST_CFLAGS} ${TARGET_CFLAGS}
+                DEPS ${COMPILE_DEPS})
+  list(APPEND ${obj_list} ${output_obj})
+  set("${obj_list}" "${${obj_list}}" PARENT_SCOPE)
+endfunction()
+
 # Compile a source into an object file with COMPILER_RT_TEST_COMPILER using
 # a provided compile flags and dependenices.
 # clang_compile(<object> <source>
 #               CFLAGS <list of compile flags>
 #               DEPS <list of dependencies>)
-macro(clang_compile object_file source)
+function(clang_compile object_file source)
   cmake_parse_arguments(SOURCE "" "" "CFLAGS;DEPS" ${ARGN})
   get_filename_component(source_rpath ${source} REALPATH)
   if(NOT COMPILER_RT_STANDALONE_BUILD)
@@ -38,25 +70,36 @@ macro(clang_compile object_file source)
   if (TARGET CompilerRTUnitTestCheckCxx)
     list(APPEND SOURCE_DEPS CompilerRTUnitTestCheckCxx)
   endif()
-  string(REGEX MATCH "[.](cc|cpp)$" is_cxx ${source_rpath})
-  if(is_cxx)
-    string(REPLACE " " ";" global_flags "${CMAKE_CXX_FLAGS}")
+  if(COMPILER_RT_STANDALONE_BUILD)
+    # Only add global flags in standalone build.
+    string(REGEX MATCH "[.](cc|cpp)$" is_cxx ${source_rpath})
+    if(is_cxx)
+      string(REPLACE " " ";" global_flags "${CMAKE_CXX_FLAGS}")
+    else()
+      string(REPLACE " " ";" global_flags "${CMAKE_C_FLAGS}")
+    endif()
+
+    if (MSVC)
+      translate_msvc_cflags(global_flags "${global_flags}")
+    endif()
+
+    if (APPLE)
+      set(global_flags ${OSX_SYSROOT_FLAG} ${global_flags})
+    endif()
+
+    # Ignore unknown warnings. CMAKE_CXX_FLAGS may contain GCC-specific options
+    # which are not supported by Clang.
+    list(APPEND global_flags -Wno-unknown-warning-option)
+    set(compile_flags ${global_flags} ${SOURCE_CFLAGS})
   else()
-    string(REPLACE " " ";" global_flags "${CMAKE_C_FLAGS}")
+    set(compile_flags ${SOURCE_CFLAGS})
   endif()
 
-  if (MSVC)
-    translate_msvc_cflags(global_flags "${global_flags}")
+  string(REGEX MATCH "[.](m|mm)$" is_objc ${source_rpath})
+  if (is_objc)
+    list(APPEND compile_flags "-ObjC")
   endif()
 
-  if (APPLE)
-    set(global_flags ${OSX_SYSROOT_FLAG} ${global_flags})
-  endif()
-
-  # Ignore unknown warnings. CMAKE_CXX_FLAGS may contain GCC-specific options
-  # which are not supported by Clang.
-  list(APPEND global_flags -Wno-unknown-warning-option)
-  set(compile_flags ${global_flags} ${SOURCE_CFLAGS})
   add_custom_command(
     OUTPUT ${object_file}
     COMMAND ${COMPILER_RT_TEST_COMPILER} ${compile_flags} -c
@@ -64,7 +107,7 @@ macro(clang_compile object_file source)
             ${source_rpath}
     MAIN_DEPENDENCY ${source}
     DEPENDS ${SOURCE_DEPS})
-endmacro()
+endfunction()
 
 # On Darwin, there are no system-wide C++ headers and the just-built clang is
 # therefore not able to compile C++ files unless they are copied/symlinked into
@@ -100,7 +143,7 @@ macro(clang_compiler_add_cxx_check)
       COMMAND bash -c "${CMD}"
       COMMENT "Checking that just-built clang can find C++ headers..."
       VERBATIM)
-    if (TARGET clang)
+    if (NOT COMPILER_RT_STANDALONE_BUILD AND NOT LLVM_RUNTIMES_BUILD)
       ADD_DEPENDENCIES(CompilerRTUnitTestCheckCxx clang)
     endif()
   endif()

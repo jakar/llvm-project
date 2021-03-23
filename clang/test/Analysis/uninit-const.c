@@ -1,4 +1,10 @@
-// RUN: %clang_analyze_cc1 -analyzer-checker=unix.Malloc,core,alpha.core.CallAndMessageUnInitRefArg -analyzer-output=text -verify %s
+// RUN: %clang_analyze_cc1 -analyzer-output=text -verify %s \
+// RUN:   -analyzer-checker=core \
+// RUN:   -analyzer-checker=unix.Malloc \
+// RUN:   -analyzer-checker=debug.ExprInspection \
+// RUN:   -analyzer-config core.CallAndMessage:ArgPointeeInitializedness=true
+
+void clang_analyzer_warnIfReached();
 
 // Passing uninitialized const data to function
 #include "Inputs/system-header-simulator.h"
@@ -22,15 +28,15 @@ void doStuff_constStaticSizedArray(const int a[static 10]) {}
 void doStuff_variadic(const int *u, ...){};
 
 void f_1(void) {
-  int t;
+  int t;               // expected-note {{'t' declared without an initial value}}
   int* tp = &t;        // expected-note {{'tp' initialized here}}
   doStuff_pointerToConstInt(tp);  // expected-warning {{1st function call argument is a pointer to uninitialized value}}
                        // expected-note@-1 {{1st function call argument is a pointer to uninitialized value}}
 }
 
 void f_1_1(void) {
-  int t;
-  int* tp1 = &t;
+  int t;                 // expected-note {{'t' declared without an initial value}}
+  int *tp1 = &t;         // expected-note {{'tp1' initialized here}}
   int* tp2 = tp1;        // expected-note {{'tp2' initialized here}}
   doStuff_pointerToConstInt(tp2);  // expected-warning {{1st function call argument is a pointer to uninitialized value}}
                        // expected-note@-1 {{1st function call argument is a pointer to uninitialized value}}
@@ -38,12 +44,15 @@ void f_1_1(void) {
 
 
 int *f_2_sub(int *p) {
-  return p;
+  return p; // expected-note {{Returning pointer (loaded from 'p')}}
 }
 
 void f_2(void) {
-  int t;
-  int* p = f_2_sub(&t);
+  int t;                // expected-note {{'t' declared without an initial value}}
+  int *p = f_2_sub(&t); // expected-note {{Passing value via 1st parameter 'p'}}
+                        // expected-note@-1{{Calling 'f_2_sub'}}
+                        // expected-note@-2{{Returning from 'f_2_sub'}}
+                        // expected-note@-3{{'p' initialized here}}
   int* tp = p; // expected-note {{'tp' initialized here}}
   doStuff_pointerToConstInt(tp); // expected-warning {{1st function call argument is a pointer to uninitialized value}}
                       // expected-note@-1 {{1st function call argument is a pointer to uninitialized value}}
@@ -60,7 +69,7 @@ void f_4(void) {
 }
 
 void f_5(void) {
-  int ta[5];
+  int ta[5];           // expected-note {{'ta' initialized here}}
   int* tp = ta;        // expected-note {{'tp' initialized here}}
   doStuff_pointerToConstInt(tp);  // expected-warning {{1st function call argument is a pointer to uninitialized value}}
                        // expected-note@-1 {{1st function call argument is a pointer to uninitialized value}}
@@ -97,7 +106,7 @@ void f_8(void) {
 }
 
 void f_9(void) {
-  int  a[6];
+  int a[6];                        // expected-note {{'a' initialized here}}
   int const *ptau = a;             // expected-note {{'ptau' initialized here}}
   doStuff_arrayOfConstInt(ptau);    // expected-warning {{1st function call argument is a pointer to uninitialized value}}
                                    // expected-note@-1 {{1st function call argument is a pointer to uninitialized value}}
@@ -119,6 +128,32 @@ void f_12(void) {
   int t[10] = {0,1,2,3,4,5,6,7,8,9};
   doStuff_constStaticSizedArray(t);  // no-warning
 
+}
+
+// https://bugs.llvm.org/show_bug.cgi?id=35419
+void f11_0(void) {
+  int x; // expected-note {{'x' declared without an initial value}}
+  x++; // expected-warning {{The expression is an uninitialized value. The computed value will also be garbage}}
+       // expected-note@-1 {{The expression is an uninitialized value. The computed value will also be garbage}}
+  clang_analyzer_warnIfReached(); // no-warning
+}
+void f11_1(void) {
+  int x; // expected-note {{'x' declared without an initial value}}
+  ++x; // expected-warning {{The expression is an uninitialized value. The computed value will also be garbage}}
+       // expected-note@-1 {{The expression is an uninitialized value. The computed value will also be garbage}}
+  clang_analyzer_warnIfReached(); // no-warning
+}
+void f11_2(void) {
+  int x; // expected-note {{'x' declared without an initial value}}
+  x--; // expected-warning {{The expression is an uninitialized value. The computed value will also be garbage}}
+       // expected-note@-1 {{The expression is an uninitialized value. The computed value will also be garbage}}
+  clang_analyzer_warnIfReached(); // no-warning
+}
+void f11_3(void) {
+  int x; // expected-note {{'x' declared without an initial value}}
+  --x; // expected-warning {{The expression is an uninitialized value. The computed value will also be garbage}}
+       // expected-note@-1 {{The expression is an uninitialized value. The computed value will also be garbage}}
+  clang_analyzer_warnIfReached(); // no-warning
 }
 
 int f_malloc_1(void) {
@@ -145,7 +180,7 @@ int f_malloc_2(void) {
 
 // uninit pointer, uninit val
 void f_variadic_unp_unv(void) {
-  int t;
+  int t; // expected-note {{'t' declared without an initial value}}
   int v;
   int* tp = &t;           // expected-note {{'tp' initialized here}}
   doStuff_variadic(tp,v);  // expected-warning {{1st function call argument is a pointer to uninitialized value}}
@@ -153,7 +188,7 @@ void f_variadic_unp_unv(void) {
 }
 // uninit pointer, init val
 void f_variadic_unp_inv(void) {
-  int t;
+  int t; // expected-note {{'t' declared without an initial value}}
   int v = 3;
   int* tp = &t;           // expected-note {{'tp' initialized here}}
   doStuff_variadic(tp,v);  // expected-warning {{1st function call argument is a pointer to uninitialized value}}
@@ -188,7 +223,7 @@ void f_variadic_inp_inp(void) {
 
 //uninit pointer, init pointer
 void f_variadic_unp_inp(void) {
-  int t;
+  int t; // expected-note {{'t' declared without an initial value}}
   int u=3;
   int *vp = &u ;
   int *tp = &t;             // expected-note {{'tp' initialized here}}
@@ -207,7 +242,7 @@ void f_variadic_inp_unp(void) {
 
 //uninit pointer, uninit pointer
 void f_variadic_unp_unp(void) {
-  int t;
+  int t; // expected-note {{'t' declared without an initial value}}
   int u;
   int *vp = &u ;
   int *tp = &t;             // expected-note {{'tp' initialized here}}

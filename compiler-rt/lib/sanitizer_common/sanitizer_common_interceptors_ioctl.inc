@@ -1,14 +1,15 @@
 //===-- sanitizer_common_interceptors_ioctl.inc -----------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
 // Ioctl handling in common sanitizer interceptors.
 //===----------------------------------------------------------------------===//
+
+#if !SANITIZER_NETBSD
 
 #include "sanitizer_flags.h"
 
@@ -57,7 +58,9 @@ static void ioctl_table_fill() {
   _(SIOCGIFCONF, CUSTOM, 0);
   _(SIOCGPGRP, WRITE, sizeof(int));
   _(SIOCSPGRP, READ, sizeof(int));
+#if !SANITIZER_SOLARIS
   _(TIOCCONS, NONE, 0);
+#endif
   _(TIOCEXCL, NONE, 0);
   _(TIOCGETD, WRITE, sizeof(int));
   _(TIOCGPGRP, WRITE, pid_t_sz);
@@ -327,13 +330,17 @@ static void ioctl_table_fill() {
   _(SOUND_PCM_WRITE_CHANNELS, WRITE, sizeof(int));
   _(SOUND_PCM_WRITE_FILTER, WRITE, sizeof(int));
   _(TCFLSH, NONE, 0);
+#if SANITIZER_GLIBC
   _(TCGETA, WRITE, struct_termio_sz);
+#endif
   _(TCGETS, WRITE, struct_termios_sz);
   _(TCSBRK, NONE, 0);
   _(TCSBRKP, NONE, 0);
+#if SANITIZER_GLIBC
   _(TCSETA, READ, struct_termio_sz);
   _(TCSETAF, READ, struct_termio_sz);
   _(TCSETAW, READ, struct_termio_sz);
+#endif
   _(TCSETS, READ, struct_termios_sz);
   _(TCSETSF, READ, struct_termios_sz);
   _(TCSETSW, READ, struct_termios_sz);
@@ -361,7 +368,7 @@ static void ioctl_table_fill() {
   _(VT_WAITACTIVE, NONE, 0);
 #endif
 
-#if SANITIZER_LINUX && !SANITIZER_ANDROID
+#if SANITIZER_GLIBC
   // _(SIOCDEVPLIP, WRITE, struct_ifreq_sz); // the same as EQL_ENSLAVE
   _(CYGETDEFTHRESH, WRITE, sizeof(int));
   _(CYGETDEFTIMEOUT, WRITE, sizeof(int));
@@ -476,7 +483,7 @@ struct ioctl_desc_compare {
 
 static void ioctl_init() {
   ioctl_table_fill();
-  InternalSort(&ioctl_table, ioctl_table_size, ioctl_desc_compare());
+  Sort(ioctl_table, ioctl_table_size, ioctl_desc_compare());
 
   bool bad = false;
   for (unsigned i = 0; i < ioctl_table_size - 1; ++i) {
@@ -602,3 +609,5 @@ static void ioctl_common_post(void *ctx, const ioctl_desc *desc, int res, int d,
     COMMON_INTERCEPTOR_WRITE_RANGE(ctx, ifc->ifc_ifcu.ifcu_req, ifc->ifc_len);
   }
 }
+
+#endif

@@ -1,9 +1,8 @@
-//===-- EmulateInstructionMIPS64.cpp -----------------------------*- C++-*-===//
+//===-- EmulateInstructionMIPS64.cpp --------------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -12,14 +11,14 @@
 #include <stdlib.h>
 
 #include "lldb/Core/Address.h"
-#include "lldb/Core/ArchSpec.h"
 #include "lldb/Core/Opcode.h"
 #include "lldb/Core/PluginManager.h"
-#include "lldb/Core/RegisterValue.h"
 #include "lldb/Host/PosixApi.h"
 #include "lldb/Symbol/UnwindPlan.h"
+#include "lldb/Utility/ArchSpec.h"
 #include "lldb/Utility/ConstString.h"
 #include "lldb/Utility/DataExtractor.h"
+#include "lldb/Utility/RegisterValue.h"
 #include "lldb/Utility/Stream.h"
 #include "llvm-c/Disassembler.h"
 #include "llvm/MC/MCAsmInfo.h"
@@ -29,6 +28,7 @@
 #include "llvm/MC/MCInstrInfo.h"
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCSubtargetInfo.h"
+#include "llvm/MC/MCTargetOptions.h"
 #include "llvm/Support/TargetRegistry.h"
 #include "llvm/Support/TargetSelect.h"
 
@@ -40,14 +40,14 @@
 using namespace lldb;
 using namespace lldb_private;
 
+LLDB_PLUGIN_DEFINE_ADV(EmulateInstructionMIPS64, InstructionMIPS64)
+
 #define UInt(x) ((uint64_t)x)
 #define integer int64_t
 
-//----------------------------------------------------------------------
 //
 // EmulateInstructionMIPS64 implementation
 //
-//----------------------------------------------------------------------
 
 #ifdef __mips__
 extern "C" {
@@ -63,10 +63,10 @@ EmulateInstructionMIPS64::EmulateInstructionMIPS64(
     const lldb_private::ArchSpec &arch)
     : EmulateInstruction(arch) {
   /* Create instance of llvm::MCDisassembler */
-  std::string Error;
+  std::string Status;
   llvm::Triple triple = arch.GetTriple();
   const llvm::Target *target =
-      llvm::TargetRegistry::lookupTarget(triple.getTriple(), Error);
+      llvm::TargetRegistry::lookupTarget(triple.getTriple(), Status);
 
 /*
  * If we fail to get the target then we haven't registered it. The
@@ -83,7 +83,7 @@ EmulateInstructionMIPS64::EmulateInstructionMIPS64(
     LLVMInitializeMipsAsmPrinter();
     LLVMInitializeMipsTargetMC();
     LLVMInitializeMipsDisassembler();
-    target = llvm::TargetRegistry::lookupTarget(triple.getTriple(), Error);
+    target = llvm::TargetRegistry::lookupTarget(triple.getTriple(), Status);
   }
 #endif
 
@@ -156,13 +156,15 @@ EmulateInstructionMIPS64::EmulateInstructionMIPS64(
   m_insn_info.reset(target->createMCInstrInfo());
   assert(m_insn_info.get());
 
-  m_asm_info.reset(target->createMCAsmInfo(*m_reg_info, triple.getTriple()));
+  llvm::MCTargetOptions MCOptions;
+  m_asm_info.reset(
+      target->createMCAsmInfo(*m_reg_info, triple.getTriple(), MCOptions));
   m_subtype_info.reset(
       target->createMCSubtargetInfo(triple.getTriple(), cpu, features));
   assert(m_asm_info.get() && m_subtype_info.get());
 
-  m_context.reset(
-      new llvm::MCContext(m_asm_info.get(), m_reg_info.get(), nullptr));
+  m_context = std::make_unique<llvm::MCContext>(m_asm_info.get(),
+                                                m_reg_info.get(), nullptr);
   assert(m_context.get());
 
   m_disasm.reset(target->createMCDisassembler(*m_subtype_info, *m_context));
@@ -199,21 +201,16 @@ EmulateInstructionMIPS64::CreateInstance(const ArchSpec &arch,
           inst_type)) {
     if (arch.GetTriple().getArch() == llvm::Triple::mips64 ||
         arch.GetTriple().getArch() == llvm::Triple::mips64el) {
-      std::auto_ptr<EmulateInstructionMIPS64> emulate_insn_ap(
-          new EmulateInstructionMIPS64(arch));
-      if (emulate_insn_ap.get())
-        return emulate_insn_ap.release();
+      return new EmulateInstructionMIPS64(arch);
     }
   }
 
-  return NULL;
+  return nullptr;
 }
 
 bool EmulateInstructionMIPS64::SetTargetTriple(const ArchSpec &arch) {
-  if (arch.GetTriple().getArch() == llvm::Triple::mips64 ||
-      arch.GetTriple().getArch() == llvm::Triple::mips64el)
-    return true;
-  return false;
+  return arch.GetTriple().getArch() == llvm::Triple::mips64 ||
+         arch.GetTriple().getArch() == llvm::Triple::mips64el;
 }
 
 const char *EmulateInstructionMIPS64::GetRegisterName(unsigned reg_num,
@@ -670,9 +667,7 @@ bool EmulateInstructionMIPS64::GetRegisterInfo(RegisterKind reg_kind,
 EmulateInstructionMIPS64::MipsOpcode *
 EmulateInstructionMIPS64::GetOpcodeForInstruction(const char *op_name) {
   static EmulateInstructionMIPS64::MipsOpcode g_opcodes[] = {
-      //----------------------------------------------------------------------
       // Prologue/Epilogue instructions
-      //----------------------------------------------------------------------
       {"DADDiu", &EmulateInstructionMIPS64::Emulate_DADDiu,
        "DADDIU rt, rs, immediate"},
       {"ADDiu", &EmulateInstructionMIPS64::Emulate_DADDiu,
@@ -689,9 +684,7 @@ EmulateInstructionMIPS64::GetOpcodeForInstruction(const char *op_name) {
        "ADDU   rd, rs, rt"},
       {"LUI", &EmulateInstructionMIPS64::Emulate_LUI, "LUI    rt, immediate"},
 
-      //----------------------------------------------------------------------
       // Load/Store  instructions
-      //----------------------------------------------------------------------
       /* Following list of emulated instructions are required by implementation
          of hardware watchpoint
          for MIPS in lldb. As we just need the address accessed by instructions,
@@ -797,11 +790,11 @@ EmulateInstructionMIPS64::GetOpcodeForInstruction(const char *op_name) {
       {"SWXC1", &EmulateInstructionMIPS64::Emulate_LDST_Reg,
        "SWXC1 fs, index (base)"},
 
-      //----------------------------------------------------------------------
       // Branch instructions
-      //----------------------------------------------------------------------
       {"BEQ", &EmulateInstructionMIPS64::Emulate_BXX_3ops, "BEQ rs,rt,offset"},
+      {"BEQ64", &EmulateInstructionMIPS64::Emulate_BXX_3ops, "BEQ rs,rt,offset"},
       {"BNE", &EmulateInstructionMIPS64::Emulate_BXX_3ops, "BNE rs,rt,offset"},
+      {"BNE64", &EmulateInstructionMIPS64::Emulate_BXX_3ops, "BNE rs,rt,offset"},
       {"BEQL", &EmulateInstructionMIPS64::Emulate_BXX_3ops,
        "BEQL rs,rt,offset"},
       {"BNEL", &EmulateInstructionMIPS64::Emulate_BXX_3ops,
@@ -814,6 +807,7 @@ EmulateInstructionMIPS64::GetOpcodeForInstruction(const char *op_name) {
       {"BALC", &EmulateInstructionMIPS64::Emulate_BALC, "BALC offset"},
       {"BC", &EmulateInstructionMIPS64::Emulate_BC, "BC offset"},
       {"BGEZ", &EmulateInstructionMIPS64::Emulate_BXX_2ops, "BGEZ rs,offset"},
+      {"BGEZ64", &EmulateInstructionMIPS64::Emulate_BXX_2ops, "BGEZ rs,offset"},
       {"BLEZALC", &EmulateInstructionMIPS64::Emulate_Bcond_Link_C,
        "BLEZALC rs,offset"},
       {"BGEZALC", &EmulateInstructionMIPS64::Emulate_Bcond_Link_C,
@@ -828,34 +822,61 @@ EmulateInstructionMIPS64::GetOpcodeForInstruction(const char *op_name) {
        "BNEZALC rs,offset"},
       {"BEQC", &EmulateInstructionMIPS64::Emulate_BXX_3ops_C,
        "BEQC rs,rt,offset"},
+      {"BEQC64", &EmulateInstructionMIPS64::Emulate_BXX_3ops_C,
+       "BEQC rs,rt,offset"},
       {"BNEC", &EmulateInstructionMIPS64::Emulate_BXX_3ops_C,
+       "BNEC rs,rt,offset"},
+      {"BNEC64", &EmulateInstructionMIPS64::Emulate_BXX_3ops_C,
        "BNEC rs,rt,offset"},
       {"BLTC", &EmulateInstructionMIPS64::Emulate_BXX_3ops_C,
        "BLTC rs,rt,offset"},
+      {"BLTC64", &EmulateInstructionMIPS64::Emulate_BXX_3ops_C,
+       "BLTC rs,rt,offset"},
       {"BGEC", &EmulateInstructionMIPS64::Emulate_BXX_3ops_C,
+       "BGEC rs,rt,offset"},
+      {"BGEC64", &EmulateInstructionMIPS64::Emulate_BXX_3ops_C,
        "BGEC rs,rt,offset"},
       {"BLTUC", &EmulateInstructionMIPS64::Emulate_BXX_3ops_C,
        "BLTUC rs,rt,offset"},
+      {"BLTUC64", &EmulateInstructionMIPS64::Emulate_BXX_3ops_C,
+       "BLTUC rs,rt,offset"},
       {"BGEUC", &EmulateInstructionMIPS64::Emulate_BXX_3ops_C,
+       "BGEUC rs,rt,offset"},
+      {"BGEUC64", &EmulateInstructionMIPS64::Emulate_BXX_3ops_C,
        "BGEUC rs,rt,offset"},
       {"BLTZC", &EmulateInstructionMIPS64::Emulate_BXX_2ops_C,
        "BLTZC rt,offset"},
+      {"BLTZC64", &EmulateInstructionMIPS64::Emulate_BXX_2ops_C,
+       "BLTZC rt,offset"},
       {"BLEZC", &EmulateInstructionMIPS64::Emulate_BXX_2ops_C,
+       "BLEZC rt,offset"},
+      {"BLEZC64", &EmulateInstructionMIPS64::Emulate_BXX_2ops_C,
        "BLEZC rt,offset"},
       {"BGEZC", &EmulateInstructionMIPS64::Emulate_BXX_2ops_C,
        "BGEZC rt,offset"},
+      {"BGEZC64", &EmulateInstructionMIPS64::Emulate_BXX_2ops_C,
+       "BGEZC rt,offset"},
       {"BGTZC", &EmulateInstructionMIPS64::Emulate_BXX_2ops_C,
+       "BGTZC rt,offset"},
+      {"BGTZC64", &EmulateInstructionMIPS64::Emulate_BXX_2ops_C,
        "BGTZC rt,offset"},
       {"BEQZC", &EmulateInstructionMIPS64::Emulate_BXX_2ops_C,
        "BEQZC rt,offset"},
+      {"BEQZC64", &EmulateInstructionMIPS64::Emulate_BXX_2ops_C,
+       "BEQZC rt,offset"},
       {"BNEZC", &EmulateInstructionMIPS64::Emulate_BXX_2ops_C,
+       "BNEZC rt,offset"},
+      {"BNEZC64", &EmulateInstructionMIPS64::Emulate_BXX_2ops_C,
        "BNEZC rt,offset"},
       {"BGEZL", &EmulateInstructionMIPS64::Emulate_BXX_2ops, "BGEZL rt,offset"},
       {"BGTZ", &EmulateInstructionMIPS64::Emulate_BXX_2ops, "BGTZ rt,offset"},
+      {"BGTZ64", &EmulateInstructionMIPS64::Emulate_BXX_2ops, "BGTZ rt,offset"},
       {"BGTZL", &EmulateInstructionMIPS64::Emulate_BXX_2ops, "BGTZL rt,offset"},
       {"BLEZ", &EmulateInstructionMIPS64::Emulate_BXX_2ops, "BLEZ rt,offset"},
+      {"BLEZ64", &EmulateInstructionMIPS64::Emulate_BXX_2ops, "BLEZ rt,offset"},
       {"BLEZL", &EmulateInstructionMIPS64::Emulate_BXX_2ops, "BLEZL rt,offset"},
       {"BLTZ", &EmulateInstructionMIPS64::Emulate_BXX_2ops, "BLTZ rt,offset"},
+      {"BLTZ64", &EmulateInstructionMIPS64::Emulate_BXX_2ops, "BLTZ rt,offset"},
       {"BLTZAL", &EmulateInstructionMIPS64::Emulate_Bcond_Link,
        "BLTZAL rt,offset"},
       {"BLTZALL", &EmulateInstructionMIPS64::Emulate_Bcond_Link,
@@ -872,8 +893,11 @@ EmulateInstructionMIPS64::GetOpcodeForInstruction(const char *op_name) {
       {"JALR64", &EmulateInstructionMIPS64::Emulate_JALR, "JALR target"},
       {"JALR_HB", &EmulateInstructionMIPS64::Emulate_JALR, "JALR.HB target"},
       {"JIALC", &EmulateInstructionMIPS64::Emulate_JIALC, "JIALC rt,offset"},
+      {"JIALC64", &EmulateInstructionMIPS64::Emulate_JIALC, "JIALC rt,offset"},
       {"JIC", &EmulateInstructionMIPS64::Emulate_JIC, "JIC rt,offset"},
+      {"JIC64", &EmulateInstructionMIPS64::Emulate_JIC, "JIC rt,offset"},
       {"JR", &EmulateInstructionMIPS64::Emulate_JR, "JR target"},
+      {"JR64", &EmulateInstructionMIPS64::Emulate_JR, "JR target"},
       {"JR_HB", &EmulateInstructionMIPS64::Emulate_JR, "JR.HB target"},
       {"BC1F", &EmulateInstructionMIPS64::Emulate_FP_branch, "BC1F cc, offset"},
       {"BC1T", &EmulateInstructionMIPS64::Emulate_FP_branch, "BC1T cc, offset"},
@@ -912,7 +936,7 @@ EmulateInstructionMIPS64::GetOpcodeForInstruction(const char *op_name) {
       return &g_opcodes[i];
   }
 
-  return NULL;
+  return nullptr;
 }
 
 bool EmulateInstructionMIPS64::ReadInstruction() {
@@ -943,8 +967,8 @@ bool EmulateInstructionMIPS64::EvaluateInstruction(uint32_t evaluate_options) {
   if (m_opcode.GetData(data)) {
     llvm::MCDisassembler::DecodeStatus decode_status;
     llvm::ArrayRef<uint8_t> raw_insn(data.GetDataStart(), data.GetByteSize());
-    decode_status = m_disasm->getInstruction(
-        mc_insn, insn_size, raw_insn, m_addr, llvm::nulls(), llvm::nulls());
+    decode_status = m_disasm->getInstruction(mc_insn, insn_size, raw_insn,
+                                             m_addr, llvm::nulls());
     if (decode_status != llvm::MCDisassembler::Success)
       return false;
   }
@@ -955,7 +979,7 @@ bool EmulateInstructionMIPS64::EvaluateInstruction(uint32_t evaluate_options) {
   */
   const char *op_name = m_insn_info->getName(mc_insn.getOpcode()).data();
 
-  if (op_name == NULL)
+  if (op_name == nullptr)
     return false;
 
   /*
@@ -964,7 +988,7 @@ bool EmulateInstructionMIPS64::EvaluateInstruction(uint32_t evaluate_options) {
   */
   MipsOpcode *opcode_data = GetOpcodeForInstruction(op_name);
 
-  if (opcode_data == NULL)
+  if (opcode_data == nullptr)
     return false;
 
   uint64_t old_pc = 0, new_pc = 0;
@@ -1023,6 +1047,7 @@ bool EmulateInstructionMIPS64::CreateFunctionEntryUnwind(
   unwind_plan.SetSourceName("EmulateInstructionMIPS64");
   unwind_plan.SetSourcedFromCompiler(eLazyBoolNo);
   unwind_plan.SetUnwindPlanValidAtAllInstructions(eLazyBoolYes);
+  unwind_plan.SetUnwindPlanForSignalTrap(eLazyBoolNo);
   unwind_plan.SetReturnAddressRegister(dwarf_ra_mips64);
 
   return true;
@@ -1061,24 +1086,32 @@ bool EmulateInstructionMIPS64::Emulate_DADDiu(llvm::MCInst &insn) {
   dst = m_reg_info->getEncodingValue(insn.getOperand(0).getReg());
   src = m_reg_info->getEncodingValue(insn.getOperand(1).getReg());
 
-  // If immediate is greater than 2^16 - 1 then clang generate
-  // LUI, (D)ADDIU,(D)SUBU instructions in prolog.
-  // Example
-  // lui    $1, 0x2
-  // daddiu $1, $1, -0x5920
-  // dsubu  $sp, $sp, $1
-  // In this case, (D)ADDIU dst and src will be same and not equal to sp
+  // If immediate is greater than 2^16 - 1 then clang generate LUI,
+  // (D)ADDIU,(D)SUBU instructions in prolog. Example lui    $1, 0x2 daddiu $1,
+  // $1, -0x5920 dsubu  $sp, $sp, $1 In this case, (D)ADDIU dst and src will be
+  // same and not equal to sp
   if (dst == src) {
     Context context;
 
     /* read <src> register */
-    const int64_t src_opd_val = ReadRegisterUnsigned(
+    const uint64_t src_opd_val = ReadRegisterUnsigned(
         eRegisterKindDWARF, dwarf_zero_mips64 + src, 0, &success);
     if (!success)
       return false;
 
     /* Check if this is daddiu sp, sp, imm16 */
     if (dst == dwarf_sp_mips64) {
+      /*
+       * From the MIPS IV spec:
+       *
+       * The term “unsigned” in the instruction name is a misnomer; this
+       * operation is 64-bit modulo arithmetic that does not trap on overflow.
+       * It is appropriate for arithmetic which is not signed, such as address
+       * arithmetic, or integer arithmetic environments that ignore overflow,
+       * such as “C” language arithmetic.
+       *
+       * Assume 2's complement and rely on unsigned overflow here.
+       */
       uint64_t result = src_opd_val + imm;
       RegisterInfo reg_info_sp;
 
@@ -1141,7 +1174,7 @@ bool EmulateInstructionMIPS64::Emulate_SD(llvm::MCInst &insn) {
     context.SetRegisterToRegisterPlusOffset(reg_info_src, reg_info_base, 0);
 
     uint8_t buffer[RegisterValue::kMaxRegisterByteSize];
-    Error error;
+    Status error;
 
     if (!ReadRegister(&reg_info_base, data_src))
       return false;
@@ -1202,10 +1235,7 @@ bool EmulateInstructionMIPS64::Emulate_LD(llvm::MCInst &insn) {
     Context context;
     context.type = eContextRegisterLoad;
 
-    if (!WriteRegister(context, &reg_info_src, data_src))
-      return false;
-
-    return true;
+    return WriteRegister(context, &reg_info_src, data_src);
   }
 
   return false;
@@ -1224,11 +1254,8 @@ bool EmulateInstructionMIPS64::Emulate_LUI(llvm::MCInst &insn) {
   context.SetImmediateSigned(imm);
   context.type = eContextImmediate;
 
-  if (WriteRegisterUnsigned(context, eRegisterKindDWARF, dwarf_zero_mips64 + rt,
-                            imm))
-    return true;
-
-  return false;
+  return WriteRegisterUnsigned(context, eRegisterKindDWARF,
+                               dwarf_zero_mips64 + rt, imm);
 }
 
 bool EmulateInstructionMIPS64::Emulate_DSUBU_DADDU(llvm::MCInst &insn) {
@@ -1338,12 +1365,14 @@ bool EmulateInstructionMIPS64::Emulate_BXX_3ops(llvm::MCInst &insn) {
   if (!success)
     return false;
 
-  if (!strcasecmp(op_name, "BEQ") || !strcasecmp(op_name, "BEQL")) {
+  if (!strcasecmp(op_name, "BEQ") || !strcasecmp(op_name, "BEQL")
+       || !strcasecmp(op_name, "BEQ64") ) {
     if (rs_val == rt_val)
       target = pc + offset;
     else
       target = pc + 8;
-  } else if (!strcasecmp(op_name, "BNE") || !strcasecmp(op_name, "BNEL")) {
+  } else if (!strcasecmp(op_name, "BNE") || !strcasecmp(op_name, "BNEL")
+              || !strcasecmp(op_name, "BNE64")) {
     if (rs_val != rt_val)
       target = pc + offset;
     else
@@ -1354,11 +1383,8 @@ bool EmulateInstructionMIPS64::Emulate_BXX_3ops(llvm::MCInst &insn) {
   context.type = eContextRelativeBranchImmediate;
   context.SetImmediate(offset);
 
-  if (!WriteRegisterUnsigned(context, eRegisterKindDWARF, dwarf_pc_mips64,
-                             target))
-    return false;
-
-  return true;
+  return WriteRegisterUnsigned(context, eRegisterKindDWARF, dwarf_pc_mips64,
+                               target);
 }
 
 /*
@@ -1563,22 +1589,26 @@ bool EmulateInstructionMIPS64::Emulate_BXX_2ops(llvm::MCInst &insn) {
   if (!success)
     return false;
 
-  if (!strcasecmp(op_name, "BLTZL") || !strcasecmp(op_name, "BLTZ")) {
+  if (!strcasecmp(op_name, "BLTZL") || !strcasecmp(op_name, "BLTZ")
+       || !strcasecmp(op_name, "BLTZ64")) {
     if (rs_val < 0)
       target = pc + offset;
     else
       target = pc + 8;
-  } else if (!strcasecmp(op_name, "BGEZL") || !strcasecmp(op_name, "BGEZ")) {
+  } else if (!strcasecmp(op_name, "BGEZL") || !strcasecmp(op_name, "BGEZ")
+              || !strcasecmp(op_name, "BGEZ64")) {
     if (rs_val >= 0)
       target = pc + offset;
     else
       target = pc + 8;
-  } else if (!strcasecmp(op_name, "BGTZL") || !strcasecmp(op_name, "BGTZ")) {
+  } else if (!strcasecmp(op_name, "BGTZL") || !strcasecmp(op_name, "BGTZ")
+              || !strcasecmp(op_name, "BGTZ64")) {
     if (rs_val > 0)
       target = pc + offset;
     else
       target = pc + 8;
-  } else if (!strcasecmp(op_name, "BLEZL") || !strcasecmp(op_name, "BLEZ")) {
+  } else if (!strcasecmp(op_name, "BLEZL") || !strcasecmp(op_name, "BLEZ")
+              || !strcasecmp(op_name, "BLEZ64")) {
     if (rs_val <= 0)
       target = pc + offset;
     else
@@ -1589,11 +1619,8 @@ bool EmulateInstructionMIPS64::Emulate_BXX_2ops(llvm::MCInst &insn) {
   context.type = eContextRelativeBranchImmediate;
   context.SetImmediate(offset);
 
-  if (!WriteRegisterUnsigned(context, eRegisterKindDWARF, dwarf_pc_mips64,
-                             target))
-    return false;
-
-  return true;
+  return WriteRegisterUnsigned(context, eRegisterKindDWARF, dwarf_pc_mips64,
+                               target);
 }
 
 bool EmulateInstructionMIPS64::Emulate_BC(llvm::MCInst &insn) {
@@ -1615,11 +1642,8 @@ bool EmulateInstructionMIPS64::Emulate_BC(llvm::MCInst &insn) {
 
   Context context;
 
-  if (!WriteRegisterUnsigned(context, eRegisterKindDWARF, dwarf_pc_mips64,
-                             target))
-    return false;
-
-  return true;
+  return WriteRegisterUnsigned(context, eRegisterKindDWARF, dwarf_pc_mips64,
+                               target);
 }
 
 static int IsAdd64bitOverflow(int64_t a, int64_t b) {
@@ -1657,32 +1681,32 @@ bool EmulateInstructionMIPS64::Emulate_BXX_3ops_C(llvm::MCInst &insn) {
   if (!success)
     return false;
 
-  if (!strcasecmp(op_name, "BEQC")) {
+  if (!strcasecmp(op_name, "BEQC") || !strcasecmp(op_name, "BEQC64")) {
     if (rs_val == rt_val)
       target = pc + offset;
     else
       target = pc + 4;
-  } else if (!strcasecmp(op_name, "BNEC")) {
+  } else if (!strcasecmp(op_name, "BNEC") || !strcasecmp(op_name, "BNEC64")) {
     if (rs_val != rt_val)
       target = pc + offset;
     else
       target = pc + 4;
-  } else if (!strcasecmp(op_name, "BLTC")) {
+  } else if (!strcasecmp(op_name, "BLTC") || !strcasecmp(op_name, "BLTC64")) {
     if (rs_val < rt_val)
       target = pc + offset;
     else
       target = pc + 4;
-  } else if (!strcasecmp(op_name, "BGEC")) {
+  } else if (!strcasecmp(op_name, "BGEC64") || !strcasecmp(op_name, "BGEC")) {
     if (rs_val >= rt_val)
       target = pc + offset;
     else
       target = pc + 4;
-  } else if (!strcasecmp(op_name, "BLTUC")) {
+  } else if (!strcasecmp(op_name, "BLTUC") || !strcasecmp(op_name, "BLTUC64")) {
     if (rs_val < rt_val)
       target = pc + offset;
     else
       target = pc + 4;
-  } else if (!strcasecmp(op_name, "BGEUC")) {
+  } else if (!strcasecmp(op_name, "BGEUC") || !strcasecmp(op_name, "BGEUC64")) {
     if ((uint32_t)rs_val >= (uint32_t)rt_val)
       target = pc + offset;
     else
@@ -1703,11 +1727,8 @@ bool EmulateInstructionMIPS64::Emulate_BXX_3ops_C(llvm::MCInst &insn) {
   context.type = eContextRelativeBranchImmediate;
   context.SetImmediate(current_inst_size + offset);
 
-  if (!WriteRegisterUnsigned(context, eRegisterKindDWARF, dwarf_pc_mips64,
-                             target))
-    return false;
-
-  return true;
+  return WriteRegisterUnsigned(context, eRegisterKindDWARF, dwarf_pc_mips64,
+                               target);
 }
 
 /*
@@ -1734,32 +1755,32 @@ bool EmulateInstructionMIPS64::Emulate_BXX_2ops_C(llvm::MCInst &insn) {
   if (!success)
     return false;
 
-  if (!strcasecmp(op_name, "BLTZC")) {
+  if (!strcasecmp(op_name, "BLTZC") || !strcasecmp(op_name, "BLTZC64")) {
     if (rs_val < 0)
       target = pc + offset;
     else
       target = pc + 4;
-  } else if (!strcasecmp(op_name, "BLEZC")) {
+  } else if (!strcasecmp(op_name, "BLEZC") || !strcasecmp(op_name, "BLEZC64")) {
     if (rs_val <= 0)
       target = pc + offset;
     else
       target = pc + 4;
-  } else if (!strcasecmp(op_name, "BGEZC")) {
+  } else if (!strcasecmp(op_name, "BGEZC") || !strcasecmp(op_name, "BGEZC64")) {
     if (rs_val >= 0)
       target = pc + offset;
     else
       target = pc + 4;
-  } else if (!strcasecmp(op_name, "BGTZC")) {
+  } else if (!strcasecmp(op_name, "BGTZC") || !strcasecmp(op_name, "BGTZC64")) {
     if (rs_val > 0)
       target = pc + offset;
     else
       target = pc + 4;
-  } else if (!strcasecmp(op_name, "BEQZC")) {
+  } else if (!strcasecmp(op_name, "BEQZC") || !strcasecmp(op_name, "BEQZC64")) {
     if (rs_val == 0)
       target = pc + offset;
     else
       target = pc + 4;
-  } else if (!strcasecmp(op_name, "BNEZC")) {
+  } else if (!strcasecmp(op_name, "BNEZC") || !strcasecmp(op_name, "BNEZC64")) {
     if (rs_val != 0)
       target = pc + offset;
     else
@@ -1770,11 +1791,8 @@ bool EmulateInstructionMIPS64::Emulate_BXX_2ops_C(llvm::MCInst &insn) {
   context.type = eContextRelativeBranchImmediate;
   context.SetImmediate(current_inst_size + offset);
 
-  if (!WriteRegisterUnsigned(context, eRegisterKindDWARF, dwarf_pc_mips64,
-                             target))
-    return false;
-
-  return true;
+  return WriteRegisterUnsigned(context, eRegisterKindDWARF, dwarf_pc_mips64,
+                               target);
 }
 
 bool EmulateInstructionMIPS64::Emulate_J(llvm::MCInst &insn) {
@@ -1797,10 +1815,8 @@ bool EmulateInstructionMIPS64::Emulate_J(llvm::MCInst &insn) {
 
   Context context;
 
-  if (!WriteRegisterUnsigned(context, eRegisterKindDWARF, dwarf_pc_mips64, pc))
-    return false;
-
-  return true;
+  return WriteRegisterUnsigned(context, eRegisterKindDWARF, dwarf_pc_mips64,
+                               pc);
 }
 
 bool EmulateInstructionMIPS64::Emulate_JAL(llvm::MCInst &insn) {
@@ -1929,11 +1945,8 @@ bool EmulateInstructionMIPS64::Emulate_JIC(llvm::MCInst &insn) {
 
   Context context;
 
-  if (!WriteRegisterUnsigned(context, eRegisterKindDWARF, dwarf_pc_mips64,
-                             target))
-    return false;
-
-  return true;
+  return WriteRegisterUnsigned(context, eRegisterKindDWARF, dwarf_pc_mips64,
+                               target);
 }
 
 bool EmulateInstructionMIPS64::Emulate_JR(llvm::MCInst &insn) {
@@ -1954,11 +1967,8 @@ bool EmulateInstructionMIPS64::Emulate_JR(llvm::MCInst &insn) {
 
   Context context;
 
-  if (!WriteRegisterUnsigned(context, eRegisterKindDWARF, dwarf_pc_mips64,
-                             rs_val))
-    return false;
-
-  return true;
+  return WriteRegisterUnsigned(context, eRegisterKindDWARF, dwarf_pc_mips64,
+                               rs_val);
 }
 
 /*
@@ -2008,11 +2018,8 @@ bool EmulateInstructionMIPS64::Emulate_FP_branch(llvm::MCInst &insn) {
 
   Context context;
 
-  if (!WriteRegisterUnsigned(context, eRegisterKindDWARF, dwarf_pc_mips64,
-                             target))
-    return false;
-
-  return true;
+  return WriteRegisterUnsigned(context, eRegisterKindDWARF, dwarf_pc_mips64,
+                               target);
 }
 
 bool EmulateInstructionMIPS64::Emulate_BC1EQZ(llvm::MCInst &insn) {
@@ -2047,11 +2054,8 @@ bool EmulateInstructionMIPS64::Emulate_BC1EQZ(llvm::MCInst &insn) {
 
   Context context;
 
-  if (!WriteRegisterUnsigned(context, eRegisterKindDWARF, dwarf_pc_mips64,
-                             target))
-    return false;
-
-  return true;
+  return WriteRegisterUnsigned(context, eRegisterKindDWARF, dwarf_pc_mips64,
+                               target);
 }
 
 bool EmulateInstructionMIPS64::Emulate_BC1NEZ(llvm::MCInst &insn) {
@@ -2086,11 +2090,8 @@ bool EmulateInstructionMIPS64::Emulate_BC1NEZ(llvm::MCInst &insn) {
 
   Context context;
 
-  if (!WriteRegisterUnsigned(context, eRegisterKindDWARF, dwarf_pc_mips64,
-                             target))
-    return false;
-
-  return true;
+  return WriteRegisterUnsigned(context, eRegisterKindDWARF, dwarf_pc_mips64,
+                               target);
 }
 
 /*
@@ -2149,11 +2150,8 @@ bool EmulateInstructionMIPS64::Emulate_3D_branch(llvm::MCInst &insn) {
 
   Context context;
 
-  if (!WriteRegisterUnsigned(context, eRegisterKindDWARF, dwarf_pc_mips64,
-                             target))
-    return false;
-
-  return true;
+  return WriteRegisterUnsigned(context, eRegisterKindDWARF, dwarf_pc_mips64,
+                               target);
 }
 
 bool EmulateInstructionMIPS64::Emulate_BNZB(llvm::MCInst &insn) {
@@ -2194,7 +2192,7 @@ bool EmulateInstructionMIPS64::Emulate_MSA_Branch_DF(llvm::MCInst &insn,
   bool success = false, branch_hit = true;
   int64_t target = 0;
   RegisterValue reg_value;
-  const uint8_t *ptr = NULL;
+  const uint8_t *ptr = nullptr;
 
   uint32_t wt = m_reg_info->getEncodingValue(insn.getOperand(0).getReg());
   int64_t offset = insn.getOperand(1).getImm();
@@ -2244,11 +2242,8 @@ bool EmulateInstructionMIPS64::Emulate_MSA_Branch_DF(llvm::MCInst &insn,
   Context context;
   context.type = eContextRelativeBranchImmediate;
 
-  if (!WriteRegisterUnsigned(context, eRegisterKindDWARF, dwarf_pc_mips64,
-                             target))
-    return false;
-
-  return true;
+  return WriteRegisterUnsigned(context, eRegisterKindDWARF, dwarf_pc_mips64,
+                               target);
 }
 
 bool EmulateInstructionMIPS64::Emulate_BNZV(llvm::MCInst &insn) {
@@ -2290,11 +2285,8 @@ bool EmulateInstructionMIPS64::Emulate_MSA_Branch_V(llvm::MCInst &insn,
   Context context;
   context.type = eContextRelativeBranchImmediate;
 
-  if (!WriteRegisterUnsigned(context, eRegisterKindDWARF, dwarf_pc_mips64,
-                             target))
-    return false;
-
-  return true;
+  return WriteRegisterUnsigned(context, eRegisterKindDWARF, dwarf_pc_mips64,
+                               target);
 }
 
 bool EmulateInstructionMIPS64::Emulate_LDST_Imm(llvm::MCInst &insn) {

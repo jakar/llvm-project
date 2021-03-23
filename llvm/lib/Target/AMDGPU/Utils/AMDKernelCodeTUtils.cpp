@@ -1,11 +1,8 @@
-//===--------------------AMDKernelCodeTUtils.cpp --------------------------===//
+//===- AMDKernelCodeTUtils.cpp --------------------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
-//
-//===----------------------------------------------------------------------===//
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -14,10 +11,14 @@
 //===----------------------------------------------------------------------===//
 
 #include "AMDKernelCodeTUtils.h"
+#include "AMDKernelCodeT.h"
 #include "SIDefines.h"
-#include <llvm/MC/MCParser/MCAsmLexer.h>
-#include <llvm/MC/MCParser/MCAsmParser.h>
-#include <llvm/Support/raw_ostream.h>
+#include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/StringMap.h"
+#include "llvm/ADT/StringRef.h"
+#include "llvm/MC/MCParser/MCAsmLexer.h"
+#include "llvm/MC/MCParser/MCAsmParser.h"
+#include "llvm/Support/raw_ostream.h"
 
 using namespace llvm;
 
@@ -62,7 +63,6 @@ static StringRef get_amd_kernel_code_t_FieldName(int index) {
   return get_amd_kernel_code_t_FldNames()[index + 1];
 }
 
-
 // Field printing
 
 static raw_ostream &printName(raw_ostream &OS, StringRef Name) {
@@ -82,9 +82,7 @@ static void printBitField(StringRef Name, const amd_kernel_code_t &c,
   printName(OS, Name) << (int)((c.*ptr >> shift) & Mask);
 }
 
-typedef void(*PrintFx)(StringRef,
-                       const amd_kernel_code_t &,
-                       raw_ostream &);
+using PrintFx = void(*)(StringRef, const amd_kernel_code_t &, raw_ostream &);
 
 static ArrayRef<PrintFx> getPrinterTable() {
   static const PrintFx Table[] = {
@@ -113,7 +111,6 @@ void llvm::dumpAmdKernelCode(const amd_kernel_code_t *C,
     OS << '\n';
   }
 }
-
 
 // Field parsing
 
@@ -154,9 +151,8 @@ static bool parseBitField(amd_kernel_code_t &C, MCAsmParser &MCParser,
   return true;
 }
 
-typedef bool(*ParseFx)(amd_kernel_code_t &,
-                       MCAsmParser &MCParser,
-                       raw_ostream &Err);
+using ParseFx = bool(*)(amd_kernel_code_t &, MCAsmParser &MCParser,
+                        raw_ostream &Err);
 
 static ArrayRef<ParseFx> getParserTable() {
   static const ParseFx Table[] = {

@@ -1,20 +1,14 @@
-//===-- FunctionCaller.cpp ---------------------------------------*- C++-*-===//
+//===-- FunctionCaller.cpp ------------------------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
-// C Includes
-// C++ Includes
-// Other libraries and framework includes
 
-// Project includes
 #include "lldb/Expression/FunctionCaller.h"
 #include "lldb/Core/Module.h"
-#include "lldb/Core/State.h"
 #include "lldb/Core/ValueObject.h"
 #include "lldb/Core/ValueObjectList.h"
 #include "lldb/Expression/DiagnosticManager.h"
@@ -31,12 +25,13 @@
 #include "lldb/Target/ThreadPlanCallFunction.h"
 #include "lldb/Utility/DataExtractor.h"
 #include "lldb/Utility/Log.h"
+#include "lldb/Utility/State.h"
 
 using namespace lldb_private;
 
-//----------------------------------------------------------------------
+char FunctionCaller::ID;
+
 // FunctionCaller constructor
-//----------------------------------------------------------------------
 FunctionCaller::FunctionCaller(ExecutionContextScope &exe_scope,
                                const CompilerType &return_type,
                                const Address &functionAddress,
@@ -44,19 +39,18 @@ FunctionCaller::FunctionCaller(ExecutionContextScope &exe_scope,
                                const char *name)
     : Expression(exe_scope), m_execution_unit_sp(), m_parser(),
       m_jit_module_wp(), m_name(name ? name : "<unknown>"),
-      m_function_ptr(NULL), m_function_addr(functionAddress),
+      m_function_ptr(nullptr), m_function_addr(functionAddress),
       m_function_return_type(return_type),
       m_wrapper_function_name("__lldb_caller_function"),
       m_wrapper_struct_name("__lldb_caller_struct"), m_wrapper_args_addrs(),
-      m_arg_values(arg_value_list), m_compiled(false), m_JITted(false) {
+      m_struct_valid(false), m_arg_values(arg_value_list), m_compiled(false),
+      m_JITted(false) {
   m_jit_process_wp = lldb::ProcessWP(exe_scope.CalculateProcess());
   // Can't make a FunctionCaller without a process.
   assert(m_jit_process_wp.lock());
 }
 
-//----------------------------------------------------------------------
 // Destructor
-//----------------------------------------------------------------------
 FunctionCaller::~FunctionCaller() {
   lldb::ProcessSP process_sp(m_jit_process_wp.lock());
   if (process_sp) {
@@ -86,12 +80,16 @@ bool FunctionCaller::WriteFunctionWrapper(
 
   bool can_interpret = false; // should stay that way
 
-  Error jit_error(m_parser->PrepareForExecution(
+  Status jit_error(m_parser->PrepareForExecution(
       m_jit_start_addr, m_jit_end_addr, m_execution_unit_sp, exe_ctx,
       can_interpret, eExecutionPolicyAlways));
 
-  if (!jit_error.Success())
+  if (!jit_error.Success()) {
+    diagnostic_manager.Printf(eDiagnosticSeverityError,
+                              "Error in PrepareForExecution: %s.",
+                              jit_error.AsCString());
     return false;
+  }
 
   if (m_parser->GetGenerateDebugInfo()) {
     lldb::ModuleSP jit_module_sp(m_execution_unit_sp->GetJITModule());
@@ -102,7 +100,8 @@ bool FunctionCaller::WriteFunctionWrapper(
       jit_file.GetFilename() = const_func_name;
       jit_module_sp->SetFileSpecAndObjectName(jit_file, ConstString());
       m_jit_module_wp = jit_module_sp;
-      process->GetTarget().GetImages().Append(jit_module_sp);
+      process->GetTarget().GetImages().Append(jit_module_sp, 
+                                              true /* notify */);
     }
   }
   if (process && m_jit_start_addr)
@@ -135,12 +134,12 @@ bool FunctionCaller::WriteFunctionArguments(
     return false;
   }
 
-  Error error;
+  Status error;
   lldb::ExpressionResults return_value = lldb::eExpressionSetupError;
 
   Process *process = exe_ctx.GetProcessPtr();
 
-  if (process == NULL)
+  if (process == nullptr)
     return return_value;
 
   lldb::ProcessSP jit_process_sp(m_jit_process_wp.lock());
@@ -172,7 +171,7 @@ bool FunctionCaller::WriteFunctionArguments(
 
   // FIXME: We will need to extend this for Variadic functions.
 
-  Error value_error;
+  Status value_error;
 
   size_t num_args = arg_values.GetSize();
   if (num_args != m_arg_values.GetSize()) {
@@ -194,8 +193,8 @@ bool FunctionCaller::WriteFunctionArguments(
     // Special case: if it's a pointer, don't do anything (the ABI supports
     // passing cstrings)
 
-    if (arg_value->GetValueType() == Value::eValueTypeHostAddress &&
-        arg_value->GetContextType() == Value::eContextTypeInvalid &&
+    if (arg_value->GetValueType() == Value::ValueType::HostAddress &&
+        arg_value->GetContextType() == Value::ContextType::Invalid &&
         arg_value->GetCompilerType().IsPointerType())
       continue;
 
@@ -220,9 +219,8 @@ bool FunctionCaller::InsertFunction(ExecutionContext &exe_ctx,
     return false;
 
   Log *log(lldb_private::GetLogIfAllCategoriesSet(LIBLLDB_LOG_STEP));
-  if (log)
-    log->Printf("Call Address: 0x%" PRIx64 " Struct Address: 0x%" PRIx64 ".\n",
-                m_jit_start_addr, args_addr_ref);
+  LLDB_LOGF(log, "Call Address: 0x%" PRIx64 " Struct Address: 0x%" PRIx64 ".\n",
+            m_jit_start_addr, args_addr_ref);
 
   return true;
 }
@@ -234,18 +232,18 @@ lldb::ThreadPlanSP FunctionCaller::GetThreadPlanToCallFunction(
   Log *log(lldb_private::GetLogIfAnyCategoriesSet(LIBLLDB_LOG_EXPRESSIONS |
                                                   LIBLLDB_LOG_STEP));
 
-  if (log)
-    log->Printf("-- [FunctionCaller::GetThreadPlanToCallFunction] Creating "
-                "thread plan to call function \"%s\" --",
-                m_name.c_str());
+  LLDB_LOGF(log,
+            "-- [FunctionCaller::GetThreadPlanToCallFunction] Creating "
+            "thread plan to call function \"%s\" --",
+            m_name.c_str());
 
   // FIXME: Use the errors Stream for better error reporting.
   Thread *thread = exe_ctx.GetThreadPtr();
-  if (thread == NULL) {
+  if (thread == nullptr) {
     diagnostic_manager.PutString(
         eDiagnosticSeverityError,
         "Can't call a function without a valid thread.");
-    return NULL;
+    return nullptr;
   }
 
   // Okay, now run the function:
@@ -274,14 +272,14 @@ bool FunctionCaller::FetchFunctionResults(ExecutionContext &exe_ctx,
   Log *log(lldb_private::GetLogIfAnyCategoriesSet(LIBLLDB_LOG_EXPRESSIONS |
                                                   LIBLLDB_LOG_STEP));
 
-  if (log)
-    log->Printf("-- [FunctionCaller::FetchFunctionResults] Fetching function "
-                "results for \"%s\"--",
-                m_name.c_str());
+  LLDB_LOGF(log,
+            "-- [FunctionCaller::FetchFunctionResults] Fetching function "
+            "results for \"%s\"--",
+            m_name.c_str());
 
   Process *process = exe_ctx.GetProcessPtr();
 
-  if (process == NULL)
+  if (process == nullptr)
     return false;
 
   lldb::ProcessSP jit_process_sp(m_jit_process_wp.lock());
@@ -289,7 +287,7 @@ bool FunctionCaller::FetchFunctionResults(ExecutionContext &exe_ctx,
   if (process != jit_process_sp.get())
     return false;
 
-  Error error;
+  Status error;
   ret_value.GetScalar() = process->ReadUnsignedIntegerFromMemory(
       args_addr + m_return_offset, m_return_size, 0, error);
 
@@ -297,7 +295,7 @@ bool FunctionCaller::FetchFunctionResults(ExecutionContext &exe_ctx,
     return false;
 
   ret_value.SetCompilerType(m_function_return_type);
-  ret_value.SetValueType(Value::eValueTypeScalar);
+  ret_value.SetValueType(Value::ValueType::Scalar);
   return true;
 }
 
@@ -318,17 +316,21 @@ lldb::ExpressionResults FunctionCaller::ExecuteFunction(
     DiagnosticManager &diagnostic_manager, Value &results) {
   lldb::ExpressionResults return_value = lldb::eExpressionSetupError;
 
-  // FunctionCaller::ExecuteFunction execution is always just to get the result.
-  // Do make sure we ignore
-  // breakpoints, unwind on error, and don't try to debug it.
+  // FunctionCaller::ExecuteFunction execution is always just to get the
+  // result. Unless explicitly asked for, ignore breakpoints and unwind on
+  // error.
+  const bool enable_debugging =
+      exe_ctx.GetTargetPtr() &&
+      exe_ctx.GetTargetPtr()->GetDebugUtilityExpression();
   EvaluateExpressionOptions real_options = options;
-  real_options.SetDebug(false);
-  real_options.SetUnwindOnError(true);
-  real_options.SetIgnoreBreakpoints(true);
+  real_options.SetDebug(false); // This halts the expression for debugging.
+  real_options.SetGenerateDebugInfo(enable_debugging);
+  real_options.SetUnwindOnError(!enable_debugging);
+  real_options.SetIgnoreBreakpoints(!enable_debugging);
 
   lldb::addr_t args_addr;
 
-  if (args_addr_ptr != NULL)
+  if (args_addr_ptr != nullptr)
     args_addr = *args_addr_ptr;
   else
     args_addr = LLDB_INVALID_ADDRESS;
@@ -344,10 +346,9 @@ lldb::ExpressionResults FunctionCaller::ExecuteFunction(
   Log *log(lldb_private::GetLogIfAnyCategoriesSet(LIBLLDB_LOG_EXPRESSIONS |
                                                   LIBLLDB_LOG_STEP));
 
-  if (log)
-    log->Printf(
-        "== [FunctionCaller::ExecuteFunction] Executing function \"%s\" ==",
-        m_name.c_str());
+  LLDB_LOGF(log,
+            "== [FunctionCaller::ExecuteFunction] Executing function \"%s\" ==",
+            m_name.c_str());
 
   lldb::ThreadPlanSP call_plan_sp = GetThreadPlanToCallFunction(
       exe_ctx, args_addr, real_options, diagnostic_manager);
@@ -355,9 +356,8 @@ lldb::ExpressionResults FunctionCaller::ExecuteFunction(
     return lldb::eExpressionSetupError;
 
   // We need to make sure we record the fact that we are running an expression
-  // here
-  // otherwise this fact will fail to be recorded when fetching an Objective-C
-  // object description
+  // here otherwise this fact will fail to be recorded when fetching an
+  // Objective-C object description
   if (exe_ctx.GetProcessPtr())
     exe_ctx.GetProcessPtr()->SetRunningUserExpression(true);
 
@@ -366,20 +366,23 @@ lldb::ExpressionResults FunctionCaller::ExecuteFunction(
 
   if (log) {
     if (return_value != lldb::eExpressionCompleted) {
-      log->Printf("== [FunctionCaller::ExecuteFunction] Execution of \"%s\" "
-                  "completed abnormally ==",
-                  m_name.c_str());
+      LLDB_LOGF(log,
+                "== [FunctionCaller::ExecuteFunction] Execution of \"%s\" "
+                "completed abnormally: %s ==",
+                m_name.c_str(),
+                Process::ExecutionResultAsCString(return_value));
     } else {
-      log->Printf("== [FunctionCaller::ExecuteFunction] Execution of \"%s\" "
-                  "completed normally ==",
-                  m_name.c_str());
+      LLDB_LOGF(log,
+                "== [FunctionCaller::ExecuteFunction] Execution of \"%s\" "
+                "completed normally ==",
+                m_name.c_str());
     }
   }
 
   if (exe_ctx.GetProcessPtr())
     exe_ctx.GetProcessPtr()->SetRunningUserExpression(false);
 
-  if (args_addr_ptr != NULL)
+  if (args_addr_ptr != nullptr)
     *args_addr_ptr = args_addr;
 
   if (return_value != lldb::eExpressionCompleted)
@@ -387,7 +390,7 @@ lldb::ExpressionResults FunctionCaller::ExecuteFunction(
 
   FetchFunctionResults(exe_ctx, args_addr, results);
 
-  if (args_addr_ptr == NULL)
+  if (args_addr_ptr == nullptr)
     DeallocateFunctionResults(exe_ctx, args_addr);
 
   return lldb::eExpressionCompleted;

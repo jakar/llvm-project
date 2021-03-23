@@ -1,4 +1,8 @@
-// RUN: %clang_cc1 -fsyntax-only -fopenmp -x c++ -std=c++11 -fexceptions -fcxx-exceptions -verify %s
+// RUN: %clang_cc1 -fsyntax-only -fopenmp -fopenmp-version=45 -x c++ -std=c++11 -fexceptions -fcxx-exceptions -verify=expected,omp4 %s -Wuninitialized
+// RUN: %clang_cc1 -fsyntax-only -fopenmp -fopenmp-version=50 -x c++ -std=c++11 -fexceptions -fcxx-exceptions -verify=expected,omp5 %s -Wuninitialized
+
+// RUN: %clang_cc1 -fsyntax-only -fopenmp-simd -fopenmp-version=45 -x c++ -std=c++11 -fexceptions -fcxx-exceptions -verify=expected,omp4 %s -Wuninitialized
+// RUN: %clang_cc1 -fsyntax-only -fopenmp-simd -fopenmp-version=50 -x c++ -std=c++11 -fexceptions -fcxx-exceptions -verify=expected,omp5 %s -Wuninitialized
 
 class S {
   int a;
@@ -111,32 +115,33 @@ int test_iteration_spaces() {
     c[ii] = a[ii];
 
 #pragma omp parallel
-// expected-error@+2 {{condition of OpenMP for loop must be a relational comparison ('<', '<=', '>', or '>=') of loop variable 'i'}}
+// omp4-error@+2 {{condition of OpenMP for loop must be a relational comparison ('<', '<=', '>', or '>=') of loop variable 'i'}} omp5-error@+2 {{condition of OpenMP for loop must be a relational comparison ('<', '<=', '>', '>=', or '!=') of loop variable 'i'}}
 #pragma omp taskloop
   for (int i = 0; i; i++)
     c[i] = a[i];
 
 #pragma omp parallel
-// expected-error@+3 {{condition of OpenMP for loop must be a relational comparison ('<', '<=', '>', or '>=') of loop variable 'i'}}
+// omp4-error@+3 {{condition of OpenMP for loop must be a relational comparison ('<', '<=', '>', or '>=') of loop variable 'i'}} omp5-error@+3 {{condition of OpenMP for loop must be a relational comparison ('<', '<=', '>', '>=', or '!=') of loop variable 'i'}}
 // expected-error@+2 {{increment clause of OpenMP for loop must perform simple addition or subtraction on loop variable 'i'}}
 #pragma omp taskloop
   for (int i = 0; jj < kk; ii++)
     c[i] = a[i];
 
 #pragma omp parallel
-// expected-error@+2 {{condition of OpenMP for loop must be a relational comparison ('<', '<=', '>', or '>=') of loop variable 'i'}}
+// omp4-error@+2 {{condition of OpenMP for loop must be a relational comparison ('<', '<=', '>', or '>=') of loop variable 'i'}} omp5-error@+2 {{condition of OpenMP for loop must be a relational comparison ('<', '<=', '>', '>=', or '!=') of loop variable 'i'}}
 #pragma omp taskloop
   for (int i = 0; !!i; i++)
     c[i] = a[i];
 
+// Ok
 #pragma omp parallel
-// expected-error@+2 {{condition of OpenMP for loop must be a relational comparison ('<', '<=', '>', or '>=') of loop variable 'i'}}
+// omp4-error@+2 {{condition of OpenMP for loop must be a relational comparison ('<', '<=', '>', or '>=') of loop variable 'i'}}
 #pragma omp taskloop
   for (int i = 0; i != 1; i++)
     c[i] = a[i];
 
 #pragma omp parallel
-// expected-error@+2 {{condition of OpenMP for loop must be a relational comparison ('<', '<=', '>', or '>=') of loop variable 'i'}}
+// omp4-error@+2 {{condition of OpenMP for loop must be a relational comparison ('<', '<=', '>', or '>=') of loop variable 'i'}} omp5-error@+2 {{condition of OpenMP for loop must be a relational comparison ('<', '<=', '>', '>=', or '!=') of loop variable 'i'}}
 #pragma omp taskloop
   for (int i = 0;; i++)
     c[i] = a[i];
@@ -292,10 +297,8 @@ int test_iteration_spaces() {
     c[ii] = a[ii];
 
 #pragma omp parallel
-// expected-error@+2 {{unexpected OpenMP clause 'linear' in directive '#pragma omp taskloop'}}
-// expected-note@+1 {{defined as linear}}
+// expected-error@+1 {{unexpected OpenMP clause 'linear' in directive '#pragma omp taskloop'}}
 #pragma omp taskloop linear(ii)
-// expected-error@+1 {{loop iteration variable in the associated loop of 'omp taskloop' directive may not be linear, predetermined as private}}
   for (ii = 0; ii < 10; ii++)
     c[ii] = a[ii];
 
@@ -347,7 +350,7 @@ int test_iteration_spaces() {
   }
 
 #pragma omp parallel
-// expected-error@+2 {{statement after '#pragma omp taskloop' must be a for loop}}
+// omp4-error@+2 {{statement after '#pragma omp taskloop' must be a for loop}}
 #pragma omp taskloop
   for (auto &item : a) {
     item = item + 1;
@@ -499,17 +502,17 @@ int test_with_random_access_iterator() {
   for (begin = end; begin < end; ++begin)
     ++begin;
 #pragma omp parallel
-// expected-error@+2 {{condition of OpenMP for loop must be a relational comparison ('<', '<=', '>', or '>=') of loop variable 'I'}}
+// omp4-error@+2 {{condition of OpenMP for loop must be a relational comparison ('<', '<=', '>', or '>=') of loop variable 'I'}} omp5-error@+2 {{condition of OpenMP for loop must be a relational comparison ('<', '<=', '>', '>=', or '!=') of loop variable 'I'}}
 #pragma omp taskloop
   for (GoodIter I = begin; I - I; ++I)
     ++I;
 #pragma omp parallel
-// expected-error@+2 {{condition of OpenMP for loop must be a relational comparison ('<', '<=', '>', or '>=') of loop variable 'I'}}
+// omp4-error@+2 {{condition of OpenMP for loop must be a relational comparison ('<', '<=', '>', or '>=') of loop variable 'I'}} omp5-error@+2 {{condition of OpenMP for loop must be a relational comparison ('<', '<=', '>', '>=', or '!=') of loop variable 'I'}}
 #pragma omp taskloop
   for (GoodIter I = begin; begin < end; ++I)
     ++I;
 #pragma omp parallel
-// expected-error@+2 {{condition of OpenMP for loop must be a relational comparison ('<', '<=', '>', or '>=') of loop variable 'I'}}
+// omp4-error@+2 {{condition of OpenMP for loop must be a relational comparison ('<', '<=', '>', or '>=') of loop variable 'I'}} omp5-error@+2 {{condition of OpenMP for loop must be a relational comparison ('<', '<=', '>', '>=', or '!=') of loop variable 'I'}}
 #pragma omp taskloop
   for (GoodIter I = begin; !I; ++I)
     ++I;
@@ -644,7 +647,7 @@ void test_with_template() {
   t1.dotest_lt(begin, end);
   t2.dotest_lt(begin, end);         // expected-note {{in instantiation of member function 'TC<GoodIter, -100>::dotest_lt' requested here}}
   dotest_gt(begin, end);            // expected-note {{in instantiation of function template specialization 'dotest_gt<GoodIter, 0>' requested here}}
-  dotest_gt<unsigned, -10>(0, 100); // expected-note {{in instantiation of function template specialization 'dotest_gt<unsigned int, -10>' requested here}}
+  dotest_gt<unsigned, 10>(0, 100);  // expected-note {{in instantiation of function template specialization 'dotest_gt<unsigned int, 10>' requested here}}
 }
 
 void test_loop_break() {

@@ -1,25 +1,25 @@
 //===- lib/ReaderWriter/FileArchive.cpp -----------------------------------===//
 //
-//                             The LLVM Linker
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
+#include "lld/Common/LLVM.h"
 #include "lld/Core/ArchiveLibraryFile.h"
 #include "lld/Core/File.h"
-#include "lld/Core/LLVM.h"
 #include "lld/Core/Reader.h"
-#include "llvm/ADT/StringRef.h"
-#include "llvm/Object/Archive.h"
-#include "llvm/Support/Debug.h"
-#include "llvm/Support/Format.h"
-#include "llvm/Support/MemoryBuffer.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/StringRef.h"
+#include "llvm/BinaryFormat/Magic.h"
+#include "llvm/Object/Archive.h"
 #include "llvm/Object/Error.h"
+#include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorOr.h"
 #include "llvm/Support/FileSystem.h"
+#include "llvm/Support/Format.h"
+#include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/raw_ostream.h"
 #include <memory>
 #include <set>
@@ -30,12 +30,14 @@
 #include <vector>
 
 using llvm::object::Archive;
+using llvm::file_magic;
+using llvm::identify_magic;
 
 namespace lld {
 
 namespace {
 
-/// \brief The FileArchive class represents an Archive Library file
+/// The FileArchive class represents an Archive Library file
 class FileArchive : public lld::ArchiveLibraryFile {
 public:
   FileArchive(std::unique_ptr<MemoryBuffer> mb, const Registry &reg,
@@ -43,7 +45,7 @@ public:
       : ArchiveLibraryFile(path), _mb(std::shared_ptr<MemoryBuffer>(mb.release())),
         _registry(reg), _logLoading(logLoading) {}
 
-  /// \brief Check if any member of the archive contains an Atom with the
+  /// Check if any member of the archive contains an Atom with the
   /// specified name and return the File object for that member, or nullptr.
   File *find(StringRef name) override {
     auto member = _symbolMemberMap.find(name);
@@ -74,7 +76,7 @@ public:
     return file;
   }
 
-  /// \brief parse each member
+  /// parse each member
   std::error_code
   parseAllMembers(std::vector<std::unique_ptr<File>> &result) override {
     if (std::error_code ec = parse())
@@ -201,14 +203,14 @@ public:
   ArchiveReader(bool logLoading) : _logLoading(logLoading) {}
 
   bool canParse(file_magic magic, MemoryBufferRef) const override {
-    return magic == llvm::sys::fs::file_magic::archive;
+    return magic == file_magic::archive;
   }
 
   ErrorOr<std::unique_ptr<File>> loadFile(std::unique_ptr<MemoryBuffer> mb,
                                           const Registry &reg) const override {
     StringRef path = mb->getBufferIdentifier();
     std::unique_ptr<File> ret =
-        llvm::make_unique<FileArchive>(std::move(mb), reg, path, _logLoading);
+        std::make_unique<FileArchive>(std::move(mb), reg, path, _logLoading);
     return std::move(ret);
   }
 

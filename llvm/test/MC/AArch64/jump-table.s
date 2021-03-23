@@ -1,4 +1,4 @@
-// RUN: llvm-mc < %s -triple=aarch64-none-linux-gnu -filetype=obj | llvm-readobj -r | FileCheck %s
+// RUN: llvm-mc < %s -triple=aarch64-none-linux-gnu -filetype=obj | llvm-readobj -r - | FileCheck %s
 
 	.file	"<stdin>"
 	.text
@@ -6,11 +6,11 @@
 	.type	test_jumptable,@function
 test_jumptable:                         // @test_jumptable
 	.cfi_startproc
-// BB#0:
+// %bb.0:
 	ubfx	w1, w0, #0, #32
 	cmp w0, #4
 	b.hi .LBB0_3
-// BB#1:
+// %bb.1:
 	adrp	x0, .LJTI0_0
 	add	x0, x0, #:lo12:.LJTI0_0
 	ldr	x0, [x0, x1, lsl #3]

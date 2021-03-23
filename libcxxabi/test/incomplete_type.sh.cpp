@@ -1,12 +1,11 @@
 //===------------------------- incomplete_type.cpp --------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is dual licensed under the MIT and the University of Illinois Open
-// Source Licenses. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
-// http://mentorembedded.github.io/cxx-abi/abi.html#rtti-layout
+// https://itanium-cxx-abi.github.io/cxx-abi/abi.html#rtti-layout
 
 // Two abi::__pbase_type_info objects can always be compared for equality
 // (i.e. of the types represented) or ordering by comparison of their name
@@ -14,12 +13,19 @@
 // incomplete flags set, equality can be tested by comparing the type_info
 // addresses.
 
-// UNSUPPORTED: libcxxabi-no-exceptions
+// UNSUPPORTED: no-exceptions
+// UNSUPPORTED: no-rtti
 
-// RUN: %cxx %flags %compile_flags -c %s -o %t.one.o
-// RUN: %cxx %flags %compile_flags -c %s -o %t.two.o -DTU_ONE
-// RUN: %cxx %flags %t.one.o %t.two.o %link_flags -o %t.exe
-// RUN: %exec %t.exe
+// The fix for PR25898 landed in the system dylibs in macOS 10.13
+// XFAIL: with_system_cxx_lib=macosx10.12
+// XFAIL: with_system_cxx_lib=macosx10.11
+// XFAIL: with_system_cxx_lib=macosx10.10
+// XFAIL: with_system_cxx_lib=macosx10.9
+
+// RUN: %{cxx} %{flags} %{compile_flags} -Wno-unreachable-code -c %s -o %t.one.o
+// RUN: %{cxx} %{flags} %{compile_flags} -Wno-unreachable-code -c %s -o %t.two.o -DTU_ONE
+// RUN: %{cxx} %{flags} %t.one.o %t.two.o %{link_flags} -o %t.exe
+// RUN: %{exec} %t.exe
 
 #include <stdio.h>
 #include <cstring>
@@ -79,7 +85,7 @@ void ThrowNullptr() { throw nullptr; }
 
 struct IncompleteAtThrow {};
 
-int main() {
+int main(int, char**) {
   AssertIncompleteTypeInfoEquals(ReturnTypeInfoNeverDefinedMP(), typeid(int NeverDefined::*));
   try {
     ThrowNeverDefinedMP();
@@ -91,6 +97,8 @@ int main() {
   } catch (int NeverDefined::*p) {
     assert(!p);
   }
+  catch(...) { assert(!"FAIL: Didn't catch NeverDefined::*" ); }
+
   AssertIncompleteTypeInfoEquals(ReturnTypeInfoIncompleteMP(), typeid(int IncompleteAtThrow::*));
   try {
     ThrowIncompleteMP();
@@ -104,6 +112,7 @@ int main() {
   } catch (int IncompleteAtThrow::*p) {
     assert(!p);
   }
+  catch(...) { assert(!"FAIL: Didn't catch IncompleteAtThrow::*" ); }
 
   AssertIncompleteTypeInfoEquals(ReturnTypeInfoIncompletePP(), typeid(IncompleteAtThrow**));
   try {
@@ -114,6 +123,7 @@ int main() {
   } catch (IncompleteAtThrow** p) {
     assert(!p);
   }
+  catch(...) { assert(!"FAIL: Didn't catch IncompleteAtThrow**" ); }
 
   try {
     ThrowIncompletePMP();
@@ -125,6 +135,7 @@ int main() {
   } catch (int IncompleteAtThrow::**p) {
     assert(!p);
   }
+  catch(...) { assert(!"FAIL: Didn't catch IncompleteAtThrow::**" ); }
 
   AssertIncompleteTypeInfoEquals(ReturnTypeInfoCompleteMP(), typeid(int CompleteAtThrow::*));
   try {
@@ -139,6 +150,7 @@ int main() {
   } catch (int CompleteAtThrow::*p) {
     assert(!p);
   }
+  catch(...) { assert(!"FAIL: Didn't catch CompleteAtThrow::" ); }
 
   AssertIncompleteTypeInfoEquals(ReturnTypeInfoCompletePP(), typeid(CompleteAtThrow**));
   try {
@@ -153,6 +165,7 @@ int main() {
   } catch (CompleteAtThrow**p) {
     assert(!p);
   }
+  catch(...) { assert(!"FAIL: Didn't catch CompleteAtThrow**" ); }
 
   try {
     ThrowCompletePMP();
@@ -168,6 +181,7 @@ int main() {
   } catch (int CompleteAtThrow::**p) {
     assert(!p);
   }
+  catch(...) { assert(!"FAIL: Didn't catch CompleteAtThrow::**" ); }
 
 #if __cplusplus >= 201103L
   // Catch nullptr as complete type
@@ -176,6 +190,7 @@ int main() {
   } catch (int IncompleteAtThrow::*p) {
     assert(!p);
   }
+  catch(...) { assert(!"FAIL: Didn't catch nullptr as IncompleteAtThrow::*" ); }
 
   // Catch nullptr as an incomplete type
   try {
@@ -183,12 +198,17 @@ int main() {
   } catch (int CompleteAtThrow::*p) {
     assert(!p);
   }
+  catch(...) { assert(!"FAIL: Didn't catch nullptr as CompleteAtThrow::*" ); }
+
   // Catch nullptr as a type that is never complete.
   try {
     ThrowNullptr();
   } catch (int NeverDefined::*p) {
     assert(!p);
   }
+  catch(...) { assert(!"FAIL: Didn't catch nullptr as NeverDefined::*" ); }
 #endif
+
+  return 0;
 }
 #endif

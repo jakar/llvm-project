@@ -21,11 +21,13 @@ add_lld_library(lldMachO
 
   LINK_COMPONENTS
     DebugInfoDWARF
+    Demangle
     Object
     Support
-    Demangle
+    TextAPI
 
   LINK_LIBS
+    lldCommon
     lldCore
     lldYAML
     ${LLVM_PTHREAD_LIB}

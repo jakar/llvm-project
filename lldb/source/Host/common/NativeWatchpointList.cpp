@@ -1,9 +1,8 @@
-//===-- NativeWatchpointList.cpp --------------------------------*- C++ -*-===//
+//===-- NativeWatchpointList.cpp ------------------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -14,15 +13,15 @@
 using namespace lldb;
 using namespace lldb_private;
 
-Error NativeWatchpointList::Add(addr_t addr, size_t size, uint32_t watch_flags,
-                                bool hardware) {
+Status NativeWatchpointList::Add(addr_t addr, size_t size, uint32_t watch_flags,
+                                 bool hardware) {
   m_watchpoints[addr] = {addr, size, watch_flags, hardware};
-  return Error();
+  return Status();
 }
 
-Error NativeWatchpointList::Remove(addr_t addr) {
+Status NativeWatchpointList::Remove(addr_t addr) {
   m_watchpoints.erase(addr);
-  return Error();
+  return Status();
 }
 
 const NativeWatchpointList::WatchpointMap &

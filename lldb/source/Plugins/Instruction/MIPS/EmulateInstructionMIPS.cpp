@@ -1,9 +1,8 @@
-//===-- EmulateInstructionMIPS.cpp -------------------------------*- C++-*-===//
+//===-- EmulateInstructionMIPS.cpp ----------------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -12,14 +11,14 @@
 #include <stdlib.h>
 
 #include "lldb/Core/Address.h"
-#include "lldb/Core/ArchSpec.h"
 #include "lldb/Core/Opcode.h"
 #include "lldb/Core/PluginManager.h"
-#include "lldb/Core/RegisterValue.h"
 #include "lldb/Symbol/UnwindPlan.h"
 #include "lldb/Target/Target.h"
+#include "lldb/Utility/ArchSpec.h"
 #include "lldb/Utility/ConstString.h"
 #include "lldb/Utility/DataExtractor.h"
+#include "lldb/Utility/RegisterValue.h"
 #include "lldb/Utility/Stream.h"
 #include "llvm-c/Disassembler.h"
 #include "llvm/MC/MCAsmInfo.h"
@@ -29,25 +28,26 @@
 #include "llvm/MC/MCInstrInfo.h"
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCSubtargetInfo.h"
+#include "llvm/MC/MCTargetOptions.h"
 #include "llvm/Support/TargetRegistry.h"
 #include "llvm/Support/TargetSelect.h"
 
 #include "llvm/ADT/STLExtras.h"
 
 #include "Plugins/Process/Utility/InstructionUtils.h"
-#include "Plugins/Process/Utility/RegisterContext_mips.h" //mips32 has same registers nos as mips64
+#include "Plugins/Process/Utility/RegisterContext_mips.h"
 
 using namespace lldb;
 using namespace lldb_private;
 
+LLDB_PLUGIN_DEFINE_ADV(EmulateInstructionMIPS, InstructionMIPS)
+
 #define UInt(x) ((uint64_t)x)
 #define integer int64_t
 
-//----------------------------------------------------------------------
 //
 // EmulateInstructionMIPS implementation
 //
-//----------------------------------------------------------------------
 
 #ifdef __mips__
 extern "C" {
@@ -63,10 +63,10 @@ EmulateInstructionMIPS::EmulateInstructionMIPS(
     const lldb_private::ArchSpec &arch)
     : EmulateInstruction(arch) {
   /* Create instance of llvm::MCDisassembler */
-  std::string Error;
+  std::string Status;
   llvm::Triple triple = arch.GetTriple();
   const llvm::Target *target =
-      llvm::TargetRegistry::lookupTarget(triple.getTriple(), Error);
+      llvm::TargetRegistry::lookupTarget(triple.getTriple(), Status);
 
 /*
  * If we fail to get the target then we haven't registered it. The
@@ -83,7 +83,7 @@ EmulateInstructionMIPS::EmulateInstructionMIPS(
     LLVMInitializeMipsAsmPrinter();
     LLVMInitializeMipsTargetMC();
     LLVMInitializeMipsDisassembler();
-    target = llvm::TargetRegistry::lookupTarget(triple.getTriple(), Error);
+    target = llvm::TargetRegistry::lookupTarget(triple.getTriple(), Status);
   }
 #endif
 
@@ -152,13 +152,15 @@ EmulateInstructionMIPS::EmulateInstructionMIPS(
   m_insn_info.reset(target->createMCInstrInfo());
   assert(m_insn_info.get());
 
-  m_asm_info.reset(target->createMCAsmInfo(*m_reg_info, triple.getTriple()));
+  llvm::MCTargetOptions MCOptions;
+  m_asm_info.reset(
+      target->createMCAsmInfo(*m_reg_info, triple.getTriple(), MCOptions));
   m_subtype_info.reset(
       target->createMCSubtargetInfo(triple.getTriple(), cpu, features));
   assert(m_asm_info.get() && m_subtype_info.get());
 
-  m_context.reset(
-      new llvm::MCContext(m_asm_info.get(), m_reg_info.get(), nullptr));
+  m_context = std::make_unique<llvm::MCContext>(m_asm_info.get(),
+                                                m_reg_info.get(), nullptr);
   assert(m_context.get());
 
   m_disasm.reset(target->createMCDisassembler(*m_subtype_info, *m_context));
@@ -212,21 +214,16 @@ EmulateInstructionMIPS::CreateInstance(const ArchSpec &arch,
           inst_type)) {
     if (arch.GetTriple().getArch() == llvm::Triple::mips ||
         arch.GetTriple().getArch() == llvm::Triple::mipsel) {
-      std::auto_ptr<EmulateInstructionMIPS> emulate_insn_ap(
-          new EmulateInstructionMIPS(arch));
-      if (emulate_insn_ap.get())
-        return emulate_insn_ap.release();
+      return new EmulateInstructionMIPS(arch);
     }
   }
 
-  return NULL;
+  return nullptr;
 }
 
 bool EmulateInstructionMIPS::SetTargetTriple(const ArchSpec &arch) {
-  if (arch.GetTriple().getArch() == llvm::Triple::mips ||
-      arch.GetTriple().getArch() == llvm::Triple::mipsel)
-    return true;
-  return false;
+  return arch.GetTriple().getArch() == llvm::Triple::mips ||
+         arch.GetTriple().getArch() == llvm::Triple::mipsel;
 }
 
 const char *EmulateInstructionMIPS::GetRegisterName(unsigned reg_num,
@@ -683,9 +680,7 @@ bool EmulateInstructionMIPS::GetRegisterInfo(RegisterKind reg_kind,
 EmulateInstructionMIPS::MipsOpcode *
 EmulateInstructionMIPS::GetOpcodeForInstruction(const char *op_name) {
   static EmulateInstructionMIPS::MipsOpcode g_opcodes[] = {
-      //----------------------------------------------------------------------
       // Prologue/Epilogue instructions
-      //----------------------------------------------------------------------
       {"ADDiu", &EmulateInstructionMIPS::Emulate_ADDiu,
        "ADDIU rt, rs, immediate"},
       {"SW", &EmulateInstructionMIPS::Emulate_SW, "SW rt, offset(rs)"},
@@ -694,9 +689,7 @@ EmulateInstructionMIPS::GetOpcodeForInstruction(const char *op_name) {
       {"ADDU", &EmulateInstructionMIPS::Emulate_SUBU_ADDU, "ADDU rd, rs, rt"},
       {"LUI", &EmulateInstructionMIPS::Emulate_LUI, "LUI rt, immediate"},
 
-      //----------------------------------------------------------------------
       // MicroMIPS Prologue/Epilogue instructions
-      //----------------------------------------------------------------------
       {"ADDIUSP_MM", &EmulateInstructionMIPS::Emulate_ADDIUSP,
        "ADDIU immediate"},
       {"ADDIUS5_MM", &EmulateInstructionMIPS::Emulate_ADDIUS5,
@@ -717,10 +710,8 @@ EmulateInstructionMIPS::GetOpcodeForInstruction(const char *op_name) {
        "LWP rd,offset(base)"},
       {"JRADDIUSP", &EmulateInstructionMIPS::Emulate_JRADDIUSP,
        "JRADDIUSP immediate"},
-      //----------------------------------------------------------------------
 
       // Load/Store  instructions
-      //----------------------------------------------------------------------
       /* Following list of emulated instructions are required by implementation
          of hardware watchpoint
          for MIPS in lldb. As we just need the address accessed by instructions,
@@ -840,9 +831,7 @@ EmulateInstructionMIPS::GetOpcodeForInstruction(const char *op_name) {
       {"SCDX", &EmulateInstructionMIPS::Emulate_LDST_Imm,
        "SCDX  rt, offset(base)"},
 
-      //----------------------------------------------------------------------
       // MicroMIPS Load/Store instructions
-      //----------------------------------------------------------------------
       {"LBU16_MM", &EmulateInstructionMIPS::Emulate_LDST_Imm,
        "LBU16 rt, decoded_offset(base)"},
       {"LHU16_MM", &EmulateInstructionMIPS::Emulate_LDST_Imm,
@@ -860,9 +849,7 @@ EmulateInstructionMIPS::GetOpcodeForInstruction(const char *op_name) {
       {"SB16_MM", &EmulateInstructionMIPS::Emulate_LDST_Imm,
        "SB16  rt, offset(base)"},
 
-      //----------------------------------------------------------------------
       // Branch instructions
-      //----------------------------------------------------------------------
       {"BEQ", &EmulateInstructionMIPS::Emulate_BXX_3ops, "BEQ rs,rt,offset"},
       {"BNE", &EmulateInstructionMIPS::Emulate_BXX_3ops, "BNE rs,rt,offset"},
       {"BEQL", &EmulateInstructionMIPS::Emulate_BXX_3ops, "BEQL rs,rt,offset"},
@@ -954,9 +941,7 @@ EmulateInstructionMIPS::GetOpcodeForInstruction(const char *op_name) {
       {"BNZ_V", &EmulateInstructionMIPS::Emulate_BNZV, "BNZ.V wt,s16"},
       {"BZ_V", &EmulateInstructionMIPS::Emulate_BZV, "BZ.V wt,s16"},
 
-      //----------------------------------------------------------------------
       // MicroMIPS Branch instructions
-      //----------------------------------------------------------------------
       {"B16_MM", &EmulateInstructionMIPS::Emulate_B16_MM, "B16 offset"},
       {"BEQZ16_MM", &EmulateInstructionMIPS::Emulate_Branch_MM,
        "BEQZ16 rs, offset"},
@@ -986,7 +971,7 @@ EmulateInstructionMIPS::GetOpcodeForInstruction(const char *op_name) {
       return &g_opcodes[i];
   }
 
-  return NULL;
+  return nullptr;
 }
 
 uint32_t
@@ -998,13 +983,11 @@ EmulateInstructionMIPS::GetSizeOfInstruction(lldb_private::DataExtractor &data,
   llvm::ArrayRef<uint8_t> raw_insn(data.GetDataStart(), data.GetByteSize());
 
   if (m_use_alt_disaasm)
-    decode_status =
-        m_alt_disasm->getInstruction(mc_insn, next_inst_size, raw_insn,
-                                     inst_addr, llvm::nulls(), llvm::nulls());
+    decode_status = m_alt_disasm->getInstruction(
+        mc_insn, next_inst_size, raw_insn, inst_addr, llvm::nulls());
   else
-    decode_status =
-        m_disasm->getInstruction(mc_insn, next_inst_size, raw_insn, inst_addr,
-                                 llvm::nulls(), llvm::nulls());
+    decode_status = m_disasm->getInstruction(mc_insn, next_inst_size, raw_insn,
+                                             inst_addr, llvm::nulls());
 
   if (decode_status != llvm::MCDisassembler::Success)
     return false;
@@ -1018,8 +1001,8 @@ bool EmulateInstructionMIPS::SetInstruction(const Opcode &insn_opcode,
   m_use_alt_disaasm = false;
 
   if (EmulateInstruction::SetInstruction(insn_opcode, inst_addr, target)) {
-    if (inst_addr.GetAddressClass() == eAddressClassCodeAlternateISA) {
-      Error error;
+    if (inst_addr.GetAddressClass() == AddressClass::eCodeAlternateISA) {
+      Status error;
       lldb::addr_t load_addr = LLDB_INVALID_ADDRESS;
 
       /*
@@ -1047,7 +1030,7 @@ bool EmulateInstructionMIPS::SetInstruction(const Opcode &insn_opcode,
       return true;
     } else {
       /*
-       * If the address class is not eAddressClassCodeAlternateISA then
+       * If the address class is not AddressClass::eCodeAlternateISA then
        * the function is not microMIPS. In this case instruction size is
        * always 4 bytes.
       */
@@ -1087,11 +1070,11 @@ bool EmulateInstructionMIPS::EvaluateInstruction(uint32_t evaluate_options) {
     llvm::MCDisassembler::DecodeStatus decode_status;
     llvm::ArrayRef<uint8_t> raw_insn(data.GetDataStart(), data.GetByteSize());
     if (m_use_alt_disaasm)
-      decode_status = m_alt_disasm->getInstruction(
-          mc_insn, insn_size, raw_insn, m_addr, llvm::nulls(), llvm::nulls());
+      decode_status = m_alt_disasm->getInstruction(mc_insn, insn_size, raw_insn,
+                                                   m_addr, llvm::nulls());
     else
-      decode_status = m_disasm->getInstruction(
-          mc_insn, insn_size, raw_insn, m_addr, llvm::nulls(), llvm::nulls());
+      decode_status = m_disasm->getInstruction(mc_insn, insn_size, raw_insn,
+                                               m_addr, llvm::nulls());
 
     if (decode_status != llvm::MCDisassembler::Success)
       return false;
@@ -1103,7 +1086,7 @@ bool EmulateInstructionMIPS::EvaluateInstruction(uint32_t evaluate_options) {
   */
   const char *op_name = m_insn_info->getName(mc_insn.getOpcode()).data();
 
-  if (op_name == NULL)
+  if (op_name == nullptr)
     return false;
 
   /*
@@ -1112,7 +1095,7 @@ bool EmulateInstructionMIPS::EvaluateInstruction(uint32_t evaluate_options) {
   */
   MipsOpcode *opcode_data = GetOpcodeForInstruction(op_name);
 
-  if (opcode_data == NULL)
+  if (opcode_data == nullptr)
     return false;
 
   uint64_t old_pc = 0, new_pc = 0;
@@ -1170,6 +1153,7 @@ bool EmulateInstructionMIPS::CreateFunctionEntryUnwind(
   unwind_plan.SetSourceName("EmulateInstructionMIPS");
   unwind_plan.SetSourcedFromCompiler(eLazyBoolNo);
   unwind_plan.SetUnwindPlanValidAtAllInstructions(eLazyBoolYes);
+  unwind_plan.SetUnwindPlanForSignalTrap(eLazyBoolNo);
   unwind_plan.SetReturnAddressRegister(dwarf_ra_mips);
 
   return true;
@@ -1208,13 +1192,10 @@ bool EmulateInstructionMIPS::Emulate_ADDiu(llvm::MCInst &insn) {
   dst = m_reg_info->getEncodingValue(insn.getOperand(0).getReg());
   src = m_reg_info->getEncodingValue(insn.getOperand(1).getReg());
 
-  // If immediate value is greater then 2^16 - 1 then clang generate
-  // LUI, ADDIU, SUBU instructions in prolog.
-  // Example
-  // lui    $1, 0x2
-  // addiu $1, $1, -0x5920
-  // subu  $sp, $sp, $1
-  // In this case, ADDIU dst and src will be same and not equal to sp
+  // If immediate value is greater then 2^16 - 1 then clang generate LUI,
+  // ADDIU, SUBU instructions in prolog. Example lui    $1, 0x2 addiu $1, $1,
+  // -0x5920 subu  $sp, $sp, $1 In this case, ADDIU dst and src will be same
+  // and not equal to sp
   if (dst == src) {
     Context context;
 
@@ -1297,7 +1278,7 @@ bool EmulateInstructionMIPS::Emulate_SW(llvm::MCInst &insn) {
     context.SetRegisterToRegisterPlusOffset(reg_info_src, reg_info_base, 0);
 
     uint8_t buffer[RegisterValue::kMaxRegisterByteSize];
-    Error error;
+    Status error;
 
     if (!ReadRegister(&reg_info_base, data_src))
       return false;
@@ -1356,10 +1337,7 @@ bool EmulateInstructionMIPS::Emulate_LW(llvm::MCInst &insn) {
     context.type = eContextPopRegisterOffStack;
     context.SetAddress(address);
 
-    if (!WriteRegister(context, &reg_info_src, data_src))
-      return false;
-
-    return true;
+    return WriteRegister(context, &reg_info_src, data_src);
   }
 
   return false;
@@ -1456,11 +1434,8 @@ bool EmulateInstructionMIPS::Emulate_LUI(llvm::MCInst &insn) {
   context.SetImmediateSigned(imm);
   context.type = eContextImmediate;
 
-  if (WriteRegisterUnsigned(context, eRegisterKindDWARF, dwarf_zero_mips + rt,
-                            imm))
-    return true;
-
-  return false;
+  return WriteRegisterUnsigned(context, eRegisterKindDWARF,
+                               dwarf_zero_mips + rt, imm);
 }
 
 bool EmulateInstructionMIPS::Emulate_ADDIUSP(llvm::MCInst &insn) {
@@ -1548,8 +1523,8 @@ bool EmulateInstructionMIPS::Emulate_SWSP(llvm::MCInst &insn) {
   address = address + imm5;
 
   // We use bad_vaddr_context to store base address which is used by H/W
-  // watchpoint
-  // Set the bad_vaddr register with base address used in the instruction
+  // watchpoint Set the bad_vaddr register with base address used in the
+  // instruction
   bad_vaddr_context.type = eContextInvalid;
   WriteRegisterUnsigned(bad_vaddr_context, eRegisterKindDWARF, dwarf_bad_mips,
                         address);
@@ -1563,7 +1538,7 @@ bool EmulateInstructionMIPS::Emulate_SWSP(llvm::MCInst &insn) {
     context.SetRegisterToRegisterPlusOffset(reg_info_src, reg_info_base, 0);
 
     uint8_t buffer[RegisterValue::kMaxRegisterByteSize];
-    Error error;
+    Status error;
 
     if (!ReadRegister(&reg_info_base, data_src))
       return false;
@@ -1646,7 +1621,7 @@ bool EmulateInstructionMIPS::Emulate_SWM16_32(llvm::MCInst &insn) {
     context.SetRegisterToRegisterPlusOffset(reg_info_src, reg_info_base, 0);
 
     uint8_t buffer[RegisterValue::kMaxRegisterByteSize];
-    Error error;
+    Status error;
 
     if (!ReadRegister(&reg_info_base, data_src))
       return false;
@@ -1685,8 +1660,8 @@ bool EmulateInstructionMIPS::Emulate_LWSP(llvm::MCInst &insn) {
   base_address = base_address + imm5;
 
   // We use bad_vaddr_context to store base address which is used by H/W
-  // watchpoint
-  // Set the bad_vaddr register with base address used in the instruction
+  // watchpoint Set the bad_vaddr register with base address used in the
+  // instruction
   bad_vaddr_context.type = eContextInvalid;
   WriteRegisterUnsigned(bad_vaddr_context, eRegisterKindDWARF, dwarf_bad_mips,
                         base_address);
@@ -1703,10 +1678,7 @@ bool EmulateInstructionMIPS::Emulate_LWSP(llvm::MCInst &insn) {
     context.type = eContextPopRegisterOffStack;
     context.SetAddress(base_address);
 
-    if (!WriteRegister(context, &reg_info_src, data_src))
-      return false;
-
-    return true;
+    return WriteRegister(context, &reg_info_src, data_src);
   }
 
   return false;
@@ -1813,11 +1785,8 @@ bool EmulateInstructionMIPS::Emulate_JRADDIUSP(llvm::MCInst &insn) {
   context.type = eContextAdjustStackPointer;
 
   // update SP
-  if (!WriteRegisterUnsigned(context, eRegisterKindDWARF, dwarf_sp_mips,
-                             result))
-    return false;
-
-  return true;
+  return WriteRegisterUnsigned(context, eRegisterKindDWARF, dwarf_sp_mips,
+                               result);
 }
 
 static int IsAdd64bitOverflow(int32_t a, int32_t b) {
@@ -1870,11 +1839,8 @@ bool EmulateInstructionMIPS::Emulate_BXX_3ops(llvm::MCInst &insn) {
   context.type = eContextRelativeBranchImmediate;
   context.SetImmediate(offset);
 
-  if (!WriteRegisterUnsigned(context, eRegisterKindDWARF, dwarf_pc_mips,
-                             target))
-    return false;
-
-  return true;
+  return WriteRegisterUnsigned(context, eRegisterKindDWARF, dwarf_pc_mips,
+                               target);
 }
 
 /*
@@ -1953,11 +1919,8 @@ bool EmulateInstructionMIPS::Emulate_BXX_3ops_C(llvm::MCInst &insn) {
   context.type = eContextRelativeBranchImmediate;
   context.SetImmediate(current_inst_size + offset);
 
-  if (!WriteRegisterUnsigned(context, eRegisterKindDWARF, dwarf_pc_mips,
-                             target))
-    return false;
-
-  return true;
+  return WriteRegisterUnsigned(context, eRegisterKindDWARF, dwarf_pc_mips,
+                               target);
 }
 
 /*
@@ -2128,11 +2091,8 @@ bool EmulateInstructionMIPS::Emulate_BXX_2ops(llvm::MCInst &insn) {
   context.type = eContextRelativeBranchImmediate;
   context.SetImmediate(offset);
 
-  if (!WriteRegisterUnsigned(context, eRegisterKindDWARF, dwarf_pc_mips,
-                             target))
-    return false;
-
-  return true;
+  return WriteRegisterUnsigned(context, eRegisterKindDWARF, dwarf_pc_mips,
+                               target);
 }
 
 /*
@@ -2195,11 +2155,8 @@ bool EmulateInstructionMIPS::Emulate_BXX_2ops_C(llvm::MCInst &insn) {
   context.type = eContextRelativeBranchImmediate;
   context.SetImmediate(current_inst_size + offset);
 
-  if (!WriteRegisterUnsigned(context, eRegisterKindDWARF, dwarf_pc_mips,
-                             target))
-    return false;
-
-  return true;
+  return WriteRegisterUnsigned(context, eRegisterKindDWARF, dwarf_pc_mips,
+                               target);
 }
 
 bool EmulateInstructionMIPS::Emulate_B16_MM(llvm::MCInst &insn) {
@@ -2220,11 +2177,8 @@ bool EmulateInstructionMIPS::Emulate_B16_MM(llvm::MCInst &insn) {
   context.type = eContextRelativeBranchImmediate;
   context.SetImmediate(current_inst_size + offset);
 
-  if (!WriteRegisterUnsigned(context, eRegisterKindDWARF, dwarf_pc_mips,
-                             target))
-    return false;
-
-  return true;
+  return WriteRegisterUnsigned(context, eRegisterKindDWARF, dwarf_pc_mips,
+                               target);
 }
 
 /*
@@ -2535,11 +2489,8 @@ bool EmulateInstructionMIPS::Emulate_BC(llvm::MCInst &insn) {
 
   Context context;
 
-  if (!WriteRegisterUnsigned(context, eRegisterKindDWARF, dwarf_pc_mips,
-                             target))
-    return false;
-
-  return true;
+  return WriteRegisterUnsigned(context, eRegisterKindDWARF, dwarf_pc_mips,
+                               target);
 }
 
 bool EmulateInstructionMIPS::Emulate_J(llvm::MCInst &insn) {
@@ -2562,10 +2513,7 @@ bool EmulateInstructionMIPS::Emulate_J(llvm::MCInst &insn) {
 
   Context context;
 
-  if (!WriteRegisterUnsigned(context, eRegisterKindDWARF, dwarf_pc_mips, pc))
-    return false;
-
-  return true;
+  return WriteRegisterUnsigned(context, eRegisterKindDWARF, dwarf_pc_mips, pc);
 }
 
 bool EmulateInstructionMIPS::Emulate_JAL(llvm::MCInst &insn) {
@@ -2694,11 +2642,8 @@ bool EmulateInstructionMIPS::Emulate_JIC(llvm::MCInst &insn) {
 
   Context context;
 
-  if (!WriteRegisterUnsigned(context, eRegisterKindDWARF, dwarf_pc_mips,
-                             target))
-    return false;
-
-  return true;
+  return WriteRegisterUnsigned(context, eRegisterKindDWARF, dwarf_pc_mips,
+                               target);
 }
 
 bool EmulateInstructionMIPS::Emulate_JR(llvm::MCInst &insn) {
@@ -2719,11 +2664,8 @@ bool EmulateInstructionMIPS::Emulate_JR(llvm::MCInst &insn) {
 
   Context context;
 
-  if (!WriteRegisterUnsigned(context, eRegisterKindDWARF, dwarf_pc_mips,
-                             rs_val))
-    return false;
-
-  return true;
+  return WriteRegisterUnsigned(context, eRegisterKindDWARF, dwarf_pc_mips,
+                               rs_val);
 }
 
 /*
@@ -2764,11 +2706,8 @@ bool EmulateInstructionMIPS::Emulate_FP_branch(llvm::MCInst &insn) {
   }
   Context context;
 
-  if (!WriteRegisterUnsigned(context, eRegisterKindDWARF, dwarf_pc_mips,
-                             target))
-    return false;
-
-  return true;
+  return WriteRegisterUnsigned(context, eRegisterKindDWARF, dwarf_pc_mips,
+                               target);
 }
 
 bool EmulateInstructionMIPS::Emulate_BC1EQZ(llvm::MCInst &insn) {
@@ -2803,11 +2742,8 @@ bool EmulateInstructionMIPS::Emulate_BC1EQZ(llvm::MCInst &insn) {
 
   Context context;
 
-  if (!WriteRegisterUnsigned(context, eRegisterKindDWARF, dwarf_pc_mips,
-                             target))
-    return false;
-
-  return true;
+  return WriteRegisterUnsigned(context, eRegisterKindDWARF, dwarf_pc_mips,
+                               target);
 }
 
 bool EmulateInstructionMIPS::Emulate_BC1NEZ(llvm::MCInst &insn) {
@@ -2842,11 +2778,8 @@ bool EmulateInstructionMIPS::Emulate_BC1NEZ(llvm::MCInst &insn) {
 
   Context context;
 
-  if (!WriteRegisterUnsigned(context, eRegisterKindDWARF, dwarf_pc_mips,
-                             target))
-    return false;
-
-  return true;
+  return WriteRegisterUnsigned(context, eRegisterKindDWARF, dwarf_pc_mips,
+                               target);
 }
 
 /*
@@ -2904,11 +2837,8 @@ bool EmulateInstructionMIPS::Emulate_3D_branch(llvm::MCInst &insn) {
   }
   Context context;
 
-  if (!WriteRegisterUnsigned(context, eRegisterKindDWARF, dwarf_pc_mips,
-                             target))
-    return false;
-
-  return true;
+  return WriteRegisterUnsigned(context, eRegisterKindDWARF, dwarf_pc_mips,
+                               target);
 }
 
 bool EmulateInstructionMIPS::Emulate_BNZB(llvm::MCInst &insn) {
@@ -2949,7 +2879,7 @@ bool EmulateInstructionMIPS::Emulate_MSA_Branch_DF(llvm::MCInst &insn,
   bool success = false, branch_hit = true;
   int32_t target = 0;
   RegisterValue reg_value;
-  const uint8_t *ptr = NULL;
+  const uint8_t *ptr = nullptr;
 
   uint32_t wt = m_reg_info->getEncodingValue(insn.getOperand(0).getReg());
   int32_t offset = insn.getOperand(1).getImm();
@@ -2999,11 +2929,8 @@ bool EmulateInstructionMIPS::Emulate_MSA_Branch_DF(llvm::MCInst &insn,
   Context context;
   context.type = eContextRelativeBranchImmediate;
 
-  if (!WriteRegisterUnsigned(context, eRegisterKindDWARF, dwarf_pc_mips,
-                             target))
-    return false;
-
-  return true;
+  return WriteRegisterUnsigned(context, eRegisterKindDWARF, dwarf_pc_mips,
+                               target);
 }
 
 bool EmulateInstructionMIPS::Emulate_BNZV(llvm::MCInst &insn) {
@@ -3045,11 +2972,8 @@ bool EmulateInstructionMIPS::Emulate_MSA_Branch_V(llvm::MCInst &insn,
   Context context;
   context.type = eContextRelativeBranchImmediate;
 
-  if (!WriteRegisterUnsigned(context, eRegisterKindDWARF, dwarf_pc_mips,
-                             target))
-    return false;
-
-  return true;
+  return WriteRegisterUnsigned(context, eRegisterKindDWARF, dwarf_pc_mips,
+                               target);
 }
 
 bool EmulateInstructionMIPS::Emulate_LDST_Imm(llvm::MCInst &insn) {

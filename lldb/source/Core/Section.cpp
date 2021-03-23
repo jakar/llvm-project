@@ -1,25 +1,23 @@
-//===-- Section.cpp ---------------------------------------------*- C++ -*-===//
+//===-- Section.cpp -------------------------------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
 #include "lldb/Core/Section.h"
-#include "lldb/Core/Address.h" // for Address
+#include "lldb/Core/Address.h"
 #include "lldb/Core/Module.h"
 #include "lldb/Symbol/ObjectFile.h"
 #include "lldb/Target/SectionLoadList.h"
 #include "lldb/Target/Target.h"
-#include "lldb/Utility/FileSpec.h" // for FileSpec
-#include "lldb/Utility/Stream.h"   // for Stream
-#include "lldb/Utility/VMRange.h"  // for VMRange
+#include "lldb/Utility/FileSpec.h"
+#include "lldb/Utility/VMRange.h"
 
-#include <inttypes.h> // for PRIx64
-#include <limits>     // for numeric_limits
-#include <utility>    // for distance
+#include <inttypes.h>
+#include <limits>
+#include <utility>
 
 namespace lldb_private {
 class DataExtractor;
@@ -27,8 +25,8 @@ class DataExtractor;
 using namespace lldb;
 using namespace lldb_private;
 
-static const char *GetSectionTypeAsCString(lldb::SectionType sect_type) {
-  switch (sect_type) {
+const char *Section::GetTypeAsCString() const {
+  switch (m_type) {
   case eSectionTypeInvalid:
     return "invalid";
   case eSectionTypeCode:
@@ -61,18 +59,34 @@ static const char *GetSectionTypeAsCString(lldb::SectionType sect_type) {
     return "objc-cfstrings";
   case eSectionTypeDWARFDebugAbbrev:
     return "dwarf-abbrev";
+  case eSectionTypeDWARFDebugAbbrevDwo:
+    return "dwarf-abbrev-dwo";
   case eSectionTypeDWARFDebugAddr:
     return "dwarf-addr";
   case eSectionTypeDWARFDebugAranges:
     return "dwarf-aranges";
+  case eSectionTypeDWARFDebugCuIndex:
+    return "dwarf-cu-index";
+  case eSectionTypeDWARFDebugTuIndex:
+    return "dwarf-tu-index";
   case eSectionTypeDWARFDebugFrame:
     return "dwarf-frame";
   case eSectionTypeDWARFDebugInfo:
     return "dwarf-info";
+  case eSectionTypeDWARFDebugInfoDwo:
+    return "dwarf-info-dwo";
   case eSectionTypeDWARFDebugLine:
     return "dwarf-line";
+  case eSectionTypeDWARFDebugLineStr:
+    return "dwarf-line-str";
   case eSectionTypeDWARFDebugLoc:
     return "dwarf-loc";
+  case eSectionTypeDWARFDebugLocDwo:
+    return "dwarf-loc-dwo";
+  case eSectionTypeDWARFDebugLocLists:
+    return "dwarf-loclists";
+  case eSectionTypeDWARFDebugLocListsDwo:
+    return "dwarf-loclists-dwo";
   case eSectionTypeDWARFDebugMacInfo:
     return "dwarf-macinfo";
   case eSectionTypeDWARFDebugMacro:
@@ -83,10 +97,24 @@ static const char *GetSectionTypeAsCString(lldb::SectionType sect_type) {
     return "dwarf-pubtypes";
   case eSectionTypeDWARFDebugRanges:
     return "dwarf-ranges";
+  case eSectionTypeDWARFDebugRngLists:
+    return "dwarf-rnglists";
+  case eSectionTypeDWARFDebugRngListsDwo:
+    return "dwarf-rnglists-dwo";
   case eSectionTypeDWARFDebugStr:
     return "dwarf-str";
+  case eSectionTypeDWARFDebugStrDwo:
+    return "dwarf-str-dwo";
   case eSectionTypeDWARFDebugStrOffsets:
     return "dwarf-str-offsets";
+  case eSectionTypeDWARFDebugStrOffsetsDwo:
+    return "dwarf-str-offsets-dwo";
+  case eSectionTypeDWARFDebugTypes:
+    return "dwarf-types";
+  case eSectionTypeDWARFDebugTypesDwo:
+    return "dwarf-types-dwo";
+  case eSectionTypeDWARFDebugNames:
+    return "dwarf-names";
   case eSectionTypeELFSymbolTable:
     return "elf-symbol-table";
   case eSectionTypeELFDynamicSymbols:
@@ -115,6 +143,8 @@ static const char *GetSectionTypeAsCString(lldb::SectionType sect_type) {
     return "go-symtab";
   case eSectionTypeAbsoluteAddress:
     return "absolute";
+  case eSectionTypeDWARFGNUDebugAltLink:
+    return "dwarf-gnu-debugaltlink";
   case eSectionTypeOther:
     return "regular";
   }
@@ -122,7 +152,7 @@ static const char *GetSectionTypeAsCString(lldb::SectionType sect_type) {
 }
 
 Section::Section(const ModuleSP &module_sp, ObjectFile *obj_file,
-                 user_id_t sect_id, const ConstString &name,
+                 user_id_t sect_id, ConstString name,
                  SectionType sect_type, addr_t file_addr, addr_t byte_size,
                  lldb::offset_t file_offset, lldb::offset_t file_size,
                  uint32_t log2align, uint32_t flags,
@@ -133,7 +163,7 @@ Section::Section(const ModuleSP &module_sp, ObjectFile *obj_file,
       m_file_offset(file_offset), m_file_size(file_size),
       m_log2align(log2align), m_children(), m_fake(false), m_encrypted(false),
       m_thread_specific(false), m_readable(false), m_writable(false),
-      m_executable(false), m_target_byte_size(target_byte_size) {
+      m_executable(false), m_relocated(false), m_target_byte_size(target_byte_size) {
   //    printf ("Section::Section(%p): module=%p, sect_id = 0x%16.16" PRIx64 ",
   //    addr=[0x%16.16" PRIx64 " - 0x%16.16" PRIx64 "), file [0x%16.16" PRIx64 "
   //    - 0x%16.16" PRIx64 "), flags = 0x%8.8x, name = %s\n",
@@ -144,7 +174,7 @@ Section::Section(const ModuleSP &module_sp, ObjectFile *obj_file,
 
 Section::Section(const lldb::SectionSP &parent_section_sp,
                  const ModuleSP &module_sp, ObjectFile *obj_file,
-                 user_id_t sect_id, const ConstString &name,
+                 user_id_t sect_id, ConstString name,
                  SectionType sect_type, addr_t file_addr, addr_t byte_size,
                  lldb::offset_t file_offset, lldb::offset_t file_size,
                  uint32_t log2align, uint32_t flags,
@@ -155,7 +185,7 @@ Section::Section(const lldb::SectionSP &parent_section_sp,
       m_file_offset(file_offset), m_file_size(file_size),
       m_log2align(log2align), m_children(), m_fake(false), m_encrypted(false),
       m_thread_specific(false), m_readable(false), m_writable(false),
-      m_executable(false), m_target_byte_size(target_byte_size) {
+      m_executable(false), m_relocated(false), m_target_byte_size(target_byte_size) {
   //    printf ("Section::Section(%p): module=%p, sect_id = 0x%16.16" PRIx64 ",
   //    addr=[0x%16.16" PRIx64 " - 0x%16.16" PRIx64 "), file [0x%16.16" PRIx64 "
   //    - 0x%16.16" PRIx64 "), flags = 0x%8.8x, name = %s.%s\n",
@@ -173,9 +203,9 @@ Section::~Section() {
 addr_t Section::GetFileAddress() const {
   SectionSP parent_sp(GetParent());
   if (parent_sp) {
-    // This section has a parent which means m_file_addr is an offset into
-    // the parent section, so the file address for this section is the file
-    // address of the parent plus the offset
+    // This section has a parent which means m_file_addr is an offset into the
+    // parent section, so the file address for this section is the file address
+    // of the parent plus the offset
     return parent_sp->GetFileAddress() + m_file_addr;
   }
   // This section has no parent, so m_file_addr is the file base address
@@ -220,33 +250,30 @@ addr_t Section::GetLoadBaseAddress(Target *target) const {
   return load_base_addr;
 }
 
-bool Section::ResolveContainedAddress(addr_t offset, Address &so_addr) const {
+bool Section::ResolveContainedAddress(addr_t offset, Address &so_addr,
+                                      bool allow_section_end) const {
   const size_t num_children = m_children.GetSize();
-  if (num_children > 0) {
-    for (size_t i = 0; i < num_children; i++) {
-      Section *child_section = m_children.GetSectionAtIndex(i).get();
+  for (size_t i = 0; i < num_children; i++) {
+    Section *child_section = m_children.GetSectionAtIndex(i).get();
 
-      addr_t child_offset = child_section->GetOffset();
-      if (child_offset <= offset &&
-          offset - child_offset < child_section->GetByteSize())
-        return child_section->ResolveContainedAddress(offset - child_offset,
-                                                      so_addr);
-    }
+    addr_t child_offset = child_section->GetOffset();
+    if (child_offset <= offset &&
+        offset - child_offset <
+            child_section->GetByteSize() + (allow_section_end ? 1 : 0))
+      return child_section->ResolveContainedAddress(offset - child_offset,
+                                                    so_addr, allow_section_end);
   }
   so_addr.SetOffset(offset);
   so_addr.SetSection(const_cast<Section *>(this)->shared_from_this());
 
-#ifdef LLDB_CONFIGURATION_DEBUG
-  // For debug builds, ensure that there are no orphaned (i.e., moduleless)
-  // sections.
+  // Ensure that there are no orphaned (i.e., moduleless) sections.
   assert(GetModule().get());
-#endif
   return true;
 }
 
 bool Section::ContainsFileAddress(addr_t vm_addr) const {
   const addr_t file_addr = GetFileAddress();
-  if (file_addr != LLDB_INVALID_ADDRESS) {
+  if (file_addr != LLDB_INVALID_ADDRESS && !IsThreadSpecific()) {
     if (file_addr <= vm_addr) {
       const addr_t offset = (vm_addr - file_addr) * m_target_byte_size;
       return offset < GetByteSize();
@@ -255,39 +282,15 @@ bool Section::ContainsFileAddress(addr_t vm_addr) const {
   return false;
 }
 
-int Section::Compare(const Section &a, const Section &b) {
-  if (&a == &b)
-    return 0;
-
-  const ModuleSP a_module_sp = a.GetModule();
-  const ModuleSP b_module_sp = b.GetModule();
-  if (a_module_sp == b_module_sp) {
-    user_id_t a_sect_uid = a.GetID();
-    user_id_t b_sect_uid = b.GetID();
-    if (a_sect_uid < b_sect_uid)
-      return -1;
-    if (a_sect_uid > b_sect_uid)
-      return 1;
-    return 0;
-  } else {
-    // The modules are different, just compare the module pointers
-    if (a_module_sp.get() < b_module_sp.get())
-      return -1;
-    else
-      return 1; // We already know the modules aren't equal
-  }
-}
-
-void Section::Dump(Stream *s, Target *target, uint32_t depth) const {
-  //    s->Printf("%.*p: ", (int)sizeof(void*) * 2, this);
-  s->Indent();
-  s->Printf("0x%8.8" PRIx64 " %-16s ", GetID(),
-            GetSectionTypeAsCString(m_type));
+void Section::Dump(llvm::raw_ostream &s, unsigned indent, Target *target,
+                   uint32_t depth) const {
+  s.indent(indent);
+  s << llvm::format("0x%8.8" PRIx64 " %-16s ", GetID(), GetTypeAsCString());
   bool resolved = true;
   addr_t addr = LLDB_INVALID_ADDRESS;
 
   if (GetByteSize() == 0)
-    s->Printf("%39s", "");
+    s.indent(39);
   else {
     if (target)
       addr = GetLoadBaseAddress(target);
@@ -302,38 +305,39 @@ void Section::Dump(Stream *s, Target *target, uint32_t depth) const {
     range.Dump(s, 0);
   }
 
-  s->Printf("%c %c%c%c  0x%8.8" PRIx64 " 0x%8.8" PRIx64 " 0x%8.8x ",
-            resolved ? ' ' : '*', m_readable ? 'r' : '-',
-            m_writable ? 'w' : '-', m_executable ? 'x' : '-', m_file_offset,
-            m_file_size, Get());
+  s << llvm::format("%c %c%c%c  0x%8.8" PRIx64 " 0x%8.8" PRIx64 " 0x%8.8x ",
+                    resolved ? ' ' : '*', m_readable ? 'r' : '-',
+                    m_writable ? 'w' : '-', m_executable ? 'x' : '-',
+                    m_file_offset, m_file_size, Get());
 
   DumpName(s);
 
-  s->EOL();
+  s << "\n";
 
   if (depth > 0)
-    m_children.Dump(s, target, false, depth - 1);
+    m_children.Dump(s, indent, target, false, depth - 1);
 }
 
-void Section::DumpName(Stream *s) const {
+void Section::DumpName(llvm::raw_ostream &s) const {
   SectionSP parent_sp(GetParent());
   if (parent_sp) {
     parent_sp->DumpName(s);
-    s->PutChar('.');
+    s << '.';
   } else {
     // The top most section prints the module basename
-    const char *name = NULL;
+    const char *name = nullptr;
     ModuleSP module_sp(GetModule());
-    const FileSpec &file_spec = m_obj_file->GetFileSpec();
 
-    if (m_obj_file)
+    if (m_obj_file) {
+      const FileSpec &file_spec = m_obj_file->GetFileSpec();
       name = file_spec.GetFilename().AsCString();
+    }
     if ((!name || !name[0]) && module_sp)
       name = module_sp->GetFileSpec().GetFilename().AsCString();
     if (name && name[0])
-      s->Printf("%s.", name);
+      s << name << '.';
   }
-  m_name.Dump(s);
+  s << m_name;
 }
 
 bool Section::IsDescendant(const Section *section) {
@@ -360,9 +364,7 @@ bool Section::Slide(addr_t slide_amount, bool slide_children) {
   return false;
 }
 
-//------------------------------------------------------------------
 /// Get the permissions as OR'ed bits from lldb::Permissions
-//------------------------------------------------------------------
 uint32_t Section::GetPermissions() const {
   uint32_t permissions = 0;
   if (m_readable)
@@ -374,9 +376,7 @@ uint32_t Section::GetPermissions() const {
   return permissions;
 }
 
-//------------------------------------------------------------------
 /// Set the permissions using bits OR'ed from lldb::Permissions
-//------------------------------------------------------------------
 void Section::SetPermissions(uint32_t permissions) {
   m_readable = (permissions & ePermissionsReadable) != 0;
   m_writable = (permissions & ePermissionsWritable) != 0;
@@ -390,17 +390,13 @@ lldb::offset_t Section::GetSectionData(void *dst, lldb::offset_t dst_len,
   return 0;
 }
 
-lldb::offset_t Section::GetSectionData(DataExtractor &section_data) const {
+lldb::offset_t Section::GetSectionData(DataExtractor &section_data) {
   if (m_obj_file)
     return m_obj_file->ReadSectionData(this, section_data);
   return 0;
 }
 
 #pragma mark SectionList
-
-SectionList::SectionList() : m_sections() {}
-
-SectionList::~SectionList() {}
 
 SectionList &SectionList::operator=(const SectionList &rhs) {
   if (this != &rhs)
@@ -485,14 +481,14 @@ SectionSP SectionList::GetSectionAtIndex(size_t idx) const {
 }
 
 SectionSP
-SectionList::FindSectionByName(const ConstString &section_dstr) const {
+SectionList::FindSectionByName(ConstString section_dstr) const {
   SectionSP sect_sp;
   // Check if we have a valid section string
   if (section_dstr && !m_sections.empty()) {
     const_iterator sect_iter;
     const_iterator end = m_sections.end();
     for (sect_iter = m_sections.begin();
-         sect_iter != end && sect_sp.get() == NULL; ++sect_iter) {
+         sect_iter != end && sect_sp.get() == nullptr; ++sect_iter) {
       Section *child_section = sect_iter->get();
       if (child_section) {
         if (child_section->GetName() == section_dstr) {
@@ -513,7 +509,7 @@ SectionSP SectionList::FindSectionByID(user_id_t sect_id) const {
     const_iterator sect_iter;
     const_iterator end = m_sections.end();
     for (sect_iter = m_sections.begin();
-         sect_iter != end && sect_sp.get() == NULL; ++sect_iter) {
+         sect_iter != end && sect_sp.get() == nullptr; ++sect_iter) {
       if ((*sect_iter)->GetID() == sect_id) {
         sect_sp = *sect_iter;
         break;
@@ -550,19 +546,17 @@ SectionSP SectionList::FindSectionContainingFileAddress(addr_t vm_addr,
   const_iterator sect_iter;
   const_iterator end = m_sections.end();
   for (sect_iter = m_sections.begin();
-       sect_iter != end && sect_sp.get() == NULL; ++sect_iter) {
+       sect_iter != end && sect_sp.get() == nullptr; ++sect_iter) {
     Section *sect = sect_iter->get();
     if (sect->ContainsFileAddress(vm_addr)) {
       // The file address is in this section. We need to make sure one of our
-      // child
-      // sections doesn't contain this address as well as obeying the depth
-      // limit
-      // that was passed in.
+      // child sections doesn't contain this address as well as obeying the
+      // depth limit that was passed in.
       if (depth > 0)
         sect_sp = sect->GetChildren().FindSectionContainingFileAddress(
             vm_addr, depth - 1);
 
-      if (sect_sp.get() == NULL && !sect->IsFake())
+      if (sect_sp.get() == nullptr && !sect->IsFake())
         sect_sp = *sect_iter;
     }
   }
@@ -570,34 +564,30 @@ SectionSP SectionList::FindSectionContainingFileAddress(addr_t vm_addr,
 }
 
 bool SectionList::ContainsSection(user_id_t sect_id) const {
-  return FindSectionByID(sect_id).get() != NULL;
+  return FindSectionByID(sect_id).get() != nullptr;
 }
 
-void SectionList::Dump(Stream *s, Target *target, bool show_header,
-                       uint32_t depth) const {
+void SectionList::Dump(llvm::raw_ostream &s, unsigned indent, Target *target,
+                       bool show_header, uint32_t depth) const {
   bool target_has_loaded_sections =
       target && !target->GetSectionLoadList().IsEmpty();
   if (show_header && !m_sections.empty()) {
-    s->Indent();
-    s->Printf("SectID     Type             %s Address                          "
-              "   Perm File Off.  File Size  Flags "
-              "     Section Name\n",
-              target_has_loaded_sections ? "Load" : "File");
-    s->Indent();
-    s->PutCString("---------- ---------------- "
-                  "---------------------------------------  ---- ---------- "
-                  "---------- "
-                  "---------- ----------------------------\n");
+    s.indent(indent);
+    s << llvm::formatv(
+        "SectID     Type             {0} Address                          "
+        "   Perm File Off.  File Size  Flags "
+        "     Section Name\n",
+        target_has_loaded_sections ? "Load" : "File");
+    s.indent(indent);
+    s << "---------- ---------------- "
+         "---------------------------------------  ---- ---------- "
+         "---------- "
+         "---------- ----------------------------\n";
   }
 
-  const_iterator sect_iter;
-  const_iterator end = m_sections.end();
-  for (sect_iter = m_sections.begin(); sect_iter != end; ++sect_iter) {
-    (*sect_iter)->Dump(s, target_has_loaded_sections ? target : NULL, depth);
-  }
-
-  if (show_header && !m_sections.empty())
-    s->IndentLess();
+  for (const auto &section_sp : m_sections)
+    section_sp->Dump(s, indent, target_has_loaded_sections ? target : nullptr,
+                     depth);
 }
 
 size_t SectionList::Slide(addr_t slide_amount, bool slide_children) {

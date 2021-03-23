@@ -296,7 +296,7 @@ declare double @hh(double) #1
 
 ; Check that we correctly deal with repeated operands.
 ; The following testcase creates:
-;   %D1<def> = FADDDrr %D0<kill>, %D0
+;   %d1 = FADDDrr killed %d0, %d0
 ; We'll get a crash if we naively look at the first operand, remove it
 ; from the substitution list then look at the second operand.
 
@@ -329,7 +329,7 @@ entry:
 
 declare void @hhh(double, double)
 
-attributes #0 = { nounwind "less-precise-fpmad"="false" "no-frame-pointer-elim"="true" "no-frame-pointer-elim-non-leaf" "no-infs-fp-math"="true" "no-nans-fp-math"="true" "stack-protector-buffer-size"="8" "unsafe-fp-math"="true" "use-soft-float"="false" }
-attributes #1 = { "less-precise-fpmad"="false" "no-frame-pointer-elim"="true" "no-frame-pointer-elim-non-leaf" "no-infs-fp-math"="true" "no-nans-fp-math"="true" "stack-protector-buffer-size"="8" "unsafe-fp-math"="true" "use-soft-float"="false" }
+attributes #0 = { nounwind "less-precise-fpmad"="false" "frame-pointer"="all" "no-infs-fp-math"="true" "no-nans-fp-math"="true" "stack-protector-buffer-size"="8" "unsafe-fp-math"="true" "use-soft-float"="false" }
+attributes #1 = { "less-precise-fpmad"="false" "frame-pointer"="all" "no-infs-fp-math"="true" "no-nans-fp-math"="true" "stack-protector-buffer-size"="8" "unsafe-fp-math"="true" "use-soft-float"="false" }
 attributes #2 = { nounwind }
 

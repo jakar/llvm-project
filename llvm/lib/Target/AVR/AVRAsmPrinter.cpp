@@ -1,9 +1,8 @@
 //===-- AVRAsmPrinter.cpp - AVR LLVM assembly writer ----------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -15,11 +14,15 @@
 #include "AVR.h"
 #include "AVRMCInstLower.h"
 #include "AVRSubtarget.h"
-#include "InstPrinter/AVRInstPrinter.h"
+#include "MCTargetDesc/AVRInstPrinter.h"
+#include "MCTargetDesc/AVRMCExpr.h"
+#include "TargetInfo/AVRTargetInfo.h"
 
 #include "llvm/CodeGen/AsmPrinter.h"
-#include "llvm/CodeGen/MachineInstr.h"
 #include "llvm/CodeGen/MachineFunction.h"
+#include "llvm/CodeGen/MachineInstr.h"
+#include "llvm/CodeGen/TargetRegisterInfo.h"
+#include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/IR/Mangler.h"
 #include "llvm/MC/MCInst.h"
 #include "llvm/MC/MCStreamer.h"
@@ -27,8 +30,6 @@
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/TargetRegistry.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Target/TargetRegisterInfo.h"
-#include "llvm/Target/TargetSubtargetInfo.h"
 
 #define DEBUG_TYPE "avr-asm-printer"
 
@@ -43,25 +44,24 @@ public:
 
   StringRef getPassName() const override { return "AVR Assembly Printer"; }
 
-  void printOperand(const MachineInstr *MI, unsigned OpNo, raw_ostream &O,
-                    const char *Modifier = 0);
+  void printOperand(const MachineInstr *MI, unsigned OpNo, raw_ostream &O);
 
   bool PrintAsmOperand(const MachineInstr *MI, unsigned OpNum,
-                       unsigned AsmVariant, const char *ExtraCode,
-                       raw_ostream &O) override;
+                       const char *ExtraCode, raw_ostream &O) override;
 
   bool PrintAsmMemoryOperand(const MachineInstr *MI, unsigned OpNum,
-                             unsigned AsmVariant, const char *ExtraCode,
-                             raw_ostream &O) override;
+                             const char *ExtraCode, raw_ostream &O) override;
 
-  void EmitInstruction(const MachineInstr *MI) override;
+  void emitInstruction(const MachineInstr *MI) override;
+
+  const MCExpr *lowerConstant(const Constant *CV) override;
 
 private:
   const MCRegisterInfo &MRI;
 };
 
 void AVRAsmPrinter::printOperand(const MachineInstr *MI, unsigned OpNo,
-                                 raw_ostream &O, const char *Modifier) {
+                                 raw_ostream &O) {
   const MachineOperand &MO = MI->getOperand(OpNo);
 
   switch (MO.getType()) {
@@ -86,11 +86,10 @@ void AVRAsmPrinter::printOperand(const MachineInstr *MI, unsigned OpNo,
 }
 
 bool AVRAsmPrinter::PrintAsmOperand(const MachineInstr *MI, unsigned OpNum,
-                                    unsigned AsmVariant, const char *ExtraCode,
-                                    raw_ostream &O) {
+                                    const char *ExtraCode, raw_ostream &O) {
   // Default asm printer can only deal with some extra codes,
   // so try it first.
-  bool Error = AsmPrinter::PrintAsmOperand(MI, OpNum, AsmVariant, ExtraCode, O);
+  bool Error = AsmPrinter::PrintAsmOperand(MI, OpNum, ExtraCode, O);
 
   if (Error && ExtraCode && ExtraCode[0]) {
     if (ExtraCode[1] != 0)
@@ -101,7 +100,7 @@ bool AVRAsmPrinter::PrintAsmOperand(const MachineInstr *MI, unsigned OpNum,
 
       assert(RegOp.isReg() && "Operand must be a register when you're"
                               "using 'A'..'Z' operand extracodes.");
-      unsigned Reg = RegOp.getReg();
+      Register Reg = RegOp.getReg();
 
       unsigned ByteNumber = ExtraCode[0] - 'A';
 
@@ -138,8 +137,7 @@ bool AVRAsmPrinter::PrintAsmOperand(const MachineInstr *MI, unsigned OpNum,
 }
 
 bool AVRAsmPrinter::PrintAsmMemoryOperand(const MachineInstr *MI,
-                                          unsigned OpNum, unsigned AsmVariant,
-                                          const char *ExtraCode,
+                                          unsigned OpNum, const char *ExtraCode,
                                           raw_ostream &O) {
   if (ExtraCode && ExtraCode[0]) {
     llvm_unreachable("This branch is not implemented yet");
@@ -149,7 +147,10 @@ bool AVRAsmPrinter::PrintAsmMemoryOperand(const MachineInstr *MI,
   (void)MO;
   assert(MO.isReg() && "Unexpected inline asm memory operand");
 
-  // TODO: We can look up the alternative name for the register if it's given.
+  // TODO: We should be able to look up the alternative name for
+  // the register if it's given.
+  // TableGen doesn't expose a way of getting retrieving names
+  // for registers.
   if (MI->getOperand(OpNum).getReg() == AVR::R31R30) {
     O << "Z";
   } else {
@@ -170,7 +171,7 @@ bool AVRAsmPrinter::PrintAsmMemoryOperand(const MachineInstr *MI,
   return false;
 }
 
-void AVRAsmPrinter::EmitInstruction(const MachineInstr *MI) {
+void AVRAsmPrinter::emitInstruction(const MachineInstr *MI) {
   AVRMCInstLower MCInstLowering(OutContext, *this);
 
   MCInst I;
@@ -178,9 +179,23 @@ void AVRAsmPrinter::EmitInstruction(const MachineInstr *MI) {
   EmitToStreamer(*OutStreamer, I);
 }
 
+const MCExpr *AVRAsmPrinter::lowerConstant(const Constant *CV) {
+  MCContext &Ctx = OutContext;
+
+  if (const GlobalValue *GV = dyn_cast<GlobalValue>(CV)) {
+    bool IsProgMem = GV->getAddressSpace() == AVR::ProgramMemory;
+    if (IsProgMem) {
+      const MCExpr *Expr = MCSymbolRefExpr::create(getSymbol(GV), Ctx);
+      return AVRMCExpr::create(AVRMCExpr::VK_AVR_PM, Expr, false, Ctx);
+    }
+  }
+
+  return AsmPrinter::lowerConstant(CV);
+}
+
 } // end of namespace llvm
 
-extern "C" void LLVMInitializeAVRAsmPrinter() {
+extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeAVRAsmPrinter() {
   llvm::RegisterAsmPrinter<llvm::AVRAsmPrinter> X(llvm::getTheAVRTarget());
 }
 

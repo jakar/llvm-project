@@ -23,8 +23,10 @@
 @import DebugObjC;
 #endif
 
-// CHECK: distinct !DICompileUnit(language: DW_LANG_ObjC
-// CHECK-SAME:                    isOptimized: false,
+// CHECK: distinct !DICompileUnit(language: DW_LANG_ObjC, file: ![[FILE:[0-9]+]],
+// CHECK-SAME:                    isOptimized: false
+
+// CHECK: ![[FILE]] = !DIFile(filename: "{{DebugObjC|.*DebugObjC.h}}"
 
 // CHECK: !DICompositeType(tag: DW_TAG_enumeration_type,
 // CHECK-SAME:             scope: ![[MODULE:[0-9]+]],
@@ -34,18 +36,12 @@
 // CHECK-NOT:              name:
 // CHECK-SAME:             elements:
 
-// CHECK: !DISubprogram(name: "+[ObjCClass classMethod]",
-// CHECK-SAME:          scope: ![[MODULE]],
+// CHECK: !DICompositeType(tag: DW_TAG_structure_type, name: "FwdDecl",
+// CHECK-SAME:             scope: ![[MODULE]],
 
 // CHECK: !DICompositeType(tag: DW_TAG_structure_type, name: "ObjCClass",
 // CHECK-SAME:             scope: ![[MODULE]],
 // CHECK-SAME:             elements
-
-// The forward declaration should not be in the module scope.
-// CHECK: !DICompositeType(tag: DW_TAG_structure_type, name: "OpaqueData", file
-
-// CHECK: !DICompositeType(tag: DW_TAG_structure_type, name: "FwdDecl",
-// CHECK-SAME:             scope: ![[MODULE]],
 
 // CHECK: !DICompositeType(tag: DW_TAG_structure_type, name: "ObjCClassWithPrivateIVars",
 // CHECK-SAME:             scope: ![[MODULE]],
@@ -83,11 +79,8 @@
 // The output order is sublty different for module vs. pch,
 // so these are checked separately:
 //
-// CHECK2: !DISubprogram(name: "+[ObjCClass classMethod]"
-// CHECK2: !DISubprogram(name: "-[ObjCClass instanceMethodWithInt:]"
+// CHECK2: !DICompositeType(tag: DW_TAG_structure_type, name: "FwdDecl",
 // CHECK2: !DICompositeType(tag: DW_TAG_structure_type, name: "ObjCClass",
 // CHECK2: !DIObjCProperty(name: "property",
 // CHECK2: !DIDerivedType(tag: DW_TAG_member, name: "ivar"
-// CHECK2: !DISubprogram(name: "-[Category(Category) categoryMethod]"
-// CHECK2: !DICompositeType(tag: DW_TAG_structure_type, name: "FwdDecl",
 // CHECK2: !DIDerivedType(tag: DW_TAG_typedef, name: "InnerEnum"

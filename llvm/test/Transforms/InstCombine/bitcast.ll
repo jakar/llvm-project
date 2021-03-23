@@ -31,12 +31,12 @@ define <2 x i32> @xor_two_vector_bitcasts(<1 x i64> %a, <1 x i64> %b) {
   ret <2 x i32> %t3
 }
 
-; Verify that 'xor' of vector and constant is done as a vector bitwise op before the bitcast.
+; No change. Bitcasts are canonicalized above bitwise logic.
 
 define <2 x i32> @xor_bitcast_vec_to_vec(<1 x i64> %a) {
 ; CHECK-LABEL: @xor_bitcast_vec_to_vec(
-; CHECK-NEXT:    [[TMP1:%.*]] = xor <1 x i64> [[A:%.*]], <i64 8589934593>
-; CHECK-NEXT:    [[T2:%.*]] = bitcast <1 x i64> [[TMP1]] to <2 x i32>
+; CHECK-NEXT:    [[T1:%.*]] = bitcast <1 x i64> [[A:%.*]] to <2 x i32>
+; CHECK-NEXT:    [[T2:%.*]] = xor <2 x i32> [[T1]], <i32 1, i32 2>
 ; CHECK-NEXT:    ret <2 x i32> [[T2]]
 ;
   %t1 = bitcast <1 x i64> %a to <2 x i32>
@@ -44,12 +44,12 @@ define <2 x i32> @xor_bitcast_vec_to_vec(<1 x i64> %a) {
   ret <2 x i32> %t2
 }
 
-; Verify that 'and' of integer and constant is done as a vector bitwise op before the bitcast.
+; No change. Bitcasts are canonicalized above bitwise logic.
 
 define i64 @and_bitcast_vec_to_int(<2 x i32> %a) {
 ; CHECK-LABEL: @and_bitcast_vec_to_int(
-; CHECK-NEXT:    [[TMP1:%.*]] = and <2 x i32> [[A:%.*]], <i32 3, i32 0>
-; CHECK-NEXT:    [[T2:%.*]] = bitcast <2 x i32> [[TMP1]] to i64
+; CHECK-NEXT:    [[T1:%.*]] = bitcast <2 x i32> [[A:%.*]] to i64
+; CHECK-NEXT:    [[T2:%.*]] = and i64 [[T1]], 3
 ; CHECK-NEXT:    ret i64 [[T2]]
 ;
   %t1 = bitcast <2 x i32> %a to i64
@@ -57,17 +57,62 @@ define i64 @and_bitcast_vec_to_int(<2 x i32> %a) {
   ret i64 %t2
 }
 
-; Verify that 'or' of vector and constant is done as an integer bitwise op before the bitcast.
+; No change. Bitcasts are canonicalized above bitwise logic.
 
 define <2 x i32> @or_bitcast_int_to_vec(i64 %a) {
 ; CHECK-LABEL: @or_bitcast_int_to_vec(
-; CHECK-NEXT:    [[TMP1:%.*]] = or i64 [[A:%.*]], 8589934593
-; CHECK-NEXT:    [[T2:%.*]] = bitcast i64 [[TMP1]] to <2 x i32>
+; CHECK-NEXT:    [[T1:%.*]] = bitcast i64 [[A:%.*]] to <2 x i32>
+; CHECK-NEXT:    [[T2:%.*]] = or <2 x i32> [[T1]], <i32 1, i32 2>
 ; CHECK-NEXT:    ret <2 x i32> [[T2]]
 ;
   %t1 = bitcast i64 %a to <2 x i32>
   %t2 = or <2 x i32> %t1, <i32 1, i32 2>
   ret <2 x i32> %t2
+}
+
+; PR26702 - https://bugs.llvm.org//show_bug.cgi?id=26702
+; Bitcast is canonicalized above logic, so we can see the not-not pattern.
+
+define <2 x i64> @is_negative(<4 x i32> %x) {
+; CHECK-LABEL: @is_negative(
+; CHECK-NEXT:    [[LOBIT:%.*]] = ashr <4 x i32> [[X:%.*]], <i32 31, i32 31, i32 31, i32 31>
+; CHECK-NEXT:    [[TMP1:%.*]] = bitcast <4 x i32> [[LOBIT]] to <2 x i64>
+; CHECK-NEXT:    ret <2 x i64> [[TMP1]]
+;
+  %lobit = ashr <4 x i32> %x, <i32 31, i32 31, i32 31, i32 31>
+  %not = xor <4 x i32> %lobit, <i32 -1, i32 -1, i32 -1, i32 -1>
+  %bc = bitcast <4 x i32> %not to <2 x i64>
+  %notnot = xor <2 x i64> %bc, <i64 -1, i64 -1>
+  ret <2 x i64> %notnot
+}
+
+; This variation has an extra bitcast at the end. This means that the 2nd xor
+; can be done in <4 x i32> to eliminate a bitcast regardless of canonicalizaion.
+
+define <4 x i32> @is_negative_bonus_bitcast(<4 x i32> %x) {
+; CHECK-LABEL: @is_negative_bonus_bitcast(
+; CHECK-NEXT:    [[LOBIT:%.*]] = ashr <4 x i32> [[X:%.*]], <i32 31, i32 31, i32 31, i32 31>
+; CHECK-NEXT:    ret <4 x i32> [[LOBIT]]
+;
+  %lobit = ashr <4 x i32> %x, <i32 31, i32 31, i32 31, i32 31>
+  %not = xor <4 x i32> %lobit, <i32 -1, i32 -1, i32 -1, i32 -1>
+  %bc = bitcast <4 x i32> %not to <2 x i64>
+  %notnot = xor <2 x i64> %bc, <i64 -1, i64 -1>
+  %bc2 = bitcast <2 x i64> %notnot to <4 x i32>
+  ret <4 x i32> %bc2
+}
+
+; Bitcasts are canonicalized above bitwise logic.
+
+define <2 x i8> @canonicalize_bitcast_logic_with_constant(<4 x i4> %x) {
+; CHECK-LABEL: @canonicalize_bitcast_logic_with_constant(
+; CHECK-NEXT:    [[TMP1:%.*]] = bitcast <4 x i4> [[X:%.*]] to <2 x i8>
+; CHECK-NEXT:    [[B:%.*]] = and <2 x i8> [[TMP1]], <i8 -128, i8 -128>
+; CHECK-NEXT:    ret <2 x i8> [[B]]
+;
+  %a = and <4 x i4> %x, <i4 0, i4 8, i4 0, i4 8>
+  %b = bitcast <4 x i4> %a to <2 x i8>
+  ret <2 x i8> %b
 }
 
 ; PR27925 - https://llvm.org/bugs/show_bug.cgi?id=27925
@@ -344,7 +389,7 @@ define double @bitcast_extelt4(i128 %A) {
 
 define <2 x i32> @test4(i32 %A, i32 %B){
 ; CHECK-LABEL: @test4(
-; CHECK-NEXT:    [[TMP1:%.*]] = insertelement <2 x i32> undef, i32 [[A:%.*]], i32 0
+; CHECK-NEXT:    [[TMP1:%.*]] = insertelement <2 x i32> poison, i32 [[A:%.*]], i32 0
 ; CHECK-NEXT:    [[TMP2:%.*]] = insertelement <2 x i32> [[TMP1]], i32 [[B:%.*]], i32 1
 ; CHECK-NEXT:    ret <2 x i32> [[TMP2]]
 ;
@@ -359,7 +404,7 @@ define <2 x i32> @test4(i32 %A, i32 %B){
 ; rdar://8360454
 define <2 x float> @test5(float %A, float %B) {
 ; CHECK-LABEL: @test5(
-; CHECK-NEXT:    [[TMP1:%.*]] = insertelement <2 x float> undef, float [[A:%.*]], i32 0
+; CHECK-NEXT:    [[TMP1:%.*]] = insertelement <2 x float> poison, float [[A:%.*]], i32 0
 ; CHECK-NEXT:    [[TMP2:%.*]] = insertelement <2 x float> [[TMP1]], float [[B:%.*]], i32 1
 ; CHECK-NEXT:    ret <2 x float> [[TMP2]]
 ;
@@ -375,7 +420,7 @@ define <2 x float> @test5(float %A, float %B) {
 
 define <2 x float> @test6(float %A){
 ; CHECK-LABEL: @test6(
-; CHECK-NEXT:    [[TMP1:%.*]] = insertelement <2 x float> <float 4.200000e+01, float undef>, float [[A:%.*]], i32 1
+; CHECK-NEXT:    [[TMP1:%.*]] = insertelement <2 x float> <float 4.200000e+01, float poison>, float [[A:%.*]], i32 1
 ; CHECK-NEXT:    ret <2 x float> [[TMP1]]
 ;
   %tmp23 = bitcast float %A to i32
@@ -515,4 +560,14 @@ define void @constant_fold_vector_to_half() {
   store volatile half bitcast (<2 x i8> <i8 0, i8 64> to half), half* undef
   store volatile half bitcast (<4 x i4> <i4 0, i4 0, i4 0, i4 4> to half), half* undef
   ret void
+}
+
+; Ensure that we do not crash when looking at such a weird bitcast.
+define i8* @bitcast_from_single_element_pointer_vector_to_pointer(<1 x i8*> %ptrvec) {
+; CHECK-LABEL: @bitcast_from_single_element_pointer_vector_to_pointer(
+; CHECK-NEXT:    [[TMP1:%.*]] = extractelement <1 x i8*> [[PTRVEC:%.*]], i32 0
+; CHECK-NEXT:    ret i8* [[TMP1]]
+;
+  %ptr = bitcast <1 x i8*> %ptrvec to i8*
+  ret i8* %ptr
 }

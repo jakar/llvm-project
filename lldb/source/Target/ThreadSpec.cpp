@@ -1,19 +1,14 @@
-//===-- ThreadSpec.cpp ------------------------------------------*- C++ -*-===//
+//===-- ThreadSpec.cpp ----------------------------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
-// C Includes
-// C++ Includes
-// Other libraries and framework includes
-// Project includes
-#include "lldb/Target/Thread.h"
-#include "lldb/Core/StructuredData.h"
 #include "lldb/Target/ThreadSpec.h"
+#include "lldb/Target/Thread.h"
+#include "lldb/Utility/StructuredData.h"
 
 using namespace lldb;
 using namespace lldb_private;
@@ -26,24 +21,12 @@ ThreadSpec::ThreadSpec()
     : m_index(UINT32_MAX), m_tid(LLDB_INVALID_THREAD_ID), m_name(),
       m_queue_name() {}
 
-ThreadSpec::ThreadSpec(const ThreadSpec &rhs)
-    : m_index(rhs.m_index), m_tid(rhs.m_tid), m_name(rhs.m_name),
-      m_queue_name(rhs.m_queue_name) {}
-
-const ThreadSpec &ThreadSpec::operator=(const ThreadSpec &rhs) {
-  m_index = rhs.m_index;
-  m_tid = rhs.m_tid;
-  m_name = rhs.m_name;
-  m_queue_name = rhs.m_queue_name;
-  return *this;
-}
-
 std::unique_ptr<ThreadSpec> ThreadSpec::CreateFromStructuredData(
-    const StructuredData::Dictionary &spec_dict, Error &error) {
+    const StructuredData::Dictionary &spec_dict, Status &error) {
   uint32_t index = UINT32_MAX;
   lldb::tid_t tid = LLDB_INVALID_THREAD_ID;
-  std::string name;
-  std::string queue_name;
+  llvm::StringRef name;
+  llvm::StringRef queue_name;
 
   std::unique_ptr<ThreadSpec> thread_spec_up(new ThreadSpec());
   bool success = spec_dict.GetValueForKeyAsInteger(
@@ -59,12 +42,12 @@ std::unique_ptr<ThreadSpec> ThreadSpec::CreateFromStructuredData(
   success =
       spec_dict.GetValueForKeyAsString(GetKey(OptionNames::ThreadName), name);
   if (success)
-    thread_spec_up->SetName(name.c_str());
+    thread_spec_up->SetName(name);
 
   success = spec_dict.GetValueForKeyAsString(GetKey(OptionNames::ThreadName),
                                              queue_name);
   if (success)
-    thread_spec_up->SetQueueName(queue_name.c_str());
+    thread_spec_up->SetQueueName(queue_name);
 
   return thread_spec_up;
 }

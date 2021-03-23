@@ -1,4 +1,4 @@
-; RUN: llc -mtriple=aarch64 -O0 < %s | FileCheck %s
+; RUN: llc -mtriple=aarch64 -O0 -fast-isel < %s | FileCheck %s
 
 ; Function Attrs: nounwind
 define i32 @foo() #0 {
@@ -23,6 +23,6 @@ entry:
 
 declare i32 @bar(i8*, i16*, i32*) #1
 
-attributes #0 = { nounwind "no-frame-pointer-elim"="false" }
-attributes #1 = { "no-frame-pointer-elim"="false" }
+attributes #0 = { nounwind "frame-pointer"="none" }
+attributes #1 = { "frame-pointer"="none" }
 

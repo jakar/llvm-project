@@ -1,5 +1,36 @@
-// RUN: %clang_cc1 -std=c++11 -triple %itanium_abi_triple -fsyntax-only -Wnon-virtual-dtor -Wdelete-non-virtual-dtor -fcxx-exceptions -verify %s
-// RUN: %clang_cc1 -std=c++11 -triple %ms_abi_triple -DMSABI -fsyntax-only -Wnon-virtual-dtor -Wdelete-non-virtual-dtor -verify %s
+// RUN: %clang_cc1 -std=c++11 -triple %itanium_abi_triple -fsyntax-only -Wnon-virtual-dtor -Wdelete-non-virtual-dtor -fcxx-exceptions -verify %s -pedantic
+// RUN: %clang_cc1 -std=c++11 -triple %ms_abi_triple -DMSABI -fsyntax-only -Wnon-virtual-dtor -Wdelete-non-virtual-dtor -verify %s -pedantic
+
+#if defined(BE_THE_HEADER)
+
+// Wdelete-non-virtual-dtor should warn about the delete from smart pointer
+// classes in system headers (std::unique_ptr...) too.
+
+#pragma clang system_header
+namespace dnvd {
+
+struct SystemB {
+  virtual void foo();
+};
+
+template <typename T>
+class simple_ptr {
+public:
+  simple_ptr(T* t): _ptr(t) {}
+  ~simple_ptr() { delete _ptr; } // \
+    // expected-warning {{delete called on non-final 'dnvd::B' that has virtual functions but non-virtual destructor}} \
+    // expected-warning {{delete called on non-final 'dnvd::D' that has virtual functions but non-virtual destructor}}
+  T& operator*() const { return *_ptr; }
+private:
+  T* _ptr;
+};
+}
+
+#else
+
+#define BE_THE_HEADER
+#include __FILE__
+
 class A {
 public:
   ~A();
@@ -44,7 +75,7 @@ struct F {
 };
 
 ~; // expected-error {{expected a class name after '~' to name a destructor}}
-~undef(); // expected-error {{expected the class name after '~' to name a destructor}}
+~undef(); // expected-error {{undeclared identifier 'undef' in destructor name}}
 ~operator+(int, int);  // expected-error {{expected a class name after '~' to name a destructor}}
 ~F(){} // expected-error {{destructor must be a non-static member function}}
 
@@ -68,7 +99,7 @@ struct Y {
 namespace PR6421 {
   class T; // expected-note{{forward declaration}}
 
-  class QGenericArgument // expected-note{{declared here}}
+  class QGenericArgument
   {
     template<typename U>
     void foo(T t) // expected-error{{variable has incomplete type}}
@@ -77,8 +108,7 @@ namespace PR6421 {
     void disconnect()
     {
       T* t;
-      bob<QGenericArgument>(t); // expected-error{{undeclared identifier 'bob'}} \
-      // expected-error{{does not refer to a value}}
+      bob<QGenericArgument>(t); // expected-error{{undeclared identifier 'bob'}}
     }
   };
 }
@@ -213,18 +243,6 @@ struct VD: VB {};
 struct VF final: VB {};
 
 template <typename T>
-class simple_ptr {
-public:
-  simple_ptr(T* t): _ptr(t) {}
-  ~simple_ptr() { delete _ptr; } // \
-    // expected-warning {{delete called on non-final 'dnvd::B' that has virtual functions but non-virtual destructor}} \
-    // expected-warning {{delete called on non-final 'dnvd::D' that has virtual functions but non-virtual destructor}}
-  T& operator*() const { return *_ptr; }
-private:
-  T* _ptr;
-};
-
-template <typename T>
 class simple_ptr2 {
 public:
   simple_ptr2(T* t): _ptr(t) {}
@@ -235,6 +253,7 @@ private:
 };
 
 void use(B&);
+void use(SystemB&);
 void use(VB&);
 
 void nowarnstack() {
@@ -335,9 +354,27 @@ void warn0() {
   }
 }
 
+// Taken from libc++, slightly simplified.
+template <class>
+struct __is_destructible_apply { typedef int type; };
+struct __two {char __lx[2];};
+template <typename _Tp>
+struct __is_destructor_wellformed {
+  template <typename _Tp1>
+  static char __test(typename __is_destructible_apply<
+                       decltype(_Tp1().~_Tp1())>::type);
+  template <typename _Tp1>
+  static __two __test (...);
+              
+  static const bool value = sizeof(__test<_Tp>(12)) == sizeof(char);
+};
+
 void warn0_explicit_dtor(B* b, B& br, D* d) {
   b->~B(); // expected-warning {{destructor called on non-final 'dnvd::B' that has virtual functions but non-virtual destructor}} expected-note{{qualify call to silence this warning}}
   b->B::~B(); // No warning when the call isn't virtual.
+
+  // No warning in unevaluated contexts.
+  (void)__is_destructor_wellformed<B>::value;
 
   br.~B(); // expected-warning {{destructor called on non-final 'dnvd::B' that has virtual functions but non-virtual destructor}} expected-note{{qualify call to silence this warning}}
   br.B::~B();
@@ -367,6 +404,10 @@ void nowarn1() {
     simple_ptr<VF> vf(new VF());
     use(*vf);
   }
+  {
+    simple_ptr<SystemB> sb(new SystemB());
+    use(*sb);
+  }
 }
 
 void warn1() {
@@ -391,7 +432,7 @@ namespace PR9238 {
 }
 
 namespace PR7900 {
-  struct A { // expected-note 2{{type 'PR7900::A' is declared here}}
+  struct A { // expected-note 2{{type 'PR7900::A' found by destructor name lookup}}
   };
   struct B : public A {
   };
@@ -451,3 +492,62 @@ void foo1() {
   x.foo1();
 }
 }
+
+namespace DtorTypedef {
+  struct A { ~A(); };
+  using A = A;
+  DtorTypedef::A::~A() {}
+
+  // This is invalid, but compilers accept it.
+  struct B { ~B(); };
+  namespace N { using B = B; }
+  N::B::~B() {} // expected-error {{destructor cannot be declared using a type alias}}
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdtor-typedef"
+  struct C { ~C(); };
+  namespace N { using C = C; }
+  N::C::~C() {}
+#pragma clang diagnostic pop
+}
+
+// Ignore ambiguity errors in destructor name lookup. This matches the observed
+// behavior of ICC, and is compatible with the observed behavior of GCC (which
+// appears to ignore lookups that result in ambiguity) and MSVC (which appears
+// to perform the lookups in the opposite order from Clang).
+namespace PR44978 {
+  // All compilers accept this despite it being clearly ill-formed per the
+  // current wording.
+  namespace n {
+    class Foo {}; // expected-note {{found}}
+  }
+  class Foo {}; // expected-note {{found}}
+  using namespace n;
+  static void func(n::Foo *p) { p->~Foo(); } // expected-warning {{ambiguous}}
+
+  // GCC rejects this case, ICC accepts, despite the class member lookup being
+  // ambiguous.
+  struct Z;
+  struct X { using T = Z; }; // expected-note {{found}}
+  struct Y { using T = int; }; // expected-note {{found}}
+  struct Z : X, Y {};
+  void f(Z *p) { p->~T(); } // expected-warning {{ambiguous}}
+
+  // GCC accepts this and ignores the ambiguous class member lookup.
+  //
+  // FIXME: We should warn on the ambiguity here too, but that requires us to
+  // keep doing lookups after we've already found the type we want.
+  using T = Z;
+  void g(Z *p) { p->~T(); }
+
+  // ICC accepts this and ignores the ambiguous unqualified lookup.
+  struct Q {};
+  namespace { using U = Q; } // expected-note {{candidate}} expected-note {{found}}
+  using U = int; // expected-note {{candidate}} expected-note {{found}}
+  void f(Q *p) { p->~U(); } // expected-warning {{ambiguous}}
+
+  // We still diagnose if the unqualified lookup is dependent, though.
+  template<typename T> void f(T *p) { p->~U(); } // expected-error {{ambiguous}}
+}
+
+#endif // BE_THE_HEADER

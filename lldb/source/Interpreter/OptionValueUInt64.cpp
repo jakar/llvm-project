@@ -1,19 +1,13 @@
-//===-- OptionValueUInt64.cpp ------------------------------------*- C++
-//-*-===//
+//===-- OptionValueUInt64.cpp ---------------------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
 #include "lldb/Interpreter/OptionValueUInt64.h"
 
-// C Includes
-// C++ Includes
-// Other libraries and framework includes
-// Project includes
 #include "lldb/Host/StringConvert.h"
 #include "lldb/Utility/Stream.h"
 
@@ -21,7 +15,7 @@ using namespace lldb;
 using namespace lldb_private;
 
 lldb::OptionValueSP OptionValueUInt64::Create(llvm::StringRef value_str,
-                                              Error &error) {
+                                              Status &error) {
   lldb::OptionValueSP value_sp(new OptionValueUInt64());
   error = value_sp->SetValueFromString(value_str);
   if (error.Fail())
@@ -40,9 +34,9 @@ void OptionValueUInt64::DumpValue(const ExecutionContext *exe_ctx, Stream &strm,
   }
 }
 
-Error OptionValueUInt64::SetValueFromString(llvm::StringRef value_ref,
-                                            VarSetOperationType op) {
-  Error error;
+Status OptionValueUInt64::SetValueFromString(llvm::StringRef value_ref,
+                                             VarSetOperationType op) {
+  Status error;
   switch (op) {
   case eVarSetOperationClear:
     Clear();
@@ -73,8 +67,4 @@ Error OptionValueUInt64::SetValueFromString(llvm::StringRef value_ref,
     break;
   }
   return error;
-}
-
-lldb::OptionValueSP OptionValueUInt64::DeepCopy() const {
-  return OptionValueSP(new OptionValueUInt64(*this));
 }

@@ -1,7 +1,8 @@
-; RUN: opt < %s -basicaa -gvn -asan -asan-module -S | FileCheck %s
+; RUN: opt < %s -basic-aa -gvn -asan -asan-module -enable-new-pm=0 -S | FileCheck %s
+; RUN: opt < %s "-passes=function(require<basic-aa>,gvn),asan-pipeline" -S | FileCheck %s
 ; ASAN conflicts with load widening iff the widened load accesses data out of bounds
 ; (while the original unwidened loads do not).
-; http://code.google.com/p/address-sanitizer/issues/detail?id=20#c1
+; https://github.com/google/sanitizers/issues/20#issuecomment-136381262
 
 
 ; 32-bit little endian target.

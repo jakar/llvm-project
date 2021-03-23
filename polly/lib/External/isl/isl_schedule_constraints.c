@@ -8,10 +8,9 @@
  * Ecole Normale Superieure, 45 rue d'Ulm, 75230 Paris, France
  */
 
-#include <string.h>
-
 #include <isl_schedule_constraints.h>
 #include <isl/schedule.h>
+#include <isl/space.h>
 #include <isl/set.h>
 #include <isl/map.h>
 #include <isl/union_set.h>
@@ -480,15 +479,35 @@ static char *key_str[] = {
 	[isl_sc_key_context] = "context",
 };
 
+#undef BASE
+#define BASE set
+#include "print_yaml_field_templ.c"
+
+#undef BASE
+#define BASE union_set
+#include "print_yaml_field_templ.c"
+
+#undef BASE
+#define BASE union_map
+#include "print_yaml_field_templ.c"
+
 /* Print a key, value pair for the edge of type "type" in "sc" to "p".
+ *
+ * If the edge relation is empty, then it is not printed since
+ * an empty relation is the default value.
  */
 static __isl_give isl_printer *print_constraint(__isl_take isl_printer *p,
 	__isl_keep isl_schedule_constraints *sc, enum isl_edge_type type)
 {
-	p = isl_printer_print_str(p, key_str[type]);
-	p = isl_printer_yaml_next(p);
-	p = isl_printer_print_union_map(p, sc->constraint[type]);
-	p = isl_printer_yaml_next(p);
+	isl_bool empty;
+
+	empty = isl_union_map_plain_is_empty(sc->constraint[type]);
+	if (empty < 0)
+		return isl_printer_free(p);
+	if (empty)
+		return p;
+
+	p = print_yaml_field_union_map(p, key_str[type], sc->constraint[type]);
 
 	return p;
 }
@@ -496,22 +515,26 @@ static __isl_give isl_printer *print_constraint(__isl_take isl_printer *p,
 /* Print "sc" to "p"
  *
  * In particular, print the isl_schedule_constraints object as a YAML document.
+ * Fields with values that are (obviously) equal to their default values
+ * are not printed.
  */
 __isl_give isl_printer *isl_printer_print_schedule_constraints(
 	__isl_take isl_printer *p, __isl_keep isl_schedule_constraints *sc)
 {
+	isl_bool universe;
+
 	if (!sc)
 		return isl_printer_free(p);
 
 	p = isl_printer_yaml_start_mapping(p);
-	p = isl_printer_print_str(p, key_str[isl_sc_key_domain]);
-	p = isl_printer_yaml_next(p);
-	p = isl_printer_print_union_set(p, sc->domain);
-	p = isl_printer_yaml_next(p);
-	p = isl_printer_print_str(p, key_str[isl_sc_key_context]);
-	p = isl_printer_yaml_next(p);
-	p = isl_printer_print_set(p, sc->context);
-	p = isl_printer_yaml_next(p);
+	p = print_yaml_field_union_set(p, key_str[isl_sc_key_domain],
+					sc->domain);
+	universe = isl_set_plain_is_universe(sc->context);
+	if (universe < 0)
+		return isl_printer_free(p);
+	if (!universe)
+		p = print_yaml_field_set(p, key_str[isl_sc_key_context],
+						sc->context);
 	p = print_constraint(p, sc, isl_edge_validity);
 	p = print_constraint(p, sc, isl_edge_proximity);
 	p = print_constraint(p, sc, isl_edge_coincidence);
@@ -526,58 +549,13 @@ __isl_give isl_printer *isl_printer_print_schedule_constraints(
 #define BASE schedule_constraints
 #include <print_templ_yaml.c>
 
-/* Extract a mapping key from the token "tok".
- * Return isl_sc_key_error on error, i.e., if "tok" does not
- * correspond to any known key.
- */
-static enum isl_sc_key extract_key(__isl_keep isl_stream *s,
-	struct isl_token *tok)
-{
-	int type;
-	char *name;
-	isl_ctx *ctx;
-	enum isl_sc_key key;
-
-	if (!tok)
-		return isl_sc_key_error;
-	type = isl_token_get_type(tok);
-	if (type != ISL_TOKEN_IDENT && type != ISL_TOKEN_STRING) {
-		isl_stream_error(s, tok, "expecting key");
-		return isl_sc_key_error;
-	}
-
-	ctx = isl_stream_get_ctx(s);
-	name = isl_token_get_str(ctx, tok);
-	if (!name)
-		return isl_sc_key_error;
-
-	for (key = 0; key < isl_sc_key_end; ++key) {
-		if (!strcmp(name, key_str[key]))
-			break;
-	}
-	free(name);
-
-	if (key >= isl_sc_key_end)
-		isl_die(ctx, isl_error_invalid, "unknown key",
-			return isl_sc_key_error);
-	return key;
-}
-
-/* Read a key from "s" and return the corresponding enum.
- * Return isl_sc_key_error on error, i.e., if the first token
- * on the stream does not correspond to any known key.
- */
-static enum isl_sc_key get_key(__isl_keep isl_stream *s)
-{
-	struct isl_token *tok;
-	enum isl_sc_key key;
-
-	tok = isl_stream_next_token(s);
-	key = extract_key(s, tok);
-	isl_token_free(tok);
-
-	return key;
-}
+#undef KEY
+#define KEY enum isl_sc_key
+#undef KEY_ERROR
+#define KEY_ERROR isl_sc_key_error
+#undef KEY_END
+#define KEY_END isl_sc_key_end
+#include "extract_key.c"
 
 #undef BASE
 #define BASE set
@@ -638,7 +616,11 @@ __isl_give isl_schedule_constraints *isl_stream_read_schedule_constraints(
 			if (!sc)
 				return NULL;
 			break;
-		default:
+		case isl_sc_key_validity:
+		case isl_sc_key_coincidence:
+		case isl_sc_key_condition:
+		case isl_sc_key_conditional_validity:
+		case isl_sc_key_proximity:
 			constraints = read_union_map(s);
 			sc = isl_schedule_constraints_set(sc, key, constraints);
 			if (!sc)
@@ -732,11 +714,13 @@ isl_schedule_constraints_align_params(__isl_take isl_schedule_constraints *sc)
 static isl_stat add_n_basic_map(__isl_take isl_map *map, void *user)
 {
 	int *n = user;
+	isl_size n_basic_map;
 
-	*n += isl_map_n_basic_map(map);
+	n_basic_map = isl_map_n_basic_map(map);
+	*n += n_basic_map;
 	isl_map_free(map);
 
-	return isl_stat_ok;
+	return n_basic_map < 0 ? isl_stat_error : isl_stat_ok;
 }
 
 /* Return the total number of isl_basic_maps in the constraints of "sc".
@@ -760,13 +744,19 @@ int isl_schedule_constraints_n_basic_map(
 
 /* Return the total number of isl_maps in the constraints of "sc".
  */
-int isl_schedule_constraints_n_map(__isl_keep isl_schedule_constraints *sc)
+isl_size isl_schedule_constraints_n_map(__isl_keep isl_schedule_constraints *sc)
 {
 	enum isl_edge_type i;
 	int n = 0;
 
-	for (i = isl_edge_first; i <= isl_edge_last; ++i)
-		n += isl_union_map_n_map(sc->constraint[i]);
+	for (i = isl_edge_first; i <= isl_edge_last; ++i) {
+		isl_size n_i;
+
+		n_i = isl_union_map_n_map(sc->constraint[i]);
+		if (n_i < 0)
+			return isl_size_error;
+		n += n_i;
+	}
 
 	return n;
 }

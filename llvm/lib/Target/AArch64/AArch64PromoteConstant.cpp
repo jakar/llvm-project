@@ -1,9 +1,8 @@
-//=- AArch64PromoteConstant.cpp --- Promote constant to global for AArch64 -==//
+//==- AArch64PromoteConstant.cpp - Promote constant to global for AArch64 --==//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -22,23 +21,32 @@
 
 #include "AArch64.h"
 #include "llvm/ADT/DenseMap.h"
-#include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/Statistic.h"
+#include "llvm/IR/BasicBlock.h"
+#include "llvm/IR/Constant.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Dominators.h"
 #include "llvm/IR/Function.h"
+#include "llvm/IR/GlobalValue.h"
 #include "llvm/IR/GlobalVariable.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/InlineAsm.h"
 #include "llvm/IR/InstIterator.h"
+#include "llvm/IR/Instruction.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/IR/Module.h"
+#include "llvm/IR/Type.h"
+#include "llvm/InitializePasses.h"
 #include "llvm/Pass.h"
+#include "llvm/Support/Casting.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
+#include <algorithm>
+#include <cassert>
+#include <utility>
 
 using namespace llvm;
 
@@ -56,6 +64,7 @@ STATISTIC(NumPromotedUses, "Number of promoted constants uses");
 //===----------------------------------------------------------------------===//
 
 namespace {
+
 /// Promotes interesting constant into global variables.
 /// The motivating example is:
 /// static const uint16_t TableA[32] = {
@@ -83,13 +92,12 @@ namespace {
 /// Therefore the final assembly final has 4 different loads. With this pass
 /// enabled, only one load is issued for the constants.
 class AArch64PromoteConstant : public ModulePass {
-
 public:
   struct PromotedConstant {
     bool ShouldConvert = false;
     GlobalVariable *GV = nullptr;
   };
-  typedef SmallDenseMap<Constant *, PromotedConstant, 16> PromotionCacheTy;
+  using PromotionCacheTy = SmallDenseMap<Constant *, PromotedConstant, 16>;
 
   struct UpdateRecord {
     Constant *C;
@@ -101,6 +109,7 @@ public:
   };
 
   static char ID;
+
   AArch64PromoteConstant() : ModulePass(ID) {
     initializeAArch64PromoteConstantPass(*PassRegistry::getPassRegistry());
   }
@@ -110,7 +119,7 @@ public:
   /// Iterate over the functions and promote the interesting constants into
   /// global variables with module scope.
   bool runOnModule(Module &M) override {
-    DEBUG(dbgs() << getPassName() << '\n');
+    LLVM_DEBUG(dbgs() << getPassName() << '\n');
     if (skipModule(M))
       return false;
     bool Changed = false;
@@ -135,9 +144,9 @@ private:
   }
 
   /// Type to store a list of Uses.
-  typedef SmallVector<std::pair<Instruction *, unsigned>, 4> Uses;
+  using Uses = SmallVector<std::pair<Instruction *, unsigned>, 4>;
   /// Map an insertion point to all the uses it dominates.
-  typedef DenseMap<Instruction *, Uses> InsertionPoints;
+  using InsertionPoints = DenseMap<Instruction *, Uses>;
 
   /// Find the closest point that dominates the given Use.
   Instruction *findInsertionPoint(Instruction &User, unsigned OpNo);
@@ -212,6 +221,7 @@ private:
     InsertPts.erase(OldInstr);
   }
 };
+
 } // end anonymous namespace
 
 char AArch64PromoteConstant::ID = 0;
@@ -238,6 +248,20 @@ static bool isConstantUsingVectorTy(const Type *CstTy) {
   } else if (CstTy->isArrayTy())
     return isConstantUsingVectorTy(CstTy->getArrayElementType());
   return false;
+}
+
+// Returns true if \p C contains only ConstantData leafs and no global values,
+// block addresses or constant expressions. Traverses ConstantAggregates.
+static bool containsOnlyConstantData(const Constant *C) {
+  if (isa<ConstantData>(C))
+    return true;
+
+  if (isa<GlobalValue>(C) || isa<BlockAddress>(C) || isa<ConstantExpr>(C))
+    return false;
+
+  return all_of(C->operands(), [](const Use &U) {
+    return containsOnlyConstantData(cast<Constant>(&U));
+  });
 }
 
 /// Check if the given use (Instruction + OpIdx) of Cst should be converted into
@@ -294,7 +318,7 @@ static bool shouldConvertUse(const Constant *Cst, const Instruction *Instr,
 
   // Do not mess with inline asm.
   const CallInst *CI = dyn_cast<const CallInst>(Instr);
-  return !(CI && isa<const InlineAsm>(CI->getCalledValue()));
+  return !(CI && CI->isInlineAsm());
 }
 
 /// Check if the given Cst should be converted into
@@ -357,7 +381,6 @@ Instruction *AArch64PromoteConstant::findInsertionPoint(Instruction &User,
 bool AArch64PromoteConstant::isDominated(Instruction *NewPt, Instruction *User,
                                          unsigned OpNo,
                                          InsertionPoints &InsertPts) {
-
   DominatorTree &DT = getAnalysis<DominatorTreeWrapperPass>(
       *NewPt->getParent()->getParent()).getDomTree();
 
@@ -371,9 +394,9 @@ bool AArch64PromoteConstant::isDominated(Instruction *NewPt, Instruction *User,
         (IPI.first->getParent() != NewPt->getParent() &&
          DT.dominates(IPI.first->getParent(), NewPt->getParent()))) {
       // No need to insert this point. Just record the dominated use.
-      DEBUG(dbgs() << "Insertion point dominated by:\n");
-      DEBUG(IPI.first->print(dbgs()));
-      DEBUG(dbgs() << '\n');
+      LLVM_DEBUG(dbgs() << "Insertion point dominated by:\n");
+      LLVM_DEBUG(IPI.first->print(dbgs()));
+      LLVM_DEBUG(dbgs() << '\n');
       IPI.second.emplace_back(User, OpNo);
       return true;
     }
@@ -399,9 +422,9 @@ bool AArch64PromoteConstant::tryAndMerge(Instruction *NewPt, Instruction *User,
       // Instructions are in the same block.
       // By construction, NewPt is dominating the other.
       // Indeed, isDominated returned false with the exact same arguments.
-      DEBUG(dbgs() << "Merge insertion point with:\n");
-      DEBUG(IPI->first->print(dbgs()));
-      DEBUG(dbgs() << "\nat considered insertion point.\n");
+      LLVM_DEBUG(dbgs() << "Merge insertion point with:\n");
+      LLVM_DEBUG(IPI->first->print(dbgs()));
+      LLVM_DEBUG(dbgs() << "\nat considered insertion point.\n");
       appendAndTransferDominatedUses(NewPt, User, OpNo, IPI, InsertPts);
       return true;
     }
@@ -421,11 +444,11 @@ bool AArch64PromoteConstant::tryAndMerge(Instruction *NewPt, Instruction *User,
     }
     // else, CommonDominator is the block of NewBB, hence NewBB is the last
     // possible insertion point in that block.
-    DEBUG(dbgs() << "Merge insertion point with:\n");
-    DEBUG(IPI->first->print(dbgs()));
-    DEBUG(dbgs() << '\n');
-    DEBUG(NewPt->print(dbgs()));
-    DEBUG(dbgs() << '\n');
+    LLVM_DEBUG(dbgs() << "Merge insertion point with:\n");
+    LLVM_DEBUG(IPI->first->print(dbgs()));
+    LLVM_DEBUG(dbgs() << '\n');
+    LLVM_DEBUG(NewPt->print(dbgs()));
+    LLVM_DEBUG(dbgs() << '\n');
     appendAndTransferDominatedUses(NewPt, User, OpNo, IPI, InsertPts);
     return true;
   }
@@ -434,15 +457,15 @@ bool AArch64PromoteConstant::tryAndMerge(Instruction *NewPt, Instruction *User,
 
 void AArch64PromoteConstant::computeInsertionPoint(
     Instruction *User, unsigned OpNo, InsertionPoints &InsertPts) {
-  DEBUG(dbgs() << "Considered use, opidx " << OpNo << ":\n");
-  DEBUG(User->print(dbgs()));
-  DEBUG(dbgs() << '\n');
+  LLVM_DEBUG(dbgs() << "Considered use, opidx " << OpNo << ":\n");
+  LLVM_DEBUG(User->print(dbgs()));
+  LLVM_DEBUG(dbgs() << '\n');
 
   Instruction *InsertionPoint = findInsertionPoint(*User, OpNo);
 
-  DEBUG(dbgs() << "Considered insertion point:\n");
-  DEBUG(InsertionPoint->print(dbgs()));
-  DEBUG(dbgs() << '\n');
+  LLVM_DEBUG(dbgs() << "Considered insertion point:\n");
+  LLVM_DEBUG(InsertionPoint->print(dbgs()));
+  LLVM_DEBUG(dbgs() << '\n');
 
   if (isDominated(InsertionPoint, User, OpNo, InsertPts))
     return;
@@ -451,7 +474,7 @@ void AArch64PromoteConstant::computeInsertionPoint(
   if (tryAndMerge(InsertionPoint, User, OpNo, InsertPts))
     return;
 
-  DEBUG(dbgs() << "Keep considered insertion point\n");
+  LLVM_DEBUG(dbgs() << "Keep considered insertion point\n");
 
   // It is definitely useful by its own
   InsertPts[InsertionPoint].emplace_back(User, OpNo);
@@ -467,9 +490,9 @@ static void ensurePromotedGV(Function &F, Constant &C,
       *F.getParent(), C.getType(), true, GlobalValue::InternalLinkage, nullptr,
       "_PromotedConst", nullptr, GlobalVariable::NotThreadLocal);
   PC.GV->setInitializer(&C);
-  DEBUG(dbgs() << "Global replacement: ");
-  DEBUG(PC.GV->print(dbgs()));
-  DEBUG(dbgs() << '\n');
+  LLVM_DEBUG(dbgs() << "Global replacement: ");
+  LLVM_DEBUG(PC.GV->print(dbgs()));
+  LLVM_DEBUG(dbgs() << '\n');
   ++NumPromoted;
 }
 
@@ -485,11 +508,12 @@ void AArch64PromoteConstant::insertDefinitions(Function &F,
   for (const auto &IPI : InsertPts) {
     // Create the load of the global variable.
     IRBuilder<> Builder(IPI.first);
-    LoadInst *LoadedCst = Builder.CreateLoad(&PromotedGV);
-    DEBUG(dbgs() << "**********\n");
-    DEBUG(dbgs() << "New def: ");
-    DEBUG(LoadedCst->print(dbgs()));
-    DEBUG(dbgs() << '\n');
+    LoadInst *LoadedCst =
+        Builder.CreateLoad(PromotedGV.getValueType(), &PromotedGV);
+    LLVM_DEBUG(dbgs() << "**********\n");
+    LLVM_DEBUG(dbgs() << "New def: ");
+    LLVM_DEBUG(LoadedCst->print(dbgs()));
+    LLVM_DEBUG(dbgs() << '\n');
 
     // Update the dominated uses.
     for (auto Use : IPI.second) {
@@ -498,11 +522,11 @@ void AArch64PromoteConstant::insertDefinitions(Function &F,
                           findInsertionPoint(*Use.first, Use.second)) &&
              "Inserted definition does not dominate all its uses!");
 #endif
-      DEBUG({
-            dbgs() << "Use to update " << Use.second << ":";
-            Use.first->print(dbgs());
-            dbgs() << '\n';
-            });
+      LLVM_DEBUG({
+        dbgs() << "Use to update " << Use.second << ":";
+        Use.first->print(dbgs());
+        dbgs() << '\n';
+      });
       Use.first->setOperand(Use.second, LoadedCst);
       ++NumPromotedUses;
     }
@@ -514,7 +538,7 @@ void AArch64PromoteConstant::promoteConstants(
     PromotionCacheTy &PromotionCache) {
   // Promote the constants.
   for (auto U = Updates.begin(), E = Updates.end(); U != E;) {
-    DEBUG(dbgs() << "** Compute insertion points **\n");
+    LLVM_DEBUG(dbgs() << "** Compute insertion points **\n");
     auto First = U;
     Constant *C = First->C;
     InsertionPoints InsertPts;
@@ -540,9 +564,10 @@ bool AArch64PromoteConstant::runOnFunction(Function &F,
     for (Use &U : I.operands()) {
       Constant *Cst = dyn_cast<Constant>(U);
       // There is no point in promoting global values as they are already
-      // global. Do not promote constant expressions either, as they may
-      // require some code expansion.
-      if (!Cst || isa<GlobalValue>(Cst) || isa<ConstantExpr>(Cst))
+      // global. Do not promote constants containing constant expression, global
+      // values or blockaddresses either, as they may require some code
+      // expansion.
+      if (!Cst || isa<GlobalValue>(Cst) || !containsOnlyConstantData(Cst))
         continue;
 
       // Check if this constant is worth promoting.

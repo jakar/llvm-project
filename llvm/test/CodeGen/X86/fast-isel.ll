@@ -1,4 +1,4 @@
-; RUN: llc < %s -fast-isel -fast-isel-abort=1 -verify-machineinstrs -march=x86 -mattr=sse2 -no-integrated-as
+; RUN: llc < %s -fast-isel -fast-isel-abort=1 -verify-machineinstrs -mtriple=i686-- -mattr=sse2 -no-integrated-as
 ; RUN: llc < %s -fast-isel -fast-isel-abort=1 -verify-machineinstrs -mtriple=x86_64-apple-darwin10 -no-integrated-as
 
 ; This tests very minimal fast-isel functionality.
@@ -96,6 +96,11 @@ define void @mul_i8(i8 %a, i8* %p) nounwind {
 define void @load_store_i1(i1* %p, i1* %q) nounwind {
   %t = load i1, i1* %p
   store i1 %t, i1* %q
+  ret void
+}
+
+define void @freeze_i32(i32 %x) {
+  %t = freeze i32 %x
   ret void
 }
 

@@ -1,9 +1,8 @@
 //===----------------------------------------------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is dual licensed under the MIT and the University of Illinois Open
-// Source Licenses. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -19,22 +18,36 @@
 
 class MoveOnly
 {
-    friend class MoveOnly2;
     MoveOnly(const MoveOnly&);
     MoveOnly& operator=(const MoveOnly&);
 
     int data_;
 public:
-    MoveOnly(int data = 1) : data_(data) {}
-    MoveOnly(MoveOnly&& x)
+    constexpr MoveOnly(int data = 1) : data_(data) {}
+    TEST_CONSTEXPR_CXX14 MoveOnly(MoveOnly&& x)
         : data_(x.data_) {x.data_ = 0;}
-    MoveOnly& operator=(MoveOnly&& x)
+    TEST_CONSTEXPR_CXX14 MoveOnly& operator=(MoveOnly&& x)
         {data_ = x.data_; x.data_ = 0; return *this;}
 
-    int get() const {return data_;}
+    constexpr int get() const {return data_;}
 
-    bool operator==(const MoveOnly& x) const {return data_ == x.data_;}
-    bool operator< (const MoveOnly& x) const {return data_ <  x.data_;}
+    friend constexpr bool operator==(const MoveOnly& x, const MoveOnly& y)
+        { return x.data_ == y.data_; }
+    friend constexpr bool operator!=(const MoveOnly& x, const MoveOnly& y)
+        { return x.data_ != y.data_; }
+    friend constexpr bool operator< (const MoveOnly& x, const MoveOnly& y)
+        { return x.data_ <  y.data_; }
+    friend constexpr bool operator<=(const MoveOnly& x, const MoveOnly& y)
+        { return x.data_ <= y.data_; }
+    friend constexpr bool operator> (const MoveOnly& x, const MoveOnly& y)
+        { return x.data_ >  y.data_; }
+    friend constexpr bool operator>=(const MoveOnly& x, const MoveOnly& y)
+        { return x.data_ >= y.data_; }
+
+    TEST_CONSTEXPR_CXX14 MoveOnly operator+(const MoveOnly& x) const
+        { return MoveOnly{data_ + x.data_}; }
+    TEST_CONSTEXPR_CXX14 MoveOnly operator*(const MoveOnly& x) const
+        { return MoveOnly{data_ * x.data_}; }
 };
 
 namespace std {
@@ -44,7 +57,7 @@ struct hash<MoveOnly>
 {
     typedef MoveOnly argument_type;
     typedef size_t result_type;
-    std::size_t operator()(const MoveOnly& x) const {return x.get();}
+    constexpr size_t operator()(const MoveOnly& x) const {return x.get();}
 };
 
 }

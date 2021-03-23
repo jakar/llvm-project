@@ -1,8 +1,8 @@
-(* RUN: cp %s %T/ipo_opts.ml
- * RUN: %ocamlc -g -w +A -package llvm.ipo -linkpkg %T/ipo_opts.ml -o %t
- * RUN: %t %t.bc
- * RUN: %ocamlopt -g -w +A -package llvm.ipo -linkpkg %T/ipo_opts.ml -o %t
- * RUN: %t %t.bc
+(* RUN: rm -rf %t && mkdir -p %t && cp %s %t/ipo_opts.ml
+ * RUN: %ocamlc -g -w +A -package llvm.ipo -linkpkg %t/ipo_opts.ml -o %t/executable
+ * RUN: %t/executable %t/bitcode.bc
+ * RUN: %ocamlopt -g -w +A -package llvm.ipo -linkpkg %t/ipo_opts.ml -o %t/executable
+ * RUN: %t/executable %t/bitcode.bc
  * XFAIL: vg_leak
  *)
 
@@ -55,7 +55,6 @@ let test_transforms () =
            ++ add_always_inliner
            ++ add_global_dce
            ++ add_global_optimizer
-           ++ add_ipc_propagation
            ++ add_prune_eh
            ++ add_ipsccp
            ++ add_internalize ~all_but_main:true

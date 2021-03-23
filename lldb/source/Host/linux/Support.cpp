@@ -1,9 +1,8 @@
-//===-- Support.cpp ---------------------------------------------*- C++ -*-===//
+//===-- Support.cpp -------------------------------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -27,6 +26,16 @@ llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer>>
 lldb_private::getProcFile(::pid_t pid, const llvm::Twine &file) {
   Log *log = GetLogIfAllCategoriesSet(LIBLLDB_LOG_HOST);
   std::string File = ("/proc/" + llvm::Twine(pid) + "/" + file).str();
+  auto Ret = llvm::MemoryBuffer::getFileAsStream(File);
+  if (!Ret)
+    LLDB_LOG(log, "Failed to open {0}: {1}", File, Ret.getError().message());
+  return Ret;
+}
+
+llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer>>
+lldb_private::getProcFile(const llvm::Twine &file) {
+  Log *log = GetLogIfAllCategoriesSet(LIBLLDB_LOG_HOST);
+  std::string File = ("/proc/" + file).str();
   auto Ret = llvm::MemoryBuffer::getFileAsStream(File);
   if (!Ret)
     LLDB_LOG(log, "Failed to open {0}: {1}", File, Ret.getError().message());

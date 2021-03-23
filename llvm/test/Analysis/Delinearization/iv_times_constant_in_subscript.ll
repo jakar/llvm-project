@@ -1,4 +1,5 @@
-; RUN: opt < %s -analyze -delinearize | FileCheck %s
+; RUN: opt < %s -analyze -enable-new-pm=0 -delinearize | FileCheck %s
+; RUN: opt < %s -passes='print<delinearization>' -disable-output 2>&1 | FileCheck %s
 
 ; Derived from the following code:
 ;
@@ -11,7 +12,7 @@
 ; AddRec: {{((%m * %b * 8) + %A),+,(2 * %m * 8)}<%for.i>,+,(2 * 8)}<%for.j>
 ; CHECK: Base offset: %A
 ; CHECK: ArrayDecl[UnknownSize][%m] with elements of 8 bytes.
-; CHECK: ArrayRef[{%b,+,2}<nsw><%for.i>][{0,+,2}<%for.j>]
+; CHECK: ArrayRef[{%b,+,2}<nsw><%for.i>][{0,+,2}<nuw><%for.j>]
 
 
 define void @foo(i64 %n, i64 %m, i64 %b, double* %A) {

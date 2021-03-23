@@ -1,21 +1,15 @@
-//===-- OptionValueString.cpp ------------------------------------*- C++
-//-*-===//
+//===-- OptionValueString.cpp ---------------------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
 #include "lldb/Interpreter/OptionValueString.h"
 
-// C Includes
-// C++ Includes
-// Other libraries and framework includes
-// Project includes
 #include "lldb/Host/OptionParser.h"
-#include "lldb/Interpreter/Args.h"
+#include "lldb/Utility/Args.h"
 #include "lldb/Utility/Stream.h"
 
 using namespace lldb;
@@ -47,9 +41,9 @@ void OptionValueString::DumpValue(const ExecutionContext *exe_ctx, Stream &strm,
   }
 }
 
-Error OptionValueString::SetValueFromString(llvm::StringRef value,
-                                            VarSetOperationType op) {
-  Error error;
+Status OptionValueString::SetValueFromString(llvm::StringRef value,
+                                             VarSetOperationType op) {
+  Status error;
 
   std::string value_str = value.str();
   value = value.trim();
@@ -88,7 +82,7 @@ Error OptionValueString::SetValueFromString(llvm::StringRef value,
         Args::EncodeEscapeSequences(value_str.c_str(), str);
         new_value.append(str);
       } else
-        new_value.append(value);
+        new_value.append(std::string(value));
     }
     if (m_validator) {
       error = m_validator(new_value.c_str(), m_validator_baton);
@@ -123,31 +117,27 @@ Error OptionValueString::SetValueFromString(llvm::StringRef value,
   return error;
 }
 
-lldb::OptionValueSP OptionValueString::DeepCopy() const {
-  return OptionValueSP(new OptionValueString(*this));
-}
-
-Error OptionValueString::SetCurrentValue(llvm::StringRef value) {
+Status OptionValueString::SetCurrentValue(llvm::StringRef value) {
   if (m_validator) {
-    Error error(m_validator(value.str().c_str(), m_validator_baton));
+    Status error(m_validator(value.str().c_str(), m_validator_baton));
     if (error.Fail())
       return error;
   }
-  m_current_value.assign(value);
-  return Error();
+  m_current_value.assign(std::string(value));
+  return Status();
 }
 
-Error OptionValueString::AppendToCurrentValue(const char *value) {
+Status OptionValueString::AppendToCurrentValue(const char *value) {
   if (value && value[0]) {
     if (m_validator) {
       std::string new_value(m_current_value);
       new_value.append(value);
-      Error error(m_validator(value, m_validator_baton));
+      Status error(m_validator(value, m_validator_baton));
       if (error.Fail())
         return error;
       m_current_value.assign(new_value);
     } else
       m_current_value.append(value);
   }
-  return Error();
+  return Status();
 }

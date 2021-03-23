@@ -1,4 +1,4 @@
-; RUN: opt < %s -simplifycfg -S | FileCheck %s
+; RUN: opt < %s -simplifycfg -simplifycfg-require-and-preserve-domtree=1 -S | FileCheck %s
 target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64-S128"
 
 declare i32 @__gxx_personality_v0(...)
@@ -44,6 +44,27 @@ lpad:
           filter [0 x i8*] zeroinitializer
   %1 = extractvalue { i8*, i32 } %0, 0
   tail call void @__cxa_call_unexpected(i8* %1) noreturn nounwind
+  unreachable
+}
+
+; CHECK-LABEL: @f2_no_null_opt(
+define i8* @f2_no_null_opt() nounwind uwtable ssp #0 personality i8* bitcast (i32 (...)* @__gxx_personality_v0 to i8*) {
+entry:
+; CHECK: invoke noalias i8* null()
+  %call = invoke noalias i8* null()
+          to label %invoke.cont unwind label %lpad
+
+; CHECK: invoke.cont:
+; CHECK: ret i8* %call
+invoke.cont:
+  ret i8* %call
+
+lpad:
+  %0 = landingpad { i8*, i32 }
+          filter [0 x i8*] zeroinitializer
+  %1 = extractvalue { i8*, i32 } %0, 0
+  tail call void @__cxa_call_unexpected(i8* %1) noreturn nounwind
+; CHECK: unreachable
   unreachable
 }
 
@@ -137,3 +158,5 @@ lpad:
           cleanup
   ret void
 }
+
+attributes #0 = { null_pointer_is_valid }

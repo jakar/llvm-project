@@ -18,11 +18,7 @@ declare void @llvm.lifetime.start(i64, i8* nocapture) #0
 ; This test case tests that we can correctly handle a ScopStmt that is
 ; scheduled on the host, instead of within a kernel.
 
-; CODE-LABEL: Code
-; CODE-NEXT: ====
-; CODE-NEXT: # host
-; CODE-NEXT: {
-; CODE-NEXT:   cudaCheckReturn(cudaMemcpy(dev_MemRef_A, MemRef_A, (512) * (512) * sizeof(double), cudaMemcpyHostToDevice));
+; CODE:        cudaCheckReturn(cudaMemcpy(dev_MemRef_A, MemRef_A, (512) * (512) * sizeof(double), cudaMemcpyHostToDevice));
 ; CODE-NEXT:   cudaCheckReturn(cudaMemcpy(dev_MemRef_R, MemRef_R, (p_0 + 1) * (512) * sizeof(double), cudaMemcpyHostToDevice));
 ; CODE-NEXT:   cudaCheckReturn(cudaMemcpy(dev_MemRef_Q, MemRef_Q, (512) * (512) * sizeof(double), cudaMemcpyHostToDevice));
 ; CODE-NEXT:   {
@@ -51,7 +47,7 @@ declare void @llvm.lifetime.start(i64, i8* nocapture) #0
 ; CODE-NEXT:   cudaCheckReturn(cudaMemcpy(MemRef_A, dev_MemRef_A, (512) * (512) * sizeof(double), cudaMemcpyDeviceToHost));
 ; CODE-NEXT:   cudaCheckReturn(cudaMemcpy(MemRef_R, dev_MemRef_R, (p_0 + 1) * (512) * sizeof(double), cudaMemcpyDeviceToHost));
 ; CODE-NEXT:   cudaCheckReturn(cudaMemcpy(MemRef_Q, dev_MemRef_Q, (512) * (512) * sizeof(double), cudaMemcpyDeviceToHost));
-; CODE-NEXT:     Stmt_for_cond33_preheader();
+; CODE-NEXT:     Stmt_for_cond33_preheader_last();
 
 ; CODE: }
 
@@ -196,7 +192,7 @@ declare void @llvm.lifetime.end(i64, i8* nocapture) #0
 declare double @sqrt(double) #2
 
 attributes #0 = { argmemonly nounwind }
-attributes #1 = { nounwind uwtable "disable-tail-calls"="false" "less-precise-fpmad"="false" "no-frame-pointer-elim"="false" "no-infs-fp-math"="false" "no-jump-tables"="false" "no-nans-fp-math"="false" "no-signed-zeros-fp-math"="false" "stack-protector-buffer-size"="8" "target-cpu"="x86-64" "target-features"="+fxsr,+mmx,+sse,+sse2,+x87" "unsafe-fp-math"="false" "use-soft-float"="false" }
+attributes #1 = { nounwind uwtable "disable-tail-calls"="false" "less-precise-fpmad"="false" "frame-pointer"="none" "no-infs-fp-math"="false" "no-jump-tables"="false" "no-nans-fp-math"="false" "no-signed-zeros-fp-math"="false" "stack-protector-buffer-size"="8" "target-cpu"="x86-64" "target-features"="+fxsr,+mmx,+sse,+sse2,+x87" "unsafe-fp-math"="false" "use-soft-float"="false" }
 attributes #2 = { nounwind }
 
 !llvm.ident = !{!0}

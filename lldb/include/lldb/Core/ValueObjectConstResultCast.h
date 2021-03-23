@@ -1,47 +1,39 @@
 //===-- ValueObjectConstResultCast.h ----------------------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef liblldb_ValueObjectConstResultCast_h_
-#define liblldb_ValueObjectConstResultCast_h_
+#ifndef LLDB_CORE_VALUEOBJECTCONSTRESULTCAST_H
+#define LLDB_CORE_VALUEOBJECTCONSTRESULTCAST_H
 
 #include "lldb/Core/ValueObjectCast.h"
 #include "lldb/Core/ValueObjectConstResultImpl.h"
-#include "lldb/Symbol/CompilerType.h" // for CompilerType
-#include "lldb/Utility/ConstString.h" // for ConstString
-#include "lldb/lldb-defines.h"        // for DISALLOW_COPY_AND_...
-#include "lldb/lldb-forward.h"        // for ValueObjectSP
-#include "lldb/lldb-types.h"          // for addr_t
+#include "lldb/Symbol/CompilerType.h"
+#include "lldb/Utility/ConstString.h"
+#include "lldb/lldb-defines.h"
+#include "lldb/lldb-forward.h"
+#include "lldb/lldb-types.h"
 
-#include <stddef.h> // for size_t
-#include <stdint.h> // for uint32_t, int32_t
+#include <stddef.h>
+#include <stdint.h>
 
 namespace lldb_private {
 class DataExtractor;
-}
-namespace lldb_private {
-class Error;
-}
-namespace lldb_private {
+class Status;
 class ValueObject;
-}
-
-namespace lldb_private {
 
 class ValueObjectConstResultCast : public ValueObjectCast {
 public:
-  ValueObjectConstResultCast(ValueObject &parent, const ConstString &name,
+  ValueObjectConstResultCast(ValueObject &parent, ConstString name,
                              const CompilerType &cast_type,
                              lldb::addr_t live_address = LLDB_INVALID_ADDRESS);
 
   ~ValueObjectConstResultCast() override;
 
-  lldb::ValueObjectSP Dereference(Error &error) override;
+  lldb::ValueObjectSP Dereference(Status &error) override;
 
   ValueObject *CreateChildAtIndex(size_t idx, bool synthetic_array_member,
                                   int32_t synthetic_index) override;
@@ -54,7 +46,7 @@ public:
       uint32_t offset, const CompilerType &type, bool can_create,
       ConstString name_const_str = ConstString()) override;
 
-  lldb::ValueObjectSP AddressOf(Error &error) override;
+  lldb::ValueObjectSP AddressOf(Status &error) override;
 
   size_t GetPointeeData(DataExtractor &data, uint32_t item_idx = 0,
                         uint32_t item_count = 1) override;
@@ -69,9 +61,11 @@ private:
   friend class ValueObjectConstResult;
   friend class ValueObjectConstResultImpl;
 
-  DISALLOW_COPY_AND_ASSIGN(ValueObjectConstResultCast);
+  ValueObjectConstResultCast(const ValueObjectConstResultCast &) = delete;
+  const ValueObjectConstResultCast &
+  operator=(const ValueObjectConstResultCast &) = delete;
 };
 
 } // namespace lldb_private
 
-#endif // liblldb_ValueObjectConstResultCast_h_
+#endif // LLDB_CORE_VALUEOBJECTCONSTRESULTCAST_H

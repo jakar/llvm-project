@@ -1,9 +1,8 @@
 //===- LowerExpectIntrinsic.cpp - Lower expect intrinsic ------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -14,6 +13,7 @@
 #include "llvm/Transforms/Scalar/LowerExpectIntrinsic.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/Statistic.h"
+#include "llvm/ADT/iterator_range.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Function.h"
@@ -22,6 +22,7 @@
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/MDBuilder.h"
 #include "llvm/IR/Metadata.h"
+#include "llvm/InitializePasses.h"
 #include "llvm/Pass.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
@@ -41,11 +42,11 @@ STATISTIC(ExpectIntrinsicsHandled,
 // only be used in extreme cases, we could make this ratio higher. As it stands,
 // programmers may be using __builtin_expect() / llvm.expect to annotate that a
 // branch is likely or unlikely to be taken.
-//
-// There is a known dependency on this ratio in CodeGenPrepare when transforming
-// 'select' instructions. It may be worthwhile to hoist these values to some
-// shared space, so they can be used directly by other passes.
 
+// WARNING: these values are internal implementation detail of the pass.
+// They should not be exposed to the outside of the pass, front-end codegen
+// should emit @llvm.expect intrinsics instead of using these weights directly.
+// Transforms should use TargetTransformInfo's getPredictableBranchThreshold().
 static cl::opt<uint32_t> LikelyBranchWeight(
     "likely-branch-weight", cl::Hidden, cl::init(2000),
     cl::desc("Weight of the branch likely to be taken (default = 2000)"));
@@ -53,13 +54,35 @@ static cl::opt<uint32_t> UnlikelyBranchWeight(
     "unlikely-branch-weight", cl::Hidden, cl::init(1),
     cl::desc("Weight of the branch unlikely to be taken (default = 1)"));
 
+static std::tuple<uint32_t, uint32_t>
+getBranchWeight(Intrinsic::ID IntrinsicID, CallInst *CI, int BranchCount) {
+  if (IntrinsicID == Intrinsic::expect) {
+    // __builtin_expect
+    return std::make_tuple(LikelyBranchWeight.getValue(),
+                           UnlikelyBranchWeight.getValue());
+  } else {
+    // __builtin_expect_with_probability
+    assert(CI->getNumOperands() >= 3 &&
+           "expect with probability must have 3 arguments");
+    ConstantFP *Confidence = dyn_cast<ConstantFP>(CI->getArgOperand(2));
+    double TrueProb = Confidence->getValueAPF().convertToDouble();
+    assert((TrueProb >= 0.0 && TrueProb <= 1.0) &&
+           "probability value must be in the range [0.0, 1.0]");
+    double FalseProb = (1.0 - TrueProb) / (BranchCount - 1);
+    uint32_t LikelyBW = ceil((TrueProb * (double)(INT32_MAX - 1)) + 1.0);
+    uint32_t UnlikelyBW = ceil((FalseProb * (double)(INT32_MAX - 1)) + 1.0);
+    return std::make_tuple(LikelyBW, UnlikelyBW);
+  }
+}
+
 static bool handleSwitchExpect(SwitchInst &SI) {
   CallInst *CI = dyn_cast<CallInst>(SI.getCondition());
   if (!CI)
     return false;
 
   Function *Fn = CI->getCalledFunction();
-  if (!Fn || Fn->getIntrinsicID() != Intrinsic::expect)
+  if (!Fn || (Fn->getIntrinsicID() != Intrinsic::expect &&
+              Fn->getIntrinsicID() != Intrinsic::expect_with_probability))
     return false;
 
   Value *ArgValue = CI->getArgOperand(0);
@@ -69,18 +92,169 @@ static bool handleSwitchExpect(SwitchInst &SI) {
 
   SwitchInst::CaseHandle Case = *SI.findCaseValue(ExpectedValue);
   unsigned n = SI.getNumCases(); // +1 for default case.
-  SmallVector<uint32_t, 16> Weights(n + 1, UnlikelyBranchWeight);
+  uint32_t LikelyBranchWeightVal, UnlikelyBranchWeightVal;
+  std::tie(LikelyBranchWeightVal, UnlikelyBranchWeightVal) =
+      getBranchWeight(Fn->getIntrinsicID(), CI, n + 1);
 
-  if (Case == *SI.case_default())
-    Weights[0] = LikelyBranchWeight;
-  else
-    Weights[Case.getCaseIndex() + 1] = LikelyBranchWeight;
+  SmallVector<uint32_t, 16> Weights(n + 1, UnlikelyBranchWeightVal);
+
+  uint64_t Index = (Case == *SI.case_default()) ? 0 : Case.getCaseIndex() + 1;
+  Weights[Index] = LikelyBranchWeightVal;
+
+  SI.setCondition(ArgValue);
 
   SI.setMetadata(LLVMContext::MD_prof,
                  MDBuilder(CI->getContext()).createBranchWeights(Weights));
 
-  SI.setCondition(ArgValue);
   return true;
+}
+
+/// Handler for PHINodes that define the value argument to an
+/// @llvm.expect call.
+///
+/// If the operand of the phi has a constant value and it 'contradicts'
+/// with the expected value of phi def, then the corresponding incoming
+/// edge of the phi is unlikely to be taken. Using that information,
+/// the branch probability info for the originating branch can be inferred.
+static void handlePhiDef(CallInst *Expect) {
+  Value &Arg = *Expect->getArgOperand(0);
+  ConstantInt *ExpectedValue = dyn_cast<ConstantInt>(Expect->getArgOperand(1));
+  if (!ExpectedValue)
+    return;
+  const APInt &ExpectedPhiValue = ExpectedValue->getValue();
+
+  // Walk up in backward a list of instructions that
+  // have 'copy' semantics by 'stripping' the copies
+  // until a PHI node or an instruction of unknown kind
+  // is reached. Negation via xor is also handled.
+  //
+  //       C = PHI(...);
+  //       B = C;
+  //       A = B;
+  //       D = __builtin_expect(A, 0);
+  //
+  Value *V = &Arg;
+  SmallVector<Instruction *, 4> Operations;
+  while (!isa<PHINode>(V)) {
+    if (ZExtInst *ZExt = dyn_cast<ZExtInst>(V)) {
+      V = ZExt->getOperand(0);
+      Operations.push_back(ZExt);
+      continue;
+    }
+
+    if (SExtInst *SExt = dyn_cast<SExtInst>(V)) {
+      V = SExt->getOperand(0);
+      Operations.push_back(SExt);
+      continue;
+    }
+
+    BinaryOperator *BinOp = dyn_cast<BinaryOperator>(V);
+    if (!BinOp || BinOp->getOpcode() != Instruction::Xor)
+      return;
+
+    ConstantInt *CInt = dyn_cast<ConstantInt>(BinOp->getOperand(1));
+    if (!CInt)
+      return;
+
+    V = BinOp->getOperand(0);
+    Operations.push_back(BinOp);
+  }
+
+  // Executes the recorded operations on input 'Value'.
+  auto ApplyOperations = [&](const APInt &Value) {
+    APInt Result = Value;
+    for (auto Op : llvm::reverse(Operations)) {
+      switch (Op->getOpcode()) {
+      case Instruction::Xor:
+        Result ^= cast<ConstantInt>(Op->getOperand(1))->getValue();
+        break;
+      case Instruction::ZExt:
+        Result = Result.zext(Op->getType()->getIntegerBitWidth());
+        break;
+      case Instruction::SExt:
+        Result = Result.sext(Op->getType()->getIntegerBitWidth());
+        break;
+      default:
+        llvm_unreachable("Unexpected operation");
+      }
+    }
+    return Result;
+  };
+
+  auto *PhiDef = cast<PHINode>(V);
+
+  // Get the first dominating conditional branch of the operand
+  // i's incoming block.
+  auto GetDomConditional = [&](unsigned i) -> BranchInst * {
+    BasicBlock *BB = PhiDef->getIncomingBlock(i);
+    BranchInst *BI = dyn_cast<BranchInst>(BB->getTerminator());
+    if (BI && BI->isConditional())
+      return BI;
+    BB = BB->getSinglePredecessor();
+    if (!BB)
+      return nullptr;
+    BI = dyn_cast<BranchInst>(BB->getTerminator());
+    if (!BI || BI->isUnconditional())
+      return nullptr;
+    return BI;
+  };
+
+  // Now walk through all Phi operands to find phi oprerands with values
+  // conflicting with the expected phi output value. Any such operand
+  // indicates the incoming edge to that operand is unlikely.
+  for (unsigned i = 0, e = PhiDef->getNumIncomingValues(); i != e; ++i) {
+
+    Value *PhiOpnd = PhiDef->getIncomingValue(i);
+    ConstantInt *CI = dyn_cast<ConstantInt>(PhiOpnd);
+    if (!CI)
+      continue;
+
+    // Not an interesting case when IsUnlikely is false -- we can not infer
+    // anything useful when the operand value matches the expected phi
+    // output.
+    if (ExpectedPhiValue == ApplyOperations(CI->getValue()))
+      continue;
+
+    BranchInst *BI = GetDomConditional(i);
+    if (!BI)
+      continue;
+
+    MDBuilder MDB(PhiDef->getContext());
+
+    // There are two situations in which an operand of the PhiDef comes
+    // from a given successor of a branch instruction BI.
+    // 1) When the incoming block of the operand is the successor block;
+    // 2) When the incoming block is BI's enclosing block and the
+    // successor is the PhiDef's enclosing block.
+    //
+    // Returns true if the operand which comes from OpndIncomingBB
+    // comes from outgoing edge of BI that leads to Succ block.
+    auto *OpndIncomingBB = PhiDef->getIncomingBlock(i);
+    auto IsOpndComingFromSuccessor = [&](BasicBlock *Succ) {
+      if (OpndIncomingBB == Succ)
+        // If this successor is the incoming block for this
+        // Phi operand, then this successor does lead to the Phi.
+        return true;
+      if (OpndIncomingBB == BI->getParent() && Succ == PhiDef->getParent())
+        // Otherwise, if the edge is directly from the branch
+        // to the Phi, this successor is the one feeding this
+        // Phi operand.
+        return true;
+      return false;
+    };
+    uint32_t LikelyBranchWeightVal, UnlikelyBranchWeightVal;
+    std::tie(LikelyBranchWeightVal, UnlikelyBranchWeightVal) = getBranchWeight(
+        Expect->getCalledFunction()->getIntrinsicID(), Expect, 2);
+
+    if (IsOpndComingFromSuccessor(BI->getSuccessor(1)))
+      BI->setMetadata(LLVMContext::MD_prof,
+                      MDB.createBranchWeights(LikelyBranchWeightVal,
+                                              UnlikelyBranchWeightVal));
+    else if (IsOpndComingFromSuccessor(BI->getSuccessor(0)))
+      BI->setMetadata(LLVMContext::MD_prof,
+                      MDB.createBranchWeights(UnlikelyBranchWeightVal,
+                                              LikelyBranchWeightVal));
+  }
 }
 
 // Handle both BranchInst and SelectInst.
@@ -98,10 +272,18 @@ template <class BrSelInst> static bool handleBrSelExpect(BrSelInst &BSI) {
   CallInst *CI;
 
   ICmpInst *CmpI = dyn_cast<ICmpInst>(BSI.getCondition());
+  CmpInst::Predicate Predicate;
+  ConstantInt *CmpConstOperand = nullptr;
   if (!CmpI) {
     CI = dyn_cast<CallInst>(BSI.getCondition());
+    Predicate = CmpInst::ICMP_NE;
   } else {
-    if (CmpI->getPredicate() != CmpInst::ICMP_NE)
+    Predicate = CmpI->getPredicate();
+    if (Predicate != CmpInst::ICMP_NE && Predicate != CmpInst::ICMP_EQ)
+      return false;
+
+    CmpConstOperand = dyn_cast<ConstantInt>(CmpI->getOperand(1));
+    if (!CmpConstOperand)
       return false;
     CI = dyn_cast<CallInst>(CmpI->getOperand(0));
   }
@@ -109,8 +291,16 @@ template <class BrSelInst> static bool handleBrSelExpect(BrSelInst &BSI) {
   if (!CI)
     return false;
 
+  uint64_t ValueComparedTo = 0;
+  if (CmpConstOperand) {
+    if (CmpConstOperand->getBitWidth() > 64)
+      return false;
+    ValueComparedTo = CmpConstOperand->getZExtValue();
+  }
+
   Function *Fn = CI->getCalledFunction();
-  if (!Fn || Fn->getIntrinsicID() != Intrinsic::expect)
+  if (!Fn || (Fn->getIntrinsicID() != Intrinsic::expect &&
+              Fn->getIntrinsicID() != Intrinsic::expect_with_probability))
     return false;
 
   Value *ArgValue = CI->getArgOperand(0);
@@ -121,19 +311,26 @@ template <class BrSelInst> static bool handleBrSelExpect(BrSelInst &BSI) {
   MDBuilder MDB(CI->getContext());
   MDNode *Node;
 
-  // If expect value is equal to 1 it means that we are more likely to take
-  // branch 0, in other case more likely is branch 1.
-  if (ExpectedValue->isOne())
-    Node = MDB.createBranchWeights(LikelyBranchWeight, UnlikelyBranchWeight);
-  else
-    Node = MDB.createBranchWeights(UnlikelyBranchWeight, LikelyBranchWeight);
+  uint32_t LikelyBranchWeightVal, UnlikelyBranchWeightVal;
+  std::tie(LikelyBranchWeightVal, UnlikelyBranchWeightVal) =
+      getBranchWeight(Fn->getIntrinsicID(), CI, 2);
 
-  BSI.setMetadata(LLVMContext::MD_prof, Node);
+  if ((ExpectedValue->getZExtValue() == ValueComparedTo) ==
+      (Predicate == CmpInst::ICMP_EQ)) {
+    Node =
+        MDB.createBranchWeights(LikelyBranchWeightVal, UnlikelyBranchWeightVal);
+  } else {
+    Node =
+        MDB.createBranchWeights(UnlikelyBranchWeightVal, LikelyBranchWeightVal);
+  }
 
   if (CmpI)
     CmpI->setOperand(0, ArgValue);
   else
     BSI.setCondition(ArgValue);
+
+  BSI.setMetadata(LLVMContext::MD_prof, Node);
+
   return true;
 }
 
@@ -172,7 +369,12 @@ static bool lowerExpectIntrinsic(Function &F) {
       }
 
       Function *Fn = CI->getCalledFunction();
-      if (Fn && Fn->getIntrinsicID() == Intrinsic::expect) {
+      if (Fn && (Fn->getIntrinsicID() == Intrinsic::expect ||
+                 Fn->getIntrinsicID() == Intrinsic::expect_with_probability)) {
+        // Before erasing the llvm.expect, walk backward to find
+        // phi that define llvm.expect's first arg, and
+        // infer branch probability:
+        handlePhiDef(CI);
         Value *Exp = CI->getArgOperand(0);
         CI->replaceAllUsesWith(Exp);
         CI->eraseFromParent();
@@ -193,7 +395,7 @@ PreservedAnalyses LowerExpectIntrinsicPass::run(Function &F,
 }
 
 namespace {
-/// \brief Legacy pass for lowering expect intrinsics out of the IR.
+/// Legacy pass for lowering expect intrinsics out of the IR.
 ///
 /// When this pass is run over a function it uses expect intrinsics which feed
 /// branches and switches to provide branch weight metadata for those

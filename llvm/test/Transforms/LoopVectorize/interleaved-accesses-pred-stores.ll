@@ -1,4 +1,5 @@
 ; RUN: opt -S -loop-vectorize -instcombine -force-vector-width=2 -force-vector-interleave=1 -enable-interleaved-mem-accesses < %s | FileCheck %s
+; RUN: opt -S -loop-vectorize -instcombine -force-vector-width=2 -force-vector-interleave=1 -enable-interleaved-mem-accesses -enable-masked-interleaved-mem-accesses < %s | FileCheck %s
 
 target datalayout = "e-m:e-i64:64-i128:128-n32:64-S128"
 %pair = type { i64, i64 }
@@ -9,7 +10,7 @@ target datalayout = "e-m:e-i64:64-i128:128-n32:64-S128"
 ;
 ; CHECK-LABEL: @interleaved_with_cond_store_0(
 ;
-; CHECK: min.iters.checked
+; CHECK: vector.ph
 ; CHECK:   %n.mod.vf = and i64 %[[N:.+]], 1
 ; CHECK:   %[[IsZero:[a-zA-Z0-9]+]] = icmp eq i64 %n.mod.vf, 0
 ; CHECK:   %[[R:.+]] = select i1 %[[IsZero]], i64 2, i64 %n.mod.vf
@@ -17,7 +18,7 @@ target datalayout = "e-m:e-i64:64-i128:128-n32:64-S128"
 ;
 ; CHECK: vector.body:
 ; CHECK:   %wide.vec = load <4 x i64>, <4 x i64>* %{{.*}}
-; CHECK:   %strided.vec = shufflevector <4 x i64> %wide.vec, <4 x i64> undef, <2 x i32> <i32 0, i32 2>
+; CHECK:   %strided.vec = shufflevector <4 x i64> %wide.vec, <4 x i64> poison, <2 x i32> <i32 0, i32 2>
 ;
 ; CHECK: pred.store.if
 ; CHECK:   %[[X1:.+]] = extractelement <4 x i64> %wide.vec, i32 0
@@ -58,7 +59,7 @@ for.end:
 ;
 ; CHECK-LABEL: @interleaved_with_cond_store_1(
 ;
-; CHECK: min.iters.checked
+; CHECK: vector.ph
 ; CHECK:   %n.mod.vf = and i64 %[[N:.+]], 1
 ; CHECK:   %[[IsZero:[a-zA-Z0-9]+]] = icmp eq i64 %n.mod.vf, 0
 ; CHECK:   %[[R:.+]] = select i1 %[[IsZero]], i64 2, i64 %n.mod.vf
@@ -66,7 +67,7 @@ for.end:
 ;
 ; CHECK: vector.body:
 ; CHECK:   %[[L1:.+]] = load <4 x i64>, <4 x i64>* %{{.*}}
-; CHECK:   %strided.vec = shufflevector <4 x i64> %[[L1]], <4 x i64> undef, <2 x i32> <i32 0, i32 2>
+; CHECK:   %strided.vec = shufflevector <4 x i64> %[[L1]], <4 x i64> poison, <2 x i32> <i32 0, i32 2>
 ;
 ; CHECK: pred.store.if
 ; CHECK:   %[[X1:.+]] = extractelement <4 x i64> %wide.vec, i32 0
@@ -117,7 +118,7 @@ for.end:
 ;
 ; CHECK-LABEL: @interleaved_with_cond_store_2(
 ;
-; CHECK: min.iters.checked
+; CHECK: vector.ph
 ; CHECK:   %n.mod.vf = and i64 %[[N:.+]], 1
 ; CHECK:   %[[IsZero:[a-zA-Z0-9]+]] = icmp eq i64 %n.mod.vf, 0
 ; CHECK:   %[[R:.+]] = select i1 %[[IsZero]], i64 2, i64 %n.mod.vf
@@ -125,7 +126,7 @@ for.end:
 ;
 ; CHECK: vector.body:
 ; CHECK:   %[[L1:.+]] = load <4 x i64>, <4 x i64>* %{{.*}}
-; CHECK:   %strided.vec = shufflevector <4 x i64> %[[L1]], <4 x i64> undef, <2 x i32> <i32 0, i32 2>
+; CHECK:   %strided.vec = shufflevector <4 x i64> %[[L1]], <4 x i64> poison, <2 x i32> <i32 0, i32 2>
 ; CHECK:   store i64 %x, {{.*}}
 ; CHECK:   store i64 %x, {{.*}}
 ;

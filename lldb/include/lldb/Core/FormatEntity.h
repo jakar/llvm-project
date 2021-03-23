@@ -1,42 +1,32 @@
 //===-- FormatEntity.h ------------------------------------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef liblldb_FormatEntity_h_
-#define liblldb_FormatEntity_h_
+#ifndef LLDB_CORE_FORMATENTITY_H
+#define LLDB_CORE_FORMATENTITY_H
 
-#include "lldb/Utility/Error.h"
-#include "lldb/Utility/FileSpec.h"  // for FileSpec
-#include "lldb/lldb-enumerations.h" // for Format::eFormatDefault, Format
-#include "lldb/lldb-types.h"        // for addr_t
-#include <algorithm>                // for min
-#include <stddef.h>                 // for size_t
-#include <stdint.h>                 // for uint32_t, uint64_t
+#include "lldb/Utility/CompletionRequest.h"
+#include "lldb/Utility/FileSpec.h"
+#include "lldb/Utility/Status.h"
+#include "lldb/lldb-enumerations.h"
+#include "lldb/lldb-types.h"
+#include <algorithm>
+#include <stddef.h>
+#include <stdint.h>
 
 #include <string>
 #include <vector>
 
 namespace lldb_private {
 class Address;
-}
-namespace lldb_private {
 class ExecutionContext;
-}
-namespace lldb_private {
 class Stream;
-}
-namespace lldb_private {
 class StringList;
-}
-namespace lldb_private {
 class SymbolContext;
-}
-namespace lldb_private {
 class ValueObject;
 }
 namespace llvm {
@@ -51,7 +41,7 @@ public:
       Invalid,
       ParentNumber,
       ParentString,
-      InsertString,
+      EscapeCode,
       Root,
       String,
       Scope,
@@ -71,6 +61,7 @@ public:
       ThreadName,
       ThreadQueue,
       ThreadStopReason,
+      ThreadStopReasonRaw,
       ThreadReturnValue,
       ThreadCompletedExpression,
       ScriptThread,
@@ -87,6 +78,7 @@ public:
       FrameRegisterFP,
       FrameRegisterFlags,
       FrameRegisterByName,
+      FrameIsArtificial,
       ScriptFrame,
       FunctionID,
       FunctionDidChange,
@@ -94,6 +86,7 @@ public:
       FunctionName,
       FunctionNameWithArgs,
       FunctionNameNoArgs,
+      FunctionMangledName,
       FunctionAddrOffset,
       FunctionAddrOffsetConcrete,
       FunctionLineOffset,
@@ -103,19 +96,16 @@ public:
       FunctionIsOptimized,
       LineEntryFile,
       LineEntryLineNumber,
+      LineEntryColumn,
       LineEntryStartAddress,
       LineEntryEndAddress,
       CurrentPCArrow
     };
 
-    enum FormatType { None, UInt32, UInt64, CString };
-
     struct Definition {
       const char *name;
       const char *string; // Insert this exact string into the output
       Entry::Type type;
-      FormatType format_type; // uint32_t, uint64_t, cstr, or anything that can
-                              // be formatted by printf or lldb::Format
       uint64_t data;
       uint32_t num_children;
       Definition *children; // An array of "num_children" Definition entries,
@@ -205,32 +195,28 @@ public:
                             const Address *addr, ValueObject *valobj,
                             bool function_changed, bool initial_function);
 
-  static Error Parse(const llvm::StringRef &format, Entry &entry);
+  static Status Parse(const llvm::StringRef &format, Entry &entry);
 
-  static Error ExtractVariableInfo(llvm::StringRef &format_str,
-                                   llvm::StringRef &variable_name,
-                                   llvm::StringRef &variable_format);
+  static Status ExtractVariableInfo(llvm::StringRef &format_str,
+                                    llvm::StringRef &variable_name,
+                                    llvm::StringRef &variable_format);
 
-  static size_t AutoComplete(llvm::StringRef s, int match_start_point,
-                             int max_return_elements, bool &word_complete,
-                             StringList &matches);
+  static void AutoComplete(lldb_private::CompletionRequest &request);
 
-  //----------------------------------------------------------------------
   // Format the current elements into the stream \a s.
   //
-  // The root element will be stripped off and the format str passed in
-  // will be either an empty string (print a description of this object),
-  // or contain a . separated series like a domain name that identifies
-  // further sub elements to display.
-  //----------------------------------------------------------------------
+  // The root element will be stripped off and the format str passed in will be
+  // either an empty string (print a description of this object), or contain a
+  // `.`-separated series like a domain name that identifies further
+  //  sub-elements to display.
   static bool FormatFileSpec(const FileSpec &file, Stream &s,
                              llvm::StringRef elements,
                              llvm::StringRef element_format);
 
 protected:
-  static Error ParseInternal(llvm::StringRef &format, Entry &parent_entry,
-                             uint32_t depth);
+  static Status ParseInternal(llvm::StringRef &format, Entry &parent_entry,
+                              uint32_t depth);
 };
 } // namespace lldb_private
 
-#endif // liblldb_FormatEntity_h_
+#endif // LLDB_CORE_FORMATENTITY_H

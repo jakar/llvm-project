@@ -3,10 +3,10 @@ include(CompilerRTCompile)
 filter_available_targets(INTERCEPTION_UNITTEST_SUPPORTED_ARCH x86_64 i386 mips64 mips64el)
 
 set(INTERCEPTION_UNITTESTS
-  interception_linux_test.cc
-  interception_test_main.cc
-  interception_win_test.cc
-)
+  interception_linux_test.cpp
+  interception_test_main.cpp
+  interception_win_test.cpp
+  )
 
 set(INTERCEPTION_TEST_HEADERS)
 
@@ -18,8 +18,10 @@ set(INTERCEPTION_TEST_CFLAGS_COMMON
   -I${COMPILER_RT_SOURCE_DIR}/lib/interception
   -fno-rtti
   -O2
-  -Werror=sign-compare
-  -Wno-non-virtual-dtor)
+  -Werror=sign-compare)
+
+set(INTERCEPTION_TEST_LINK_FLAGS_COMMON
+  ${COMPILER_RT_UNITTEST_LINK_FLAGS})
 
 # -gline-tables-only must be enough for these tests, so use it if possible.
 if(COMPILER_RT_TEST_COMPILER_ID MATCHES "Clang")
@@ -29,7 +31,10 @@ else()
 endif()
 if(MSVC)
   list(APPEND INTERCEPTION_TEST_CFLAGS_COMMON -gcodeview)
-  list(APPEND INTERCEPTION_TEST_LINK_FLAGS_COMMON -Wl,-largeaddressaware)
+  list(APPEND INTERCEPTION_TEST_LINK_FLAGS_COMMON
+    -Wl,-largeaddressaware
+    -Wl,-nodefaultlib:libcmt,-defaultlib:msvcrt,-defaultlib:oldnames
+    )
 endif()
 list(APPEND INTERCEPTION_TEST_LINK_FLAGS_COMMON -g)
 
@@ -67,23 +72,13 @@ macro(add_interceptor_lib library)
     FOLDER "Compiler-RT Runtime tests")
 endmacro()
 
-function(get_interception_lib_for_arch arch lib lib_name)
+function(get_interception_lib_for_arch arch lib)
   if(APPLE)
     set(tgt_name "RTInterception.test.osx")
   else()
     set(tgt_name "RTInterception.test.${arch}")
   endif()
   set(${lib} "${tgt_name}" PARENT_SCOPE)
-  if(CMAKE_CONFIGURATION_TYPES)
-   set(configuration_path "${CMAKE_CFG_INTDIR}/")
-  else()
-   set(configuration_path "")
-  endif()
-  if(NOT MSVC)
-    set(${lib_name} "${configuration_path}lib${tgt_name}.a" PARENT_SCOPE)
-  else()
-    set(${lib_name} "${configuration_path}${tgt_name}.lib" PARENT_SCOPE)
-  endif()
 endfunction()
 
 # Interception unit tests testsuite.
@@ -93,36 +88,16 @@ set_target_properties(InterceptionUnitTests PROPERTIES
 
 # Adds interception tests for architecture.
 macro(add_interception_tests_for_arch arch)
-  get_target_flags_for_arch(${arch} TARGET_FLAGS)
-  set(INTERCEPTION_TEST_SOURCES ${INTERCEPTION_UNITTESTS}
-                             ${COMPILER_RT_GTEST_SOURCE})
-  set(INTERCEPTION_TEST_COMPILE_DEPS ${INTERCEPTION_TEST_HEADERS})
-  if(NOT COMPILER_RT_STANDALONE_BUILD)
-    list(APPEND INTERCEPTION_TEST_COMPILE_DEPS gtest)
-  endif()
   set(INTERCEPTION_TEST_OBJECTS)
-  foreach(source ${INTERCEPTION_TEST_SOURCES})
-    get_filename_component(basename ${source} NAME)
-    if(CMAKE_CONFIGURATION_TYPES)
-      set(output_obj "${CMAKE_CFG_INTDIR}/${basename}.${arch}.o")
-    else()
-      set(output_obj "${basename}.${arch}.o")
-    endif()
-    clang_compile(${output_obj} ${source}
-                  CFLAGS ${INTERCEPTION_TEST_CFLAGS_COMMON} ${TARGET_FLAGS}
-                  DEPS ${INTERCEPTION_TEST_COMPILE_DEPS})
-    list(APPEND INTERCEPTION_TEST_OBJECTS ${output_obj})
-  endforeach()
-  get_interception_lib_for_arch(${arch} INTERCEPTION_COMMON_LIB
-                                INTERCEPTION_COMMON_LIB_NAME)
-  # Add unittest target.
-  set(INTERCEPTION_TEST_NAME "Interception-${arch}-Test")
-  add_compiler_rt_test(InterceptionUnitTests ${INTERCEPTION_TEST_NAME}
-                       OBJECTS ${INTERCEPTION_TEST_OBJECTS}
-                               ${INTERCEPTION_COMMON_LIB_NAME}
-                       DEPS ${INTERCEPTION_TEST_OBJECTS} ${INTERCEPTION_COMMON_LIB}
-                       LINK_FLAGS ${INTERCEPTION_TEST_LINK_FLAGS_COMMON}
-                                  ${TARGET_FLAGS})
+  get_interception_lib_for_arch(${arch} INTERCEPTION_COMMON_LIB)
+  generate_compiler_rt_tests(INTERCEPTION_TEST_OBJECTS
+    InterceptionUnitTests "Interception-${arch}-Test" ${arch}
+    RUNTIME ${INTERCEPTION_COMMON_LIB}
+    SOURCES ${INTERCEPTION_UNITTESTS} ${COMPILER_RT_GTEST_SOURCE}
+    COMPILE_DEPS ${INTERCEPTION_TEST_HEADERS}
+    DEPS gtest
+    CFLAGS ${INTERCEPTION_TEST_CFLAGS_COMMON}
+    LINK_FLAGS ${INTERCEPTION_TEST_LINK_FLAGS_COMMON})
 endmacro()
 
 if(COMPILER_RT_CAN_EXECUTE_TESTS AND NOT ANDROID AND NOT APPLE)

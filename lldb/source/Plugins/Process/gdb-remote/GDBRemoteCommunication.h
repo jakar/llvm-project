@@ -1,45 +1,45 @@
 //===-- GDBRemoteCommunication.h --------------------------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef liblldb_GDBRemoteCommunication_h_
-#define liblldb_GDBRemoteCommunication_h_
+#ifndef LLDB_SOURCE_PLUGINS_PROCESS_GDB_REMOTE_GDBREMOTECOMMUNICATION_H
+#define LLDB_SOURCE_PLUGINS_PROCESS_GDB_REMOTE_GDBREMOTECOMMUNICATION_H
 
-// C Includes
-// C++ Includes
+#include "GDBRemoteCommunicationHistory.h"
+
 #include <condition_variable>
 #include <mutex>
 #include <queue>
 #include <string>
 #include <vector>
 
-// Other libraries and framework includes
-// Project includes
 #include "lldb/Core/Communication.h"
-#include "lldb/Core/Listener.h"
+#include "lldb/Host/Config.h"
 #include "lldb/Host/HostThread.h"
-#include "lldb/Host/Predicate.h"
-#include "lldb/Interpreter/Args.h"
+#include "lldb/Utility/Args.h"
+#include "lldb/Utility/Listener.h"
+#include "lldb/Utility/Predicate.h"
+#include "lldb/Utility/StringExtractorGDBRemote.h"
 #include "lldb/lldb-public.h"
 
-#include "Utility/StringExtractorGDBRemote.h"
-
 namespace lldb_private {
+namespace repro {
+class PacketRecorder;
+}
 namespace process_gdb_remote {
 
-typedef enum {
+enum GDBStoppointType {
   eStoppointInvalid = -1,
   eBreakpointSoftware = 0,
   eBreakpointHardware,
   eWatchpointWrite,
   eWatchpointRead,
   eWatchpointReadWrite
-} GDBStoppointType;
+};
 
 enum class CompressionType {
   None = 0,    // no compression
@@ -65,9 +65,9 @@ public:
 
   enum class PacketResult {
     Success = 0,        // Success
-    ErrorSendFailed,    // Error sending the packet
+    ErrorSendFailed,    // Status sending the packet
     ErrorSendAck,       // Didn't get an ack back after sending a packet
-    ErrorReplyFailed,   // Error getting the reply
+    ErrorReplyFailed,   // Status getting the reply
     ErrorReplyTimeout,  // Timed out waiting for reply
     ErrorReplyInvalid,  // Got a reply but it wasn't valid for the packet that
                         // was sent
@@ -112,13 +112,11 @@ public:
 
   bool GetSendAcks() { return m_send_acks; }
 
-  //------------------------------------------------------------------
   // Set the global packet timeout.
   //
   // For clients, this is the timeout that gets used when sending
   // packets and waiting for responses. For servers, this is used when waiting
   // for ACKs.
-  //------------------------------------------------------------------
   std::chrono::seconds SetPacketTimeout(std::chrono::seconds packet_timeout) {
     const auto old_packet_timeout = m_packet_timeout;
     m_packet_timeout = packet_timeout;
@@ -127,11 +125,9 @@ public:
 
   std::chrono::seconds GetPacketTimeout() const { return m_packet_timeout; }
 
-  //------------------------------------------------------------------
   // Start a debugserver instance on the current host using the
   // supplied connection URL.
-  //------------------------------------------------------------------
-  Error StartDebugserverProcess(
+  Status StartDebugserverProcess(
       const char *url,
       Platform *platform, // If non nullptr, then check with the platform for
                           // the GDB server binary if it can't be located
@@ -141,85 +137,19 @@ public:
 
   void DumpHistory(Stream &strm);
 
+  void SetPacketRecorder(repro::PacketRecorder *recorder);
+
+  static llvm::Error ConnectLocally(GDBRemoteCommunication &client,
+                                    GDBRemoteCommunication &server);
+
+  /// Expand GDB run-length encoding.
+  static std::string ExpandRLE(std::string);
+
 protected:
-  class History {
-  public:
-    enum PacketType {
-      ePacketTypeInvalid = 0,
-      ePacketTypeSend,
-      ePacketTypeRecv
-    };
-
-    struct Entry {
-      Entry()
-          : packet(), type(ePacketTypeInvalid), bytes_transmitted(0),
-            packet_idx(0), tid(LLDB_INVALID_THREAD_ID) {}
-
-      void Clear() {
-        packet.clear();
-        type = ePacketTypeInvalid;
-        bytes_transmitted = 0;
-        packet_idx = 0;
-        tid = LLDB_INVALID_THREAD_ID;
-      }
-      std::string packet;
-      PacketType type;
-      uint32_t bytes_transmitted;
-      uint32_t packet_idx;
-      lldb::tid_t tid;
-    };
-
-    History(uint32_t size);
-
-    ~History();
-
-    // For single char packets for ack, nack and /x03
-    void AddPacket(char packet_char, PacketType type,
-                   uint32_t bytes_transmitted);
-
-    void AddPacket(const std::string &src, uint32_t src_len, PacketType type,
-                   uint32_t bytes_transmitted);
-
-    void Dump(Stream &strm) const;
-
-    void Dump(Log *log) const;
-
-    bool DidDumpToLog() const { return m_dumped_to_log; }
-
-  protected:
-    uint32_t GetFirstSavedPacketIndex() const {
-      if (m_total_packet_count < m_packets.size())
-        return 0;
-      else
-        return m_curr_idx + 1;
-    }
-
-    uint32_t GetNumPacketsInHistory() const {
-      if (m_total_packet_count < m_packets.size())
-        return m_total_packet_count;
-      else
-        return (uint32_t)m_packets.size();
-    }
-
-    uint32_t GetNextIndex() {
-      ++m_total_packet_count;
-      const uint32_t idx = m_curr_idx;
-      m_curr_idx = NormalizeIndex(idx + 1);
-      return idx;
-    }
-
-    uint32_t NormalizeIndex(uint32_t i) const { return i % m_packets.size(); }
-
-    std::vector<Entry> m_packets;
-    uint32_t m_curr_idx;
-    uint32_t m_total_packet_count;
-    mutable bool m_dumped_to_log;
-  };
-
   std::chrono::seconds m_packet_timeout;
   uint32_t m_echo_number;
   LazyBool m_supports_qEcho;
-  History m_history;
+  GDBRemoteCommunicationHistory m_history;
   bool m_send_acks;
   bool m_is_platform; // Set to true if this class represents a platform,
                       // false if this class represents a debug session for
@@ -228,9 +158,16 @@ protected:
   CompressionType m_compression_type;
 
   PacketResult SendPacketNoLock(llvm::StringRef payload);
+  PacketResult SendRawPacketNoLock(llvm::StringRef payload,
+                                   bool skip_ack = false);
 
   PacketResult ReadPacket(StringExtractorGDBRemote &response,
                           Timeout<std::micro> timeout, bool sync_on_timeout);
+
+  PacketResult ReadPacketWithOutputSupport(
+      StringExtractorGDBRemote &response, Timeout<std::micro> timeout,
+      bool sync_on_timeout,
+      llvm::function_ref<void(llvm::StringRef)> output_callback);
 
   // Pop a packet from the queue in a thread safe manner
   PacketResult PopPacketFromQueue(StringExtractorGDBRemote &response,
@@ -255,8 +192,8 @@ protected:
   // on m_bytes.  The checksum was for the compressed packet.
   bool DecompressPacket();
 
-  Error StartListenThread(const char *hostname = "127.0.0.1",
-                          uint16_t port = 0);
+  Status StartListenThread(const char *hostname = "127.0.0.1",
+                           uint16_t port = 0);
 
   bool JoinListenThread();
 
@@ -284,10 +221,27 @@ private:
   HostThread m_listen_thread;
   std::string m_listen_url;
 
-  DISALLOW_COPY_AND_ASSIGN(GDBRemoteCommunication);
+#if defined(HAVE_LIBCOMPRESSION)
+  CompressionType m_decompression_scratch_type = CompressionType::None;
+  void *m_decompression_scratch = nullptr;
+#endif
+
+  GDBRemoteCommunication(const GDBRemoteCommunication &) = delete;
+  const GDBRemoteCommunication &
+  operator=(const GDBRemoteCommunication &) = delete;
 };
 
 } // namespace process_gdb_remote
 } // namespace lldb_private
 
-#endif // liblldb_GDBRemoteCommunication_h_
+namespace llvm {
+template <>
+struct format_provider<
+    lldb_private::process_gdb_remote::GDBRemoteCommunication::PacketResult> {
+  static void format(const lldb_private::process_gdb_remote::
+                         GDBRemoteCommunication::PacketResult &state,
+                     raw_ostream &Stream, StringRef Style);
+};
+} // namespace llvm
+
+#endif // LLDB_SOURCE_PLUGINS_PROCESS_GDB_REMOTE_GDBREMOTECOMMUNICATION_H

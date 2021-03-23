@@ -1,12 +1,12 @@
 // RUN: rm -rf %t
-// RUN: %clang_cc1 -Wauto-import -fmodules-cache-path=%t -fmodules -fimplicit-module-maps -F %S/Inputs -F %S/Inputs/DependsOnModule.framework/Frameworks %s -verify
-// RUN: %clang_cc1 -x objective-c++ -Wauto-import -fmodules-cache-path=%t -fmodules -fimplicit-module-maps -F %S/Inputs -F %S/Inputs/DependsOnModule.framework/Frameworks %s -verify
+// RUN: %clang_cc1 -Wauto-import -Wno-private-module -fmodules-cache-path=%t -fmodules -fimplicit-module-maps -F %S/Inputs -F %S/Inputs/DependsOnModule.framework/Frameworks %s -verify
+// RUN: %clang_cc1 -x objective-c++ -Wauto-import -Wno-private-module -fmodules-cache-path=%t -fmodules -fimplicit-module-maps -F %S/Inputs -F %S/Inputs/DependsOnModule.framework/Frameworks %s -verify
 
 @import DependsOnModule;
 
 void testSubFramework() {
   float *sf1 = sub_framework; // expected-error{{declaration of 'sub_framework' must be imported from module 'DependsOnModule.SubFramework' before it is required}}
-  // expected-note@Inputs/DependsOnModule.framework/Frameworks/SubFramework.framework/Headers/SubFramework.h:2 {{previous}}
+  // expected-note@Inputs/DependsOnModule.framework/Frameworks/SubFramework.framework/Headers/SubFramework.h:2 {{here}}
 }
 
 @import DependsOnModule.SubFramework;

@@ -1,193 +1,523 @@
 //===- OutputSections.cpp -------------------------------------------------===//
 //
-//                             The LLVM Linker
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
 #include "OutputSections.h"
 #include "Config.h"
 #include "LinkerScript.h"
-#include "Memory.h"
-#include "Strings.h"
 #include "SymbolTable.h"
 #include "SyntheticSections.h"
 #include "Target.h"
-#include "Threads.h"
+#include "lld/Common/Memory.h"
+#include "lld/Common/Strings.h"
+#include "llvm/BinaryFormat/Dwarf.h"
 #include "llvm/Support/Compression.h"
-#include "llvm/Support/Dwarf.h"
 #include "llvm/Support/MD5.h"
 #include "llvm/Support/MathExtras.h"
+#include "llvm/Support/Parallel.h"
 #include "llvm/Support/SHA1.h"
+#include "llvm/Support/TimeProfiler.h"
+#include <regex>
+#include <unordered_set>
 
 using namespace llvm;
 using namespace llvm::dwarf;
 using namespace llvm::object;
 using namespace llvm::support::endian;
 using namespace llvm::ELF;
-
 using namespace lld;
 using namespace lld::elf;
 
-uint8_t Out::First;
-OutputSection *Out::Opd;
-uint8_t *Out::OpdBuf;
-PhdrEntry *Out::TlsPhdr;
-OutputSection *Out::DebugInfo;
-OutputSection *Out::ElfHeader;
-OutputSection *Out::ProgramHeaders;
-OutputSection *Out::PreinitArray;
-OutputSection *Out::InitArray;
-OutputSection *Out::FiniArray;
+uint8_t *Out::bufferStart;
+uint8_t Out::first;
+PhdrEntry *Out::tlsPhdr;
+OutputSection *Out::elfHeader;
+OutputSection *Out::programHeaders;
+OutputSection *Out::preinitArray;
+OutputSection *Out::initArray;
+OutputSection *Out::finiArray;
+
+std::vector<OutputSection *> elf::outputSections;
 
 uint32_t OutputSection::getPhdrFlags() const {
-  uint32_t Ret = PF_R;
-  if (Flags & SHF_WRITE)
-    Ret |= PF_W;
-  if (Flags & SHF_EXECINSTR)
-    Ret |= PF_X;
-  return Ret;
+  uint32_t ret = 0;
+  if (config->emachine != EM_ARM || !(flags & SHF_ARM_PURECODE))
+    ret |= PF_R;
+  if (flags & SHF_WRITE)
+    ret |= PF_W;
+  if (flags & SHF_EXECINSTR)
+    ret |= PF_X;
+  return ret;
 }
 
 template <class ELFT>
-void OutputSection::writeHeaderTo(typename ELFT::Shdr *Shdr) {
-  Shdr->sh_entsize = Entsize;
-  Shdr->sh_addralign = Alignment;
-  Shdr->sh_type = Type;
-  Shdr->sh_offset = Offset;
-  Shdr->sh_flags = Flags;
-  Shdr->sh_info = Info;
-  Shdr->sh_link = Link;
-  Shdr->sh_addr = Addr;
-  Shdr->sh_size = Size;
-  Shdr->sh_name = ShName;
+void OutputSection::writeHeaderTo(typename ELFT::Shdr *shdr) {
+  shdr->sh_entsize = entsize;
+  shdr->sh_addralign = alignment;
+  shdr->sh_type = type;
+  shdr->sh_offset = offset;
+  shdr->sh_flags = flags;
+  shdr->sh_info = info;
+  shdr->sh_link = link;
+  shdr->sh_addr = addr;
+  shdr->sh_size = size;
+  shdr->sh_name = shName;
 }
 
-OutputSection::OutputSection(StringRef Name, uint32_t Type, uint64_t Flags)
-    : SectionBase(Output, Name, Flags, /*Entsize*/ 0, /*Alignment*/ 1, Type,
-                  /*Info*/ 0,
-                  /*Link*/ 0),
-      SectionIndex(INT_MAX) {}
+OutputSection::OutputSection(StringRef name, uint32_t type, uint64_t flags)
+    : BaseCommand(OutputSectionKind),
+      SectionBase(Output, name, flags, /*Entsize*/ 0, /*Alignment*/ 1, type,
+                  /*Info*/ 0, /*Link*/ 0) {}
 
-static bool compareByFilePosition(InputSection *A, InputSection *B) {
-  // Synthetic doesn't have link order dependecy, stable_sort will keep it last
-  if (A->kind() == InputSectionBase::Synthetic ||
-      B->kind() == InputSectionBase::Synthetic)
-    return false;
-  auto *LA = cast<InputSection>(A->getLinkOrderDep());
-  auto *LB = cast<InputSection>(B->getLinkOrderDep());
-  OutputSection *AOut = LA->OutSec;
-  OutputSection *BOut = LB->OutSec;
-  if (AOut != BOut)
-    return AOut->SectionIndex < BOut->SectionIndex;
-  return LA->OutSecOff < LB->OutSecOff;
+// We allow sections of types listed below to merged into a
+// single progbits section. This is typically done by linker
+// scripts. Merging nobits and progbits will force disk space
+// to be allocated for nobits sections. Other ones don't require
+// any special treatment on top of progbits, so there doesn't
+// seem to be a harm in merging them.
+//
+// NOTE: clang since rL252300 emits SHT_X86_64_UNWIND .eh_frame sections. Allow
+// them to be merged into SHT_PROGBITS .eh_frame (GNU as .cfi_*).
+static bool canMergeToProgbits(unsigned type) {
+  return type == SHT_NOBITS || type == SHT_PROGBITS || type == SHT_INIT_ARRAY ||
+         type == SHT_PREINIT_ARRAY || type == SHT_FINI_ARRAY ||
+         type == SHT_NOTE ||
+         (type == SHT_X86_64_UNWIND && config->emachine == EM_X86_64);
+}
+
+// Record that isec will be placed in the OutputSection. isec does not become
+// permanent until finalizeInputSections() is called. The function should not be
+// used after finalizeInputSections() is called. If you need to add an
+// InputSection post finalizeInputSections(), then you must do the following:
+//
+// 1. Find or create an InputSectionDescription to hold InputSection.
+// 2. Add the InputSection to the InputSectionDescription::sections.
+// 3. Call commitSection(isec).
+void OutputSection::recordSection(InputSectionBase *isec) {
+  partition = isec->partition;
+  isec->parent = this;
+  if (sectionCommands.empty() ||
+      !isa<InputSectionDescription>(sectionCommands.back()))
+    sectionCommands.push_back(make<InputSectionDescription>(""));
+  auto *isd = cast<InputSectionDescription>(sectionCommands.back());
+  isd->sectionBases.push_back(isec);
+}
+
+// Update fields (type, flags, alignment, etc) according to the InputSection
+// isec. Also check whether the InputSection flags and type are consistent with
+// other InputSections.
+void OutputSection::commitSection(InputSection *isec) {
+  if (!hasInputSections) {
+    // If IS is the first section to be added to this section,
+    // initialize type, entsize and flags from isec.
+    hasInputSections = true;
+    type = isec->type;
+    entsize = isec->entsize;
+    flags = isec->flags;
+  } else {
+    // Otherwise, check if new type or flags are compatible with existing ones.
+    if ((flags ^ isec->flags) & SHF_TLS)
+      error("incompatible section flags for " + name + "\n>>> " + toString(isec) +
+            ": 0x" + utohexstr(isec->flags) + "\n>>> output section " + name +
+            ": 0x" + utohexstr(flags));
+
+    if (type != isec->type) {
+      if (!canMergeToProgbits(type) || !canMergeToProgbits(isec->type))
+        error("section type mismatch for " + isec->name + "\n>>> " +
+              toString(isec) + ": " +
+              getELFSectionTypeName(config->emachine, isec->type) +
+              "\n>>> output section " + name + ": " +
+              getELFSectionTypeName(config->emachine, type));
+      type = SHT_PROGBITS;
+    }
+  }
+  if (noload)
+    type = SHT_NOBITS;
+
+  isec->parent = this;
+  uint64_t andMask =
+      config->emachine == EM_ARM ? (uint64_t)SHF_ARM_PURECODE : 0;
+  uint64_t orMask = ~andMask;
+  uint64_t andFlags = (flags & isec->flags) & andMask;
+  uint64_t orFlags = (flags | isec->flags) & orMask;
+  flags = andFlags | orFlags;
+  if (nonAlloc)
+    flags &= ~(uint64_t)SHF_ALLOC;
+
+  alignment = std::max(alignment, isec->alignment);
+
+  // If this section contains a table of fixed-size entries, sh_entsize
+  // holds the element size. If it contains elements of different size we
+  // set sh_entsize to 0.
+  if (entsize != isec->entsize)
+    entsize = 0;
+}
+
+// This function scans over the InputSectionBase list sectionBases to create
+// InputSectionDescription::sections.
+//
+// It removes MergeInputSections from the input section array and adds
+// new synthetic sections at the location of the first input section
+// that it replaces. It then finalizes each synthetic section in order
+// to compute an output offset for each piece of each input section.
+void OutputSection::finalizeInputSections() {
+  std::vector<MergeSyntheticSection *> mergeSections;
+  for (BaseCommand *base : sectionCommands) {
+    auto *cmd = dyn_cast<InputSectionDescription>(base);
+    if (!cmd)
+      continue;
+    cmd->sections.reserve(cmd->sectionBases.size());
+    for (InputSectionBase *s : cmd->sectionBases) {
+      MergeInputSection *ms = dyn_cast<MergeInputSection>(s);
+      if (!ms) {
+        cmd->sections.push_back(cast<InputSection>(s));
+        continue;
+      }
+
+      // We do not want to handle sections that are not alive, so just remove
+      // them instead of trying to merge.
+      if (!ms->isLive())
+        continue;
+
+      auto i = llvm::find_if(mergeSections, [=](MergeSyntheticSection *sec) {
+        // While we could create a single synthetic section for two different
+        // values of Entsize, it is better to take Entsize into consideration.
+        //
+        // With a single synthetic section no two pieces with different Entsize
+        // could be equal, so we may as well have two sections.
+        //
+        // Using Entsize in here also allows us to propagate it to the synthetic
+        // section.
+        //
+        // SHF_STRINGS section with different alignments should not be merged.
+        return sec->flags == ms->flags && sec->entsize == ms->entsize &&
+               (sec->alignment == ms->alignment || !(sec->flags & SHF_STRINGS));
+      });
+      if (i == mergeSections.end()) {
+        MergeSyntheticSection *syn =
+            createMergeSynthetic(name, ms->type, ms->flags, ms->alignment);
+        mergeSections.push_back(syn);
+        i = std::prev(mergeSections.end());
+        syn->entsize = ms->entsize;
+        cmd->sections.push_back(syn);
+      }
+      (*i)->addSection(ms);
+    }
+
+    // sectionBases should not be used from this point onwards. Clear it to
+    // catch misuses.
+    cmd->sectionBases.clear();
+
+    // Some input sections may be removed from the list after ICF.
+    for (InputSection *s : cmd->sections)
+      commitSection(s);
+  }
+  for (auto *ms : mergeSections)
+    ms->finalizeContents();
+}
+
+static void sortByOrder(MutableArrayRef<InputSection *> in,
+                        llvm::function_ref<int(InputSectionBase *s)> order) {
+  std::vector<std::pair<int, InputSection *>> v;
+  for (InputSection *s : in)
+    v.push_back({order(s), s});
+  llvm::stable_sort(v, less_first());
+
+  for (size_t i = 0; i < v.size(); ++i)
+    in[i] = v[i].second;
+}
+
+uint64_t elf::getHeaderSize() {
+  if (config->oFormatBinary)
+    return 0;
+  return Out::elfHeader->size + Out::programHeaders->size;
+}
+
+bool OutputSection::classof(const BaseCommand *c) {
+  return c->kind == OutputSectionKind;
+}
+
+void OutputSection::sort(llvm::function_ref<int(InputSectionBase *s)> order) {
+  assert(isLive());
+  for (BaseCommand *b : sectionCommands)
+    if (auto *isd = dyn_cast<InputSectionDescription>(b))
+      sortByOrder(isd->sections, order);
+}
+
+static void nopInstrFill(uint8_t *buf, size_t size) {
+  if (size == 0)
+    return;
+  unsigned i = 0;
+  if (size == 0)
+    return;
+  std::vector<std::vector<uint8_t>> nopFiller = *target->nopInstrs;
+  unsigned num = size / nopFiller.back().size();
+  for (unsigned c = 0; c < num; ++c) {
+    memcpy(buf + i, nopFiller.back().data(), nopFiller.back().size());
+    i += nopFiller.back().size();
+  }
+  unsigned remaining = size - i;
+  if (!remaining)
+    return;
+  assert(nopFiller[remaining - 1].size() == remaining);
+  memcpy(buf + i, nopFiller[remaining - 1].data(), remaining);
+}
+
+// Fill [Buf, Buf + Size) with Filler.
+// This is used for linker script "=fillexp" command.
+static void fill(uint8_t *buf, size_t size,
+                 const std::array<uint8_t, 4> &filler) {
+  size_t i = 0;
+  for (; i + 4 < size; i += 4)
+    memcpy(buf + i, filler.data(), 4);
+  memcpy(buf + i, filler.data(), size - i);
 }
 
 // Compress section contents if this section contains debug info.
 template <class ELFT> void OutputSection::maybeCompress() {
-  typedef typename ELFT::Chdr Elf_Chdr;
+  using Elf_Chdr = typename ELFT::Chdr;
 
   // Compress only DWARF debug sections.
-  if (!Config->CompressDebugSections || (Flags & SHF_ALLOC) ||
-      !Name.startswith(".debug_"))
+  if (!config->compressDebugSections || (flags & SHF_ALLOC) ||
+      !name.startswith(".debug_"))
     return;
 
+  llvm::TimeTraceScope timeScope("Compress debug sections");
+
   // Create a section header.
-  ZDebugHeader.resize(sizeof(Elf_Chdr));
-  auto *Hdr = reinterpret_cast<Elf_Chdr *>(ZDebugHeader.data());
-  Hdr->ch_type = ELFCOMPRESS_ZLIB;
-  Hdr->ch_size = Size;
-  Hdr->ch_addralign = Alignment;
+  zDebugHeader.resize(sizeof(Elf_Chdr));
+  auto *hdr = reinterpret_cast<Elf_Chdr *>(zDebugHeader.data());
+  hdr->ch_type = ELFCOMPRESS_ZLIB;
+  hdr->ch_size = size;
+  hdr->ch_addralign = alignment;
 
   // Write section contents to a temporary buffer and compress it.
-  std::vector<uint8_t> Buf(Size);
-  writeTo<ELFT>(Buf.data());
-  if (Error E = zlib::compress(toStringRef(Buf), CompressedData))
-    fatal("compress failed: " + llvm::toString(std::move(E)));
+  std::vector<uint8_t> buf(size);
+  writeTo<ELFT>(buf.data());
+  // We chose 1 as the default compression level because it is the fastest. If
+  // -O2 is given, we use level 6 to compress debug info more by ~15%. We found
+  // that level 7 to 9 doesn't make much difference (~1% more compression) while
+  // they take significant amount of time (~2x), so level 6 seems enough.
+  if (Error e = zlib::compress(toStringRef(buf), compressedData,
+                               config->optimize >= 2 ? 6 : 1))
+    fatal("compress failed: " + llvm::toString(std::move(e)));
 
   // Update section headers.
-  Size = sizeof(Elf_Chdr) + CompressedData.size();
-  Flags |= SHF_COMPRESSED;
+  size = sizeof(Elf_Chdr) + compressedData.size();
+  flags |= SHF_COMPRESSED;
 }
 
-template <class ELFT> void OutputSection::finalize() {
-  if ((this->Flags & SHF_LINK_ORDER) && !this->Sections.empty()) {
-    std::sort(Sections.begin(), Sections.end(), compareByFilePosition);
-    assignOffsets();
+static void writeInt(uint8_t *buf, uint64_t data, uint64_t size) {
+  if (size == 1)
+    *buf = data;
+  else if (size == 2)
+    write16(buf, data);
+  else if (size == 4)
+    write32(buf, data);
+  else if (size == 8)
+    write64(buf, data);
+  else
+    llvm_unreachable("unsupported Size argument");
+}
 
+template <class ELFT> void OutputSection::writeTo(uint8_t *buf) {
+  if (type == SHT_NOBITS)
+    return;
+
+  // If -compress-debug-section is specified and if this is a debug section,
+  // we've already compressed section contents. If that's the case,
+  // just write it down.
+  if (!compressedData.empty()) {
+    memcpy(buf, zDebugHeader.data(), zDebugHeader.size());
+    memcpy(buf + zDebugHeader.size(), compressedData.data(),
+           compressedData.size());
+    return;
+  }
+
+  // Write leading padding.
+  std::vector<InputSection *> sections = getInputSections(this);
+  std::array<uint8_t, 4> filler = getFiller();
+  bool nonZeroFiller = read32(filler.data()) != 0;
+  if (nonZeroFiller)
+    fill(buf, sections.empty() ? size : sections[0]->outSecOff, filler);
+
+  parallelForEachN(0, sections.size(), [&](size_t i) {
+    InputSection *isec = sections[i];
+    isec->writeTo<ELFT>(buf);
+
+    // Fill gaps between sections.
+    if (nonZeroFiller) {
+      uint8_t *start = buf + isec->outSecOff + isec->getSize();
+      uint8_t *end;
+      if (i + 1 == sections.size())
+        end = buf + size;
+      else
+        end = buf + sections[i + 1]->outSecOff;
+      if (isec->nopFiller) {
+        assert(target->nopInstrs);
+        nopInstrFill(start, end - start);
+      } else
+        fill(start, end - start, filler);
+    }
+  });
+
+  // Linker scripts may have BYTE()-family commands with which you
+  // can write arbitrary bytes to the output. Process them if any.
+  for (BaseCommand *base : sectionCommands)
+    if (auto *data = dyn_cast<ByteCommand>(base))
+      writeInt(buf + data->offset, data->expression().getValue(), data->size);
+}
+
+static void finalizeShtGroup(OutputSection *os,
+                             InputSection *section) {
+  assert(config->relocatable);
+
+  // sh_link field for SHT_GROUP sections should contain the section index of
+  // the symbol table.
+  os->link = in.symTab->getParent()->sectionIndex;
+
+  // sh_info then contain index of an entry in symbol table section which
+  // provides signature of the section group.
+  ArrayRef<Symbol *> symbols = section->file->getSymbols();
+  os->info = in.symTab->getSymbolIndex(symbols[section->info]);
+
+  // Some group members may be combined or discarded, so we need to compute the
+  // new size. The content will be rewritten in InputSection::copyShtGroup.
+  std::unordered_set<uint32_t> seen;
+  ArrayRef<InputSectionBase *> sections = section->file->getSections();
+  for (const uint32_t &idx : section->getDataAs<uint32_t>().slice(1))
+    if (OutputSection *osec = sections[read32(&idx)]->getOutputSection())
+      seen.insert(osec->sectionIndex);
+  os->size = (1 + seen.size()) * sizeof(uint32_t);
+}
+
+void OutputSection::finalize() {
+  InputSection *first = getFirstInputSection(this);
+
+  if (flags & SHF_LINK_ORDER) {
     // We must preserve the link order dependency of sections with the
     // SHF_LINK_ORDER flag. The dependency is indicated by the sh_link field. We
     // need to translate the InputSection sh_link to the OutputSection sh_link,
     // all InputSections in the OutputSection have the same dependency.
-    if (auto *D = this->Sections.front()->getLinkOrderDep())
-      this->Link = D->OutSec->SectionIndex;
+    if (auto *ex = dyn_cast<ARMExidxSyntheticSection>(first))
+      link = ex->getLinkOrderDep()->getParent()->sectionIndex;
+    else if (first->flags & SHF_LINK_ORDER)
+      if (auto *d = first->getLinkOrderDep())
+        link = d->getParent()->sectionIndex;
   }
 
-  uint32_t Type = this->Type;
-  if (!Config->CopyRelocs || (Type != SHT_RELA && Type != SHT_REL))
+  if (type == SHT_GROUP) {
+    finalizeShtGroup(this, first);
+    return;
+  }
+
+  if (!config->copyRelocs || (type != SHT_RELA && type != SHT_REL))
     return;
 
-  InputSection *First = Sections[0];
-  if (isa<SyntheticSection>(First))
+  // Skip if 'first' is synthetic, i.e. not a section created by --emit-relocs.
+  // Normally 'type' was changed by 'first' so 'first' should be non-null.
+  // However, if the output section is .rela.dyn, 'type' can be set by the empty
+  // synthetic .rela.plt and first can be null.
+  if (!first || isa<SyntheticSection>(first))
     return;
 
-  this->Link = In<ELFT>::SymTab->OutSec->SectionIndex;
+  link = in.symTab->getParent()->sectionIndex;
   // sh_info for SHT_REL[A] sections should contain the section header index of
   // the section to which the relocation applies.
-  InputSectionBase *S = First->getRelocatedSection();
-  this->Info = S->OutSec->SectionIndex;
+  InputSectionBase *s = first->getRelocatedSection();
+  info = s->getOutputSection()->sectionIndex;
+  flags |= SHF_INFO_LINK;
 }
 
-static uint64_t updateOffset(uint64_t Off, InputSection *S) {
-  Off = alignTo(Off, S->Alignment);
-  S->OutSecOff = Off;
-  return Off + S->getSize();
+// Returns true if S is in one of the many forms the compiler driver may pass
+// crtbegin files.
+//
+// Gcc uses any of crtbegin[<empty>|S|T].o.
+// Clang uses Gcc's plus clang_rt.crtbegin[<empty>|S|T][-<arch>|<empty>].o.
+
+static bool isCrtbegin(StringRef s) {
+  static std::regex re(R"((clang_rt\.)?crtbegin[ST]?(-.*)?\.o)");
+  s = sys::path::filename(s);
+  return std::regex_match(s.begin(), s.end(), re);
 }
 
-void OutputSection::addSection(InputSection *S) {
-  assert(S->Live);
-  Sections.push_back(S);
-  S->OutSec = this;
-  this->updateAlignment(S->Alignment);
-
-  // The actual offsets will be computed by assignAddresses. For now, use
-  // crude approximation so that it is at least easy for other code to know the
-  // section order. It is also used to calculate the output section size early
-  // for compressed debug sections.
-  this->Size = updateOffset(Size, S);
-
-  // If this section contains a table of fixed-size entries, sh_entsize
-  // holds the element size. Consequently, if this contains two or more
-  // input sections, all of them must have the same sh_entsize. However,
-  // you can put different types of input sections into one output
-  // sectin by using linker scripts. I don't know what to do here.
-  // Probably we sholuld handle that as an error. But for now we just
-  // pick the largest sh_entsize.
-  this->Entsize = std::max(this->Entsize, S->Entsize);
+static bool isCrtend(StringRef s) {
+  static std::regex re(R"((clang_rt\.)?crtend[ST]?(-.*)?\.o)");
+  s = sys::path::filename(s);
+  return std::regex_match(s.begin(), s.end(), re);
 }
 
-// This function is called after we sort input sections
-// and scan relocations to setup sections' offsets.
-void OutputSection::assignOffsets() {
-  uint64_t Off = 0;
-  for (InputSection *S : Sections)
-    Off = updateOffset(Off, S);
-  this->Size = Off;
+// .ctors and .dtors are sorted by this order:
+//
+// 1. .ctors/.dtors in crtbegin (which contains a sentinel value -1).
+// 2. The section is named ".ctors" or ".dtors" (priority: 65536).
+// 3. The section has an optional priority value in the form of ".ctors.N" or
+//    ".dtors.N" where N is a number in the form of %05u (priority: 65535-N).
+// 4. .ctors/.dtors in crtend (which contains a sentinel value 0).
+//
+// For 2 and 3, the sections are sorted by priority from high to low, e.g.
+// .ctors (65536), .ctors.00100 (65436), .ctors.00200 (65336).  In GNU ld's
+// internal linker scripts, the sorting is by string comparison which can
+// achieve the same goal given the optional priority values are of the same
+// length.
+//
+// In an ideal world, we don't need this function because .init_array and
+// .ctors are duplicate features (and .init_array is newer.) However, there
+// are too many real-world use cases of .ctors, so we had no choice to
+// support that with this rather ad-hoc semantics.
+static bool compCtors(const InputSection *a, const InputSection *b) {
+  bool beginA = isCrtbegin(a->file->getName());
+  bool beginB = isCrtbegin(b->file->getName());
+  if (beginA != beginB)
+    return beginA;
+  bool endA = isCrtend(a->file->getName());
+  bool endB = isCrtend(b->file->getName());
+  if (endA != endB)
+    return endB;
+  return getPriority(a->name) > getPriority(b->name);
 }
 
-void OutputSection::sort(std::function<int(InputSectionBase *S)> Order) {
-  typedef std::pair<unsigned, InputSection *> Pair;
-  auto Comp = [](const Pair &A, const Pair &B) { return A.first < B.first; };
+// Sorts input sections by the special rules for .ctors and .dtors.
+// Unfortunately, the rules are different from the one for .{init,fini}_array.
+// Read the comment above.
+void OutputSection::sortCtorsDtors() {
+  assert(sectionCommands.size() == 1);
+  auto *isd = cast<InputSectionDescription>(sectionCommands[0]);
+  llvm::stable_sort(isd->sections, compCtors);
+}
 
-  std::vector<Pair> V;
-  for (InputSection *S : Sections)
-    V.push_back({Order(S), S});
-  std::stable_sort(V.begin(), V.end(), Comp);
-  Sections.clear();
-  for (Pair &P : V)
-    Sections.push_back(P.second);
+// If an input string is in the form of "foo.N" where N is a number, return N
+// (65535-N if .ctors.N or .dtors.N). Otherwise, returns 65536, which is one
+// greater than the lowest priority.
+int elf::getPriority(StringRef s) {
+  size_t pos = s.rfind('.');
+  if (pos == StringRef::npos)
+    return 65536;
+  int v = 65536;
+  if (to_integer(s.substr(pos + 1), v, 10) &&
+      (pos == 6 && (s.startswith(".ctors") || s.startswith(".dtors"))))
+    v = 65535 - v;
+  return v;
+}
+
+InputSection *elf::getFirstInputSection(const OutputSection *os) {
+  for (BaseCommand *base : os->sectionCommands)
+    if (auto *isd = dyn_cast<InputSectionDescription>(base))
+      if (!isd->sections.empty())
+        return isd->sections[0];
+  return nullptr;
+}
+
+std::vector<InputSection *> elf::getInputSections(const OutputSection *os) {
+  std::vector<InputSection *> ret;
+  for (BaseCommand *base : os->sectionCommands)
+    if (auto *isd = dyn_cast<InputSectionDescription>(base))
+      ret.insert(ret.end(), isd->sections.begin(), isd->sections.end());
+  return ret;
 }
 
 // Sorts input sections by section name suffixes, so that .foo.N comes
@@ -198,273 +528,15 @@ void OutputSection::sort(std::function<int(InputSectionBase *S)> Order) {
 // For more detail, read the section of the GCC's manual about init_priority.
 void OutputSection::sortInitFini() {
   // Sort sections by priority.
-  sort([](InputSectionBase *S) { return getPriority(S->Name); });
+  sort([](InputSectionBase *s) { return getPriority(s->name); });
 }
 
-// Returns true if S matches /Filename.?\.o$/.
-static bool isCrtBeginEnd(StringRef S, StringRef Filename) {
-  if (!S.endswith(".o"))
-    return false;
-  S = S.drop_back(2);
-  if (S.endswith(Filename))
-    return true;
-  return !S.empty() && S.drop_back().endswith(Filename);
-}
-
-static bool isCrtbegin(StringRef S) { return isCrtBeginEnd(S, "crtbegin"); }
-static bool isCrtend(StringRef S) { return isCrtBeginEnd(S, "crtend"); }
-
-// .ctors and .dtors are sorted by this priority from highest to lowest.
-//
-//  1. The section was contained in crtbegin (crtbegin contains
-//     some sentinel value in its .ctors and .dtors so that the runtime
-//     can find the beginning of the sections.)
-//
-//  2. The section has an optional priority value in the form of ".ctors.N"
-//     or ".dtors.N" where N is a number. Unlike .{init,fini}_array,
-//     they are compared as string rather than number.
-//
-//  3. The section is just ".ctors" or ".dtors".
-//
-//  4. The section was contained in crtend, which contains an end marker.
-//
-// In an ideal world, we don't need this function because .init_array and
-// .ctors are duplicate features (and .init_array is newer.) However, there
-// are too many real-world use cases of .ctors, so we had no choice to
-// support that with this rather ad-hoc semantics.
-static bool compCtors(const InputSection *A, const InputSection *B) {
-  bool BeginA = isCrtbegin(A->File->getName());
-  bool BeginB = isCrtbegin(B->File->getName());
-  if (BeginA != BeginB)
-    return BeginA;
-  bool EndA = isCrtend(A->File->getName());
-  bool EndB = isCrtend(B->File->getName());
-  if (EndA != EndB)
-    return EndB;
-  StringRef X = A->Name;
-  StringRef Y = B->Name;
-  assert(X.startswith(".ctors") || X.startswith(".dtors"));
-  assert(Y.startswith(".ctors") || Y.startswith(".dtors"));
-  X = X.substr(6);
-  Y = Y.substr(6);
-  if (X.empty() && Y.empty())
-    return false;
-  return X < Y;
-}
-
-// Sorts input sections by the special rules for .ctors and .dtors.
-// Unfortunately, the rules are different from the one for .{init,fini}_array.
-// Read the comment above.
-void OutputSection::sortCtorsDtors() {
-  std::stable_sort(Sections.begin(), Sections.end(), compCtors);
-}
-
-// Fill [Buf, Buf + Size) with Filler.
-// This is used for linker script "=fillexp" command.
-static void fill(uint8_t *Buf, size_t Size, uint32_t Filler) {
-  size_t I = 0;
-  for (; I + 4 < Size; I += 4)
-    memcpy(Buf + I, &Filler, 4);
-  memcpy(Buf + I, &Filler, Size - I);
-}
-
-uint32_t OutputSection::getFiller() {
-  // Determine what to fill gaps between InputSections with, as specified by the
-  // linker script. If nothing is specified and this is an executable section,
-  // fall back to trap instructions to prevent bad diassembly and detect invalid
-  // jumps to padding.
-  if (Optional<uint32_t> Filler = Script->getFiller(Name))
-    return *Filler;
-  if (Flags & SHF_EXECINSTR)
-    return Target->TrapInstr;
-  return 0;
-}
-
-template <class ELFT> void OutputSection::writeTo(uint8_t *Buf) {
-  Loc = Buf;
-
-  // We may have already rendered compressed content when using
-  // -compress-debug-sections option. Write it together with header.
-  if (!CompressedData.empty()) {
-    memcpy(Buf, ZDebugHeader.data(), ZDebugHeader.size());
-    memcpy(Buf + ZDebugHeader.size(), CompressedData.data(),
-           CompressedData.size());
-    return;
-  }
-
-  // Write leading padding.
-  uint32_t Filler = getFiller();
-  if (Filler)
-    fill(Buf, Sections.empty() ? Size : Sections[0]->OutSecOff, Filler);
-
-  parallelFor(0, Sections.size(), [=](size_t I) {
-    InputSection *Sec = Sections[I];
-    Sec->writeTo<ELFT>(Buf);
-
-    // Fill gaps between sections.
-    if (Filler) {
-      uint8_t *Start = Buf + Sec->OutSecOff + Sec->getSize();
-      uint8_t *End;
-      if (I + 1 == Sections.size())
-        End = Buf + Size;
-      else
-        End = Buf + Sections[I + 1]->OutSecOff;
-      fill(Start, End - Start, Filler);
-    }
-  });
-
-  // Linker scripts may have BYTE()-family commands with which you
-  // can write arbitrary bytes to the output. Process them if any.
-  Script->writeDataBytes(this, Buf);
-}
-
-static uint64_t getOutFlags(InputSectionBase *S) {
-  return S->Flags & ~SHF_GROUP & ~SHF_COMPRESSED;
-}
-
-static SectionKey createKey(InputSectionBase *C, StringRef OutsecName) {
-  //  The ELF spec just says
-  // ----------------------------------------------------------------
-  // In the first phase, input sections that match in name, type and
-  // attribute flags should be concatenated into single sections.
-  // ----------------------------------------------------------------
-  //
-  // However, it is clear that at least some flags have to be ignored for
-  // section merging. At the very least SHF_GROUP and SHF_COMPRESSED have to be
-  // ignored. We should not have two output .text sections just because one was
-  // in a group and another was not for example.
-  //
-  // It also seems that that wording was a late addition and didn't get the
-  // necessary scrutiny.
-  //
-  // Merging sections with different flags is expected by some users. One
-  // reason is that if one file has
-  //
-  // int *const bar __attribute__((section(".foo"))) = (int *)0;
-  //
-  // gcc with -fPIC will produce a read only .foo section. But if another
-  // file has
-  //
-  // int zed;
-  // int *const bar __attribute__((section(".foo"))) = (int *)&zed;
-  //
-  // gcc with -fPIC will produce a read write section.
-  //
-  // Last but not least, when using linker script the merge rules are forced by
-  // the script. Unfortunately, linker scripts are name based. This means that
-  // expressions like *(.foo*) can refer to multiple input sections with
-  // different flags. We cannot put them in different output sections or we
-  // would produce wrong results for
-  //
-  // start = .; *(.foo.*) end = .; *(.bar)
-  //
-  // and a mapping of .foo1 and .bar1 to one section and .foo2 and .bar2 to
-  // another. The problem is that there is no way to layout those output
-  // sections such that the .foo sections are the only thing between the start
-  // and end symbols.
-  //
-  // Given the above issues, we instead merge sections by name and error on
-  // incompatible types and flags.
-
-  uint32_t Alignment = 0;
-  uint64_t Flags = 0;
-  if (Config->Relocatable && (C->Flags & SHF_MERGE)) {
-    Alignment = std::max<uint64_t>(C->Alignment, C->Entsize);
-    Flags = C->Flags & (SHF_MERGE | SHF_STRINGS);
-  }
-
-  return SectionKey{OutsecName, Flags, Alignment};
-}
-
-OutputSectionFactory::OutputSectionFactory(
-    std::vector<OutputSection *> &OutputSections)
-    : OutputSections(OutputSections) {}
-
-static uint64_t getIncompatibleFlags(uint64_t Flags) {
-  return Flags & (SHF_ALLOC | SHF_TLS);
-}
-
-// We allow sections of types listed below to merged into a
-// single progbits section. This is typically done by linker
-// scripts. Merging nobits and progbits will force disk space
-// to be allocated for nobits sections. Other ones don't require
-// any special treatment on top of progbits, so there doesn't
-// seem to be a harm in merging them.
-static bool canMergeToProgbits(unsigned Type) {
-  return Type == SHT_NOBITS || Type == SHT_PROGBITS || Type == SHT_INIT_ARRAY ||
-         Type == SHT_PREINIT_ARRAY || Type == SHT_FINI_ARRAY ||
-         Type == SHT_NOTE;
-}
-
-static void reportDiscarded(InputSectionBase *IS) {
-  if (!Config->PrintGcSections)
-    return;
-  message("removing unused section from '" + IS->Name + "' in file '" +
-          IS->File->getName());
-}
-
-void OutputSectionFactory::addInputSec(InputSectionBase *IS,
-                                       StringRef OutsecName) {
-  SectionKey Key = createKey(IS, OutsecName);
-  OutputSection *&Sec = Map[Key];
-  return addInputSec(IS, OutsecName, Sec);
-}
-
-void OutputSectionFactory::addInputSec(InputSectionBase *IS,
-                                       StringRef OutsecName,
-                                       OutputSection *&Sec) {
-  if (!IS->Live) {
-    reportDiscarded(IS);
-    return;
-  }
-
-  uint64_t Flags = getOutFlags(IS);
-  if (Sec) {
-    if (getIncompatibleFlags(Sec->Flags) != getIncompatibleFlags(IS->Flags))
-      error("incompatible section flags for " + Sec->Name +
-            "\n>>> " + toString(IS) + ": 0x" + utohexstr(IS->Flags) +
-            "\n>>> output section " + Sec->Name + ": 0x" +
-            utohexstr(Sec->Flags));
-    if (Sec->Type != IS->Type) {
-      if (canMergeToProgbits(Sec->Type) && canMergeToProgbits(IS->Type))
-        Sec->Type = SHT_PROGBITS;
-      else
-        error("Section has different type from others with the same name " +
-              toString(IS));
-    }
-    Sec->Flags |= Flags;
-  } else {
-    Sec = make<OutputSection>(OutsecName, IS->Type, Flags);
-    OutputSections.push_back(Sec);
-  }
-
-  Sec->addSection(cast<InputSection>(IS));
-}
-
-OutputSectionFactory::~OutputSectionFactory() {}
-
-SectionKey DenseMapInfo<SectionKey>::getEmptyKey() {
-  return SectionKey{DenseMapInfo<StringRef>::getEmptyKey(), 0, 0};
-}
-
-SectionKey DenseMapInfo<SectionKey>::getTombstoneKey() {
-  return SectionKey{DenseMapInfo<StringRef>::getTombstoneKey(), 0, 0};
-}
-
-unsigned DenseMapInfo<SectionKey>::getHashValue(const SectionKey &Val) {
-  return hash_combine(Val.Name, Val.Flags, Val.Alignment);
-}
-
-bool DenseMapInfo<SectionKey>::isEqual(const SectionKey &LHS,
-                                       const SectionKey &RHS) {
-  return DenseMapInfo<StringRef>::isEqual(LHS.Name, RHS.Name) &&
-         LHS.Flags == RHS.Flags && LHS.Alignment == RHS.Alignment;
-}
-
-uint64_t elf::getHeaderSize() {
-  if (Config->OFormatBinary)
-    return 0;
-  return Out::ElfHeader->Size + Out::ProgramHeaders->Size;
+std::array<uint8_t, 4> OutputSection::getFiller() {
+  if (filler)
+    return *filler;
+  if (flags & SHF_EXECINSTR)
+    return target->trapInstr;
+  return {0, 0, 0, 0};
 }
 
 template void OutputSection::writeHeaderTo<ELF32LE>(ELF32LE::Shdr *Shdr);
@@ -472,17 +544,12 @@ template void OutputSection::writeHeaderTo<ELF32BE>(ELF32BE::Shdr *Shdr);
 template void OutputSection::writeHeaderTo<ELF64LE>(ELF64LE::Shdr *Shdr);
 template void OutputSection::writeHeaderTo<ELF64BE>(ELF64BE::Shdr *Shdr);
 
-template void OutputSection::finalize<ELF32LE>();
-template void OutputSection::finalize<ELF32BE>();
-template void OutputSection::finalize<ELF64LE>();
-template void OutputSection::finalize<ELF64BE>();
+template void OutputSection::writeTo<ELF32LE>(uint8_t *Buf);
+template void OutputSection::writeTo<ELF32BE>(uint8_t *Buf);
+template void OutputSection::writeTo<ELF64LE>(uint8_t *Buf);
+template void OutputSection::writeTo<ELF64BE>(uint8_t *Buf);
 
 template void OutputSection::maybeCompress<ELF32LE>();
 template void OutputSection::maybeCompress<ELF32BE>();
 template void OutputSection::maybeCompress<ELF64LE>();
 template void OutputSection::maybeCompress<ELF64BE>();
-
-template void OutputSection::writeTo<ELF32LE>(uint8_t *Buf);
-template void OutputSection::writeTo<ELF32BE>(uint8_t *Buf);
-template void OutputSection::writeTo<ELF64LE>(uint8_t *Buf);
-template void OutputSection::writeTo<ELF64BE>(uint8_t *Buf);

@@ -1,5 +1,5 @@
-; RUN: llc -verify-machineinstrs < %s -march=ppc64 -mtriple=powerpc64-unknown-linux-gnu
-; RUN: llc -verify-machineinstrs < %s -march=ppc64le -mtriple=powerpc64le-unknown-linux-gnu
+; RUN: llc -verify-machineinstrs < %s -mtriple=powerpc64-unknown-linux-gnu
+; RUN: llc -verify-machineinstrs < %s -mtriple=powerpc64le-unknown-linux-gnu
 
 %class.Point.1 = type { %class.Tensor.0 }
 %class.Tensor.0 = type { [3 x double] }
@@ -59,7 +59,7 @@
 %struct.TriaNumberCache.52.52 = type { %struct.TriaNumberCache.53.51, i32, %"class.std::vector.12.15", i32, %"class.std::vector.12.15" }
 %struct.TriaNumberCache.53.51 = type { i32, %"class.std::vector.12.15", i32, %"class.std::vector.12.15" }
 
-define void @_ZNK18TriaObjectAccessorILi3ELi3EE10barycenterEv(%class.Point.1* noalias nocapture sret %agg.result, %class.TriaObjectAccessor.57* %this) #0 align 2 {
+define void @_ZNK18TriaObjectAccessorILi3ELi3EE10barycenterEv(%class.Point.1* noalias nocapture sret(%class.Point.1) %agg.result, %class.TriaObjectAccessor.57* %this) #0 align 2 {
 entry:
   %0 = load double, double* null, align 8
   %1 = load double, double* undef, align 8

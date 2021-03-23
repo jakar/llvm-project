@@ -8,7 +8,7 @@ void f(const string& s, ...) {  // expected-note {{parameter of type 'const stri
   __builtin_va_start(ap, s); // expected-warning {{passing an object of reference type to 'va_start' has undefined behavior}}
 }
 
-void g(register int i, ...) {
+void g(register int i, ...) { // expected-warning 0-1{{deprecated}}
   __builtin_va_start(ap, i); // UB in C, OK in C++
 }
 
@@ -22,7 +22,8 @@ void no_params(...) {
 // default ctor.
 void record_context(int a, ...) {
   struct Foo {
-    // expected-error@+1 {{'va_start' cannot be used outside a function}}
+    // expected-error@+2 {{'va_start' cannot be used outside a function}}
+    // expected-error@+1 {{default argument references parameter 'a'}}
     void meth(int a, int b = (__builtin_va_start(ap, a), 0)) {}
   };
 }

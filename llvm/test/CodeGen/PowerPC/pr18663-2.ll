@@ -1,5 +1,5 @@
-; RUN: llc -verify-machineinstrs < %s -march=ppc64 -mtriple=powerpc64-unknown-linux-gnu
-; RUN: llc -verify-machineinstrs < %s -march=ppc64le -mtriple=powerpc64le-unknown-linux-gnu
+; RUN: llc -verify-machineinstrs < %s -mtriple=powerpc64-unknown-linux-gnu
+; RUN: llc -verify-machineinstrs < %s -mtriple=powerpc64le-unknown-linux-gnu
 
 %"class.std::__1::locale::id.1580.4307.4610.8491" = type { %"struct.std::__1::once_flag.1579.4306.4609.8490", i32 }
 %"struct.std::__1::once_flag.1579.4306.4609.8490" = type { i64 }
@@ -147,7 +147,7 @@ ehcleanup142:                                     ; preds = %lpad19, %lpad.i.i.i
   resume { i8*, i32 } undef
 }
 
-attributes #0 = { "less-precise-fpmad"="false" "no-frame-pointer-elim"="true" "no-frame-pointer-elim-non-leaf" "no-infs-fp-math"="false" "no-nans-fp-math"="false" "stack-protector-buffer-size"="8" "unsafe-fp-math"="false" "use-soft-float"="false" }
-attributes #1 = { noreturn "less-precise-fpmad"="false" "no-frame-pointer-elim"="true" "no-frame-pointer-elim-non-leaf" "no-infs-fp-math"="false" "no-nans-fp-math"="false" "stack-protector-buffer-size"="8" "unsafe-fp-math"="false" "use-soft-float"="false" }
-attributes #2 = { inlinehint "less-precise-fpmad"="false" "no-frame-pointer-elim"="true" "no-frame-pointer-elim-non-leaf" "no-infs-fp-math"="false" "no-nans-fp-math"="false" "stack-protector-buffer-size"="8" "unsafe-fp-math"="false" "use-soft-float"="false" }
+attributes #0 = { "less-precise-fpmad"="false" "frame-pointer"="all" "no-infs-fp-math"="false" "no-nans-fp-math"="false" "stack-protector-buffer-size"="8" "unsafe-fp-math"="false" "use-soft-float"="false" }
+attributes #1 = { noreturn "less-precise-fpmad"="false" "frame-pointer"="all" "no-infs-fp-math"="false" "no-nans-fp-math"="false" "stack-protector-buffer-size"="8" "unsafe-fp-math"="false" "use-soft-float"="false" }
+attributes #2 = { inlinehint "less-precise-fpmad"="false" "frame-pointer"="all" "no-infs-fp-math"="false" "no-nans-fp-math"="false" "stack-protector-buffer-size"="8" "unsafe-fp-math"="false" "use-soft-float"="false" }
 

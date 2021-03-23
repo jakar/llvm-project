@@ -5,21 +5,29 @@
 ; RUN: llc -mtriple=thumbv7m -mcpu=cortex-m4 %s -o - \
 ; RUN: | FileCheck --check-prefix=CHECK-NO-XO %s
 
-; RUN: llc -mtriple=thumbv7m -arm-execute-only -mcpu=cortex-m4 %s -o - \
+; RUN: llc -mtriple=thumbv7m -mattr=+execute-only -mcpu=cortex-m4 %s -o - \
 ; RUN: | FileCheck --check-prefix=CHECK-XO-FLOAT --check-prefix=CHECK-XO-DOUBLE %s
 
-; RUN: llc -mtriple=thumbv7meb -arm-execute-only -mcpu=cortex-m4 %s -o - \
-; RUN: | FileCheck --check-prefix=CHECK-XO-FLOAT --check-prefix=CHECK-XO-DOUBLE-BE %s
+; RUN: llc -mtriple=thumbv7meb -mattr=+execute-only -mcpu=cortex-m4 %s -o - \
+; RUN: | FileCheck --check-prefix=CHECK-XO-FLOAT --check-prefix=CHECK-XO-DOUBLE-BE  --check-prefix=CHECK-XO-DOUBLE-BE-FPREGS %s
+
+; RUN: llc -mtriple=thumbv7meb -mattr=+execute-only -mcpu=cortex-m3 %s -o - \
+; RUN: | FileCheck --check-prefix=CHECK-XO-DOUBLE-BE %s
+
+; RUN: llc -mtriple=thumbv7m -mattr=+execute-only -mcpu=cortex-m4 -relocation-model=ropi %s -o - \
+; RUN: | FileCheck --check-prefix=CHECK-XO-ROPI %s
 
 ; RUN: llc -mtriple=thumbv8m.main -mattr=fp-armv8 %s -o - \
 ; RUN: | FileCheck --check-prefix=CHECK-NO-XO %s
 
-; RUN: llc -mtriple=thumbv8m.main -arm-execute-only -mattr=fp-armv8 %s -o - \
+; RUN: llc -mtriple=thumbv8m.main -mattr=+execute-only -mattr=fp-armv8 %s -o - \
 ; RUN: | FileCheck --check-prefix=CHECK-XO-FLOAT --check-prefix=CHECK-XO-DOUBLE %s
 
-; RUN: llc -mtriple=thumbv8m.maineb -arm-execute-only -mattr=fp-armv8 %s -o - \
+; RUN: llc -mtriple=thumbv8m.maineb -mattr=+execute-only -mattr=fp-armv8 %s -o - \
 ; RUN: | FileCheck --check-prefix=CHECK-XO-FLOAT --check-prefix=CHECK-XO-DOUBLE-BE %s
 
+; RUN: llc -mtriple=thumbv8m.main -mattr=+execute-only -mattr=fp-armv8 -relocation-model=ropi %s -o - \
+; RUN: | FileCheck --check-prefix=CHECK-XO-ROPI %s
 
 define arm_aapcs_vfpcc float @test_vmov_f32() {
 ; CHECK-LABEL: test_vmov_f32:
@@ -89,8 +97,8 @@ define arm_aapcs_vfpcc double @test_vmov_double_imm() {
 ; CHECK-XO-DOUBLE-NOT: vldr
 
 ; CHECK-XO-DOUBLE-BE-LABEL: test_vmov_double_imm:
-; CHECK-XO-DOUBLE-BE: movs [[REG:r[0-9]+]], #0
-; CHECK-XO-DOUBLE-BE: vmov {{d[0-9]+}}, [[REG]], [[REG]]
+; CHECK-XO-DOUBLE-BE-FPREGS: movs [[REG:r[0-9]+]], #0
+; CHECK-XO-DOUBLE-BE-FPREGS: vmov {{d[0-9]+}}, [[REG]], [[REG]]
 ; CHECK-XO-DOUBLE-NOT: vldr
   ret double 0.0
 }
@@ -111,8 +119,8 @@ define arm_aapcs_vfpcc double @test_vmvn_double_imm() {
 ; CHECK-XO-DOUBLE-NOT: vldr
 
 ; CHECK-XO-DOUBLE-BE-LABEL: test_vmvn_double_imm:
-; CHECK-XO-DOUBLE-BE: mvn [[REG:r[0-9]+]], #-1342177280
-; CHECK-XO-DOUBLE-BE: vmov {{d[0-9]+}}, [[REG]], [[REG]]
+; CHECK-XO-DOUBLE-BE-FPREGS: mvn [[REG:r[0-9]+]], #-1342177280
+; CHECK-XO-DOUBLE-BE-FPREGS: vmov {{d[0-9]+}}, [[REG]], [[REG]]
 ; CHECK-XO-DOUBLE-BE-NOT: vldr
   ret double 0x4fffffff4fffffff
 }
@@ -136,9 +144,9 @@ define arm_aapcs_vfpcc double @test_notvmvn_double_imm() {
 ; CHECK-XO-DOUBLE-NOT: vldr
 
 ; CHECK-XO-DOUBLE-BE-LABEL: test_notvmvn_double_imm:
-; CHECK-XO-DOUBLE-BE: mov.w [[REG1:r[0-9]+]], #-1
-; CHECK-XO-DOUBLE-BE: mvn [[REG2:r[0-9]+]], #-1342177280
-; CHECK-XO-DOUBLE-BE: vmov {{d[0-9]+}}, [[REG2]], [[REG1]]
+; CHECK-XO-DOUBLE-BE: mvn [[REG1:r[0-9]+]], #-1342177280
+; CHECK-XO-DOUBLE-BE: mov.w [[REG2:r[0-9]+]], #-1
+; CHECK-XO-DOUBLE-BE-FPREGS: vmov {{d[0-9]+}}, [[REG2]], [[REG1]]
 ; CHECK-XO-DOUBLE-BE-NOT: vldr
   ret double 0x4fffffffffffffff
 }
@@ -168,11 +176,56 @@ define arm_aapcs_vfpcc double @lower_const_f64_xo() {
 ; CHECK-XO-DOUBLE-NOT: vldr
 
 ; CHECK-XO-DOUBLE-BE-LABEL: lower_const_f64_xo
-; CHECK-XO-DOUBLE-BE: movw [[REG1:r[0-9]+]], #27263
-; CHECK-XO-DOUBLE-BE: movw [[REG2:r[0-9]+]], #6291
-; CHECK-XO-DOUBLE-BE: movt [[REG1]], #29884
-; CHECK-XO-DOUBLE-BE: movt [[REG2]], #16340
-; CHECK-XO-DOUBLE-BE: vmov {{d[0-9]+}}, [[REG2]], [[REG1]]
+; CHECK-XO-DOUBLE-BE: movw [[REG1:r[0-9]+]], #6291
+; CHECK-XO-DOUBLE-BE: movw [[REG2:r[0-9]+]], #27263
+; CHECK-XO-DOUBLE-BE: movt [[REG1]], #16340
+; CHECK-XO-DOUBLE-BE: movt [[REG2]], #29884
+; CHECK-XO-DOUBLE-BE-FPREGS: vmov {{d[0-9]+}}, [[REG2]], [[REG1]]
 ; CHECK-XO-DOUBLE-BE-NOT: vldr
   ret double 3.140000e-01
+}
+
+; This is a target independent optimization, performed by the
+; DAG Combiner, which promotes floating point literals into
+; constant pools:
+;
+; (a cond b) ? 1.0f : 2.0f -> load (ConstPoolAddr + ((a cond b) ? 0 : 4)
+;
+; We need to make sure that the constant pools are placed in
+; the data section when generating execute-only code:
+
+define arm_aapcs_vfpcc float @lower_fpconst_select(float %f) {
+
+; CHECK-NO-XO-LABEL: lower_fpconst_select
+; CHECK-NO-XO: adr [[REG:r[0-9]+]], [[LABEL:.?LCPI[0-9]+_[0-9]+]]
+; CHECK-NO-XO: vldr {{s[0-9]+}}, {{[[]}}[[REG]]{{[]]}}
+; CHECK-NO-XO-NOT: .rodata
+; CHECK-NO-XO: [[LABEL]]:
+; CHECK-NO-XO: .long   0x4f9502f9
+; CHECK-NO-XO: .long   0x4dee6b28
+
+; CHECK-XO-FLOAT-LABEL: lower_fpconst_select
+; CHECK-XO-FLOAT: movw [[REG:r[0-9]+]], :lower16:[[LABEL:.?LCP[0-9]+_[0-9]+]]
+; CHECK-XO-FLOAT: movt [[REG]], :upper16:[[LABEL]]
+; CHECK-XO-FLOAT: vldr {{s[0-9]+}}, {{[[]}}[[REG]]{{[]]}}
+; CHECK-XO-FLOAT: .rodata
+; CHECK-XO-FLOAT-NOT: .text
+; CHECK-XO-FLOAT: [[LABEL]]:
+; CHECK-XO-FLOAT: .long   0x4f9502f9
+; CHECK-XO-FLOAT: .long   0x4dee6b28
+
+; CHECK-XO-ROPI-LABEL: lower_fpconst_select
+; CHECK-XO-ROPI: movw [[REG:r[0-9]+]], :lower16:([[LABEL1:.?LCP[0-9]+_[0-9]+]]-([[LABEL2:.?LPC[0-9]+_[0-9]+]]+4))
+; CHECK-XO-ROPI: movt [[REG]], :upper16:([[LABEL1]]-([[LABEL2]]+4))
+; CHECK-XO-ROPI: [[LABEL2]]:
+; CHECK-XO-ROPI: vldr {{s[0-9]+}}, {{[[]}}[[REG]]{{[]]}}
+; CHECK-XO-ROPI: .rodata
+; CHECK-XO-ROPI-NOT: .text
+; CHECK-XO-ROPI: [[LABEL1]]:
+; CHECK-XO-ROPI: .long   0x4f9502f9
+; CHECK-XO-ROPI: .long   0x4dee6b28
+
+  %cmp = fcmp nnan oeq float %f, 0.000000e+00
+  %sel = select i1 %cmp, float 5.000000e+08, float 5.000000e+09
+  ret float %sel
 }

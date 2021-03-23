@@ -1,5 +1,5 @@
-// RUN: %clang_analyze_cc1 -triple i386-apple-darwin10 -analyzer-checker=core,deadcode,alpha.core -std=gnu99 -analyzer-store=region -analyzer-purge=none -verify %s -Wno-error=return-type
-// RUN: %clang_analyze_cc1 -triple i386-apple-darwin10 -analyzer-checker=core,deadcode,alpha.core -std=gnu99 -analyzer-store=region -verify %s -Wno-error=return-type
+// RUN: %clang_analyze_cc1 -triple i386-apple-darwin10 -Wno-tautological-constant-compare -Wtautological-unsigned-zero-compare -analyzer-checker=core,deadcode,alpha.core -std=gnu99 -analyzer-store=region -analyzer-purge=none -verify %s -Wno-error=return-type
+// RUN: %clang_analyze_cc1 -triple i386-apple-darwin10 -Wno-tautological-constant-compare -Wtautological-unsigned-zero-compare -analyzer-checker=core,deadcode,alpha.core -std=gnu99 -analyzer-store=region -verify %s -Wno-error=return-type
 
 typedef unsigned uintptr_t;
 
@@ -88,21 +88,21 @@ int f5() {
 int bar(int* p, int q) __attribute__((nonnull));
 
 int f6(int *p) { 
-  return !p ? bar(p, 1) // expected-warning {{Null pointer passed as an argument to a 'nonnull' parameter}}
+  return !p ? bar(p, 1) // expected-warning {{Null pointer passed to 1st parameter expecting 'nonnull'}}
          : bar(p, 0);   // no-warning
 }
 
 int bar2(int* p, int q) __attribute__((nonnull(1)));
 
 int f6b(int *p) { 
-  return !p ? bar2(p, 1) // expected-warning {{Null pointer passed as an argument to a 'nonnull' parameter}}
+  return !p ? bar2(p, 1) // expected-warning {{Null pointer passed to 1st parameter expecting 'nonnull'}}
          : bar2(p, 0);   // no-warning
 }
 
 int bar3(int*p, int q, int *r) __attribute__((nonnull(1,3)));
 
 int f6c(int *p, int *q) {
-   return !p ? bar3(q, 2, p) // expected-warning {{Null pointer passed as an argument to a 'nonnull' parameter}}
+   return !p ? bar3(q, 2, p) // expected-warning {{Null pointer passed to 3rd parameter expecting 'nonnull'}}
              : bar3(p, 2, q); // no-warning
 }
 

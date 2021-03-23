@@ -1,34 +1,36 @@
 //===-- DynamicRegisterInfo.h -----------------------------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef lldb_DynamicRegisterInfo_h_
-#define lldb_DynamicRegisterInfo_h_
+#ifndef LLDB_SOURCE_PLUGINS_PROCESS_UTILITY_DYNAMICREGISTERINFO_H
+#define LLDB_SOURCE_PLUGINS_PROCESS_UTILITY_DYNAMICREGISTERINFO_H
 
-// C Includes
-// C++ Includes
 #include <map>
 #include <vector>
 
-// Other libraries and framework includes
-// Project includes
-#include "lldb/Core/StructuredData.h"
 #include "lldb/Utility/ConstString.h"
+#include "lldb/Utility/StructuredData.h"
 #include "lldb/lldb-private.h"
 
 class DynamicRegisterInfo {
+protected:
+  DynamicRegisterInfo(DynamicRegisterInfo &) = default;
+  DynamicRegisterInfo &operator=(DynamicRegisterInfo &) = default;
+
 public:
-  DynamicRegisterInfo();
+  DynamicRegisterInfo() = default;
 
   DynamicRegisterInfo(const lldb_private::StructuredData::Dictionary &dict,
                       const lldb_private::ArchSpec &arch);
 
-  virtual ~DynamicRegisterInfo();
+  virtual ~DynamicRegisterInfo() = default;
+
+  DynamicRegisterInfo(DynamicRegisterInfo &&info);
+  DynamicRegisterInfo &operator=(DynamicRegisterInfo &&info);
 
   size_t SetRegisterInfo(const lldb_private::StructuredData::Dictionary &dict,
                          const lldb_private::ArchSpec &arch);
@@ -58,14 +60,20 @@ public:
   uint32_t ConvertRegisterKindToRegisterNumber(uint32_t kind,
                                                uint32_t num) const;
 
+  const lldb_private::RegisterInfo *GetRegisterInfo(uint32_t kind,
+                                                    uint32_t num) const;
+
   void Dump() const;
 
   void Clear();
 
+  bool IsReconfigurable();
+
+  const lldb_private::RegisterInfo *
+  GetRegisterInfo(llvm::StringRef reg_name) const;
+
 protected:
-  //------------------------------------------------------------------
   // Classes that inherit from DynamicRegisterInfo can see and modify these
-  //------------------------------------------------------------------
   typedef std::vector<lldb_private::RegisterInfo> reg_collection;
   typedef std::vector<lldb_private::RegisterSet> set_collection;
   typedef std::vector<uint32_t> reg_num_collection;
@@ -75,8 +83,9 @@ protected:
   typedef std::vector<uint8_t> dwarf_opcode;
   typedef std::map<uint32_t, dwarf_opcode> dynamic_reg_size_map;
 
-  lldb_private::RegisterInfo *
-  GetRegisterInfo(const lldb_private::ConstString &reg_name);
+  void MoveFrom(DynamicRegisterInfo &&info);
+
+  void ConfigureOffsets();
 
   reg_collection m_regs;
   set_collection m_sets;
@@ -85,9 +94,9 @@ protected:
   reg_to_regs_map m_value_regs_map;
   reg_to_regs_map m_invalidate_regs_map;
   dynamic_reg_size_map m_dynamic_reg_size_map;
-  size_t m_reg_data_byte_size; // The number of bytes required to store all
-                               // registers
-  bool m_finalized;
+  size_t m_reg_data_byte_size = 0u; // The number of bytes required to store
+                                    // all registers
+  bool m_finalized = false;
+  bool m_is_reconfigurable = false;
 };
-
-#endif // lldb_DynamicRegisterInfo_h_
+#endif // LLDB_SOURCE_PLUGINS_PROCESS_UTILITY_DYNAMICREGISTERINFO_H

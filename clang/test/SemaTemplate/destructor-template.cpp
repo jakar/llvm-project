@@ -86,3 +86,19 @@ namespace PR16852 {
   template<typename T> decltype(S<T>().~S()) f(); // expected-note {{candidate template ignored: couldn't infer template argument 'T'}}
   void g() { f(); } // expected-error {{no matching function for call to 'f'}}
 }
+
+class PR33189
+{
+  template <class T>
+  ~PR33189() { } // expected-error{{destructor cannot be declared as a template}}
+};
+
+namespace PR38671 {
+struct S {
+  template <class>
+  ~S(); // expected-error{{destructor cannot be declared as a template}}
+};
+struct T : S {    // expected-note{{destructor of 'T' is implicitly deleted because base class 'PR38671::S' has no destructor}}
+  ~T() = default; // expected-warning{{explicitly defaulted destructor is implicitly deleted}}
+};
+} // namespace PR38671

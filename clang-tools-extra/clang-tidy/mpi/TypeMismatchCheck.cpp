@@ -1,9 +1,8 @@
 //===--- TypeMismatchCheck.cpp - clang-tidy--------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -129,7 +128,7 @@ static bool isBuiltinTypeMatching(const BuiltinType *Builtin,
       {BuiltinType::LongDouble, "MPI_LONG_DOUBLE"}};
 
   if (!isMPITypeMatching(BuiltinMatches, Builtin->getKind(), MPIDatatype)) {
-    BufferTypeName = Builtin->getName(LO);
+    BufferTypeName = std::string(Builtin->getName(LO));
     return false;
   }
 
@@ -217,10 +216,10 @@ static bool isTypedefTypeMatching(const TypedefType *const Typedef,
       {"uint8_t", "MPI_UINT8_T"},   {"uint16_t", "MPI_UINT16_T"},
       {"uint32_t", "MPI_UINT32_T"}, {"uint64_t", "MPI_UINT64_T"}};
 
-  const auto it = FixedWidthMatches.find(Typedef->getDecl()->getName());
+  const auto It = FixedWidthMatches.find(Typedef->getDecl()->getName());
   // Check if the typedef is known and not matching the MPI datatype.
-  if (it != FixedWidthMatches.end() && it->getValue() != MPIDatatype) {
-    BufferTypeName = Typedef->getDecl()->getName();
+  if (It != FixedWidthMatches.end() && It->getValue() != MPIDatatype) {
+    BufferTypeName = std::string(Typedef->getDecl()->getName());
     return false;
   }
   return true;
@@ -229,11 +228,11 @@ static bool isTypedefTypeMatching(const TypedefType *const Typedef,
 /// Get the unqualified, dereferenced type of an argument.
 ///
 /// \param CE call expression
-/// \param idx argument index
+/// \param Idx argument index
 ///
 /// \returns type of the argument
-static const Type *argumentType(const CallExpr *const CE, const size_t idx) {
-  const QualType QT = CE->getArg(idx)->IgnoreImpCasts()->getType();
+static const Type *argumentType(const CallExpr *const CE, const size_t Idx) {
+  const QualType QT = CE->getArg(Idx)->IgnoreImpCasts()->getType();
   return QT.getTypePtr()->getPointeeOrArrayElementType();
 }
 
@@ -258,8 +257,8 @@ void TypeMismatchCheck::check(const MatchFinder::MatchResult &Result) {
 
   // Adds a buffer, MPI datatype pair of an MPI call expression to the
   // containers. For buffers, the type and expression is captured.
-  auto addPair = [&CE, &Result, &BufferTypes, &BufferExprs, &MPIDatatypes](
-      const size_t BufferIdx, const size_t DatatypeIdx) {
+  auto AddPair = [&CE, &Result, &BufferTypes, &BufferExprs, &MPIDatatypes](
+                     const size_t BufferIdx, const size_t DatatypeIdx) {
     // Skip null pointer constants and in place 'operators'.
     if (CE->getArg(BufferIdx)->isNullPointerConstant(
             *Result.Context, Expr::NPC_ValueDependentIsNull) ||
@@ -272,7 +271,8 @@ void TypeMismatchCheck::check(const MatchFinder::MatchResult &Result) {
 
     const Type *ArgType = argumentType(CE, BufferIdx);
     // Skip unknown MPI datatypes and void pointers.
-    if (!isStandardMPIDatatype(MPIDatatype) || ArgType->isVoidType())
+    if (!isStandardMPIDatatype(std::string(MPIDatatype)) ||
+        ArgType->isVoidType())
       return;
 
     BufferTypes.push_back(ArgType);
@@ -282,18 +282,18 @@ void TypeMismatchCheck::check(const MatchFinder::MatchResult &Result) {
 
   // Collect all buffer, MPI datatype pairs for the inspected call expression.
   if (FuncClassifier.isPointToPointType(Identifier)) {
-    addPair(0, 2);
+    AddPair(0, 2);
   } else if (FuncClassifier.isCollectiveType(Identifier)) {
     if (FuncClassifier.isReduceType(Identifier)) {
-      addPair(0, 3);
-      addPair(1, 3);
+      AddPair(0, 3);
+      AddPair(1, 3);
     } else if (FuncClassifier.isScatterType(Identifier) ||
                FuncClassifier.isGatherType(Identifier) ||
                FuncClassifier.isAlltoallType(Identifier)) {
-      addPair(0, 2);
-      addPair(3, 5);
+      AddPair(0, 2);
+      AddPair(3, 5);
     } else if (FuncClassifier.isBcastType(Identifier)) {
-      addPair(0, 2);
+      AddPair(0, 2);
     }
   }
   checkArguments(BufferTypes, BufferExprs, MPIDatatypes, getLangOpts());
@@ -305,27 +305,28 @@ void TypeMismatchCheck::checkArguments(ArrayRef<const Type *> BufferTypes,
                                        const LangOptions &LO) {
   std::string BufferTypeName;
 
-  for (size_t i = 0; i < MPIDatatypes.size(); ++i) {
-    const Type *const BT = BufferTypes[i];
+  for (size_t I = 0; I < MPIDatatypes.size(); ++I) {
+    const Type *const BT = BufferTypes[I];
     bool Error = false;
 
     if (const auto *Typedef = BT->getAs<TypedefType>()) {
-      Error = !isTypedefTypeMatching(Typedef, BufferTypeName, MPIDatatypes[i]);
+      Error = !isTypedefTypeMatching(Typedef, BufferTypeName,
+                                     std::string(MPIDatatypes[I]));
     } else if (const auto *Complex = BT->getAs<ComplexType>()) {
-      Error =
-          !isCComplexTypeMatching(Complex, BufferTypeName, MPIDatatypes[i], LO);
+      Error = !isCComplexTypeMatching(Complex, BufferTypeName,
+                                      std::string(MPIDatatypes[I]), LO);
     } else if (const auto *Template = BT->getAs<TemplateSpecializationType>()) {
       Error = !isCXXComplexTypeMatching(Template, BufferTypeName,
-                                        MPIDatatypes[i], LO);
+                                        std::string(MPIDatatypes[I]), LO);
     } else if (const auto *Builtin = BT->getAs<BuiltinType>()) {
-      Error =
-          !isBuiltinTypeMatching(Builtin, BufferTypeName, MPIDatatypes[i], LO);
+      Error = !isBuiltinTypeMatching(Builtin, BufferTypeName,
+                                     std::string(MPIDatatypes[I]), LO);
     }
 
     if (Error) {
-      const auto Loc = BufferExprs[i]->getSourceRange().getBegin();
+      const auto Loc = BufferExprs[I]->getSourceRange().getBegin();
       diag(Loc, "buffer type '%0' does not match the MPI datatype '%1'")
-          << BufferTypeName << MPIDatatypes[i];
+          << BufferTypeName << MPIDatatypes[I];
     }
   }
 }

@@ -1,14 +1,18 @@
 //===- llvm/unittest/Analysis/LoopPassManagerTest.cpp - LPM tests ---------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
+#include "llvm/Transforms/Scalar/LoopPassManager.h"
 #include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/Analysis/AssumptionCache.h"
+#include "llvm/Analysis/BlockFrequencyInfo.h"
+#include "llvm/Analysis/BranchProbabilityInfo.h"
+#include "llvm/Analysis/MemorySSA.h"
+#include "llvm/Analysis/PostDominators.h"
 #include "llvm/Analysis/ScalarEvolution.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
@@ -19,7 +23,7 @@
 #include "llvm/IR/Module.h"
 #include "llvm/IR/PassManager.h"
 #include "llvm/Support/SourceMgr.h"
-#include "llvm/Transforms/Scalar/LoopPassManager.h"
+
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
@@ -189,6 +193,16 @@ struct MockLoopPassHandle
   MockLoopPassHandle() { setDefaults(); }
 };
 
+struct MockLoopNestPassHandle
+    : MockPassHandleBase<MockLoopNestPassHandle, LoopNest, LoopAnalysisManager,
+                         LoopStandardAnalysisResults &, LPMUpdater &> {
+  MOCK_METHOD4(run,
+               PreservedAnalyses(LoopNest &, LoopAnalysisManager &,
+                                 LoopStandardAnalysisResults &, LPMUpdater &));
+
+  MockLoopNestPassHandle() { setDefaults(); }
+};
+
 struct MockFunctionPassHandle
     : MockPassHandleBase<MockFunctionPassHandle, Function> {
   MOCK_METHOD2(run, PreservedAnalyses(Function &, FunctionAnalysisManager &));
@@ -238,6 +252,7 @@ protected:
 
   MockLoopAnalysisHandle MLAHandle;
   MockLoopPassHandle MLPHandle;
+  MockLoopNestPassHandle MLNPHandle;
   MockFunctionPassHandle MFPHandle;
   MockModulePassHandle MMPHandle;
 
@@ -293,9 +308,18 @@ public:
     // those.
     FAM.registerPass([&] { return AAManager(); });
     FAM.registerPass([&] { return AssumptionAnalysis(); });
+    FAM.registerPass([&] { return BlockFrequencyAnalysis(); });
+    FAM.registerPass([&] { return BranchProbabilityAnalysis(); });
+    FAM.registerPass([&] { return PostDominatorTreeAnalysis(); });
+    FAM.registerPass([&] { return MemorySSAAnalysis(); });
     FAM.registerPass([&] { return ScalarEvolutionAnalysis(); });
     FAM.registerPass([&] { return TargetLibraryAnalysis(); });
     FAM.registerPass([&] { return TargetIRAnalysis(); });
+
+    // Register required pass instrumentation analysis.
+    LAM.registerPass([&] { return PassInstrumentationAnalysis(); });
+    FAM.registerPass([&] { return PassInstrumentationAnalysis(); });
+    MAM.registerPass([&] { return PassInstrumentationAnalysis(); });
 
     // Cross-register proxies.
     LAM.registerPass([&] { return FunctionAnalysisManagerLoopProxy(FAM); });
@@ -389,11 +413,13 @@ TEST_F(LoopPassManagerTest, FunctionPassInvalidationOfLoopAnalyses) {
   // No need to re-run if we require again from a fresh loop pass manager.
   FPM.addPass(createFunctionToLoopPassAdaptor(
       RequireAnalysisLoopPass<MockLoopAnalysisHandle::Analysis>()));
-
   // For 'f', preserve most things but not the specific loop analyses.
+  auto PA = getLoopPassPreservedAnalyses();
+  if (EnableMSSALoopDependency)
+    PA.preserve<MemorySSAAnalysis>();
   EXPECT_CALL(MFPHandle, run(HasName("f"), _))
       .InSequence(FSequence)
-      .WillOnce(Return(getLoopPassPreservedAnalyses()));
+      .WillOnce(Return(PA));
   EXPECT_CALL(MLAHandle, invalidate(HasName("loop.0.0"), _, _))
       .InSequence(FSequence)
       .WillOnce(DoDefault());
@@ -468,6 +494,8 @@ TEST_F(LoopPassManagerTest, ModulePassInvalidationOfLoopAnalyses) {
   EXPECT_CALL(MMPHandle, run(_, _)).WillOnce(InvokeWithoutArgs([] {
     auto PA = getLoopPassPreservedAnalyses();
     PA.preserve<FunctionAnalysisManagerModuleProxy>();
+    if (EnableMSSALoopDependency)
+      PA.preserve<MemorySSAAnalysis>();
     return PA;
   }));
   // All the loop analyses from both functions get invalidated before we
@@ -555,7 +583,6 @@ TEST_F(LoopPassManagerTest, InvalidationOfBundledAnalyses) {
   // invalidation and running.
   EXPECT_CALL(MFPHandle, run(HasName("f"), _))
       .WillOnce(Return(getLoopPassPreservedAnalyses()));
-  EXPECT_CALL(MLAHandle, invalidate(_, _, _)).Times(3);
   EXPECT_CALL(MLAHandle, run(HasName("loop.0.0"), _, _));
   EXPECT_CALL(MLAHandle, run(HasName("loop.0.1"), _, _));
   EXPECT_CALL(MLAHandle, run(HasName("loop.0"), _, _));
@@ -770,9 +797,11 @@ TEST_F(LoopPassManagerTest, IndirectOuterPassInvalidation) {
       .WillByDefault(Invoke([&](Loop &L, LoopAnalysisManager &AM,
                                 LoopStandardAnalysisResults &AR) {
         auto &FAMP = AM.getResult<FunctionAnalysisManagerLoopProxy>(L, AR);
-        auto &FAM = FAMP.getManager();
         Function &F = *L.getHeader()->getParent();
-        if (FAM.getCachedResult<FunctionAnalysis>(F))
+        // This call will assert when trying to get the actual analysis if the
+        // FunctionAnalysis can be invalidated. Only check its existence.
+        // Alternatively, use FAM above, for the purposes of this unittest.
+        if (FAMP.cachedResultExists<FunctionAnalysis>(F))
           FAMP.registerOuterAnalysisInvalidation<FunctionAnalysis,
                                                  LoopAnalysis>();
         return MLAHandle.getResult();
@@ -797,6 +826,8 @@ TEST_F(LoopPassManagerTest, IndirectOuterPassInvalidation) {
   // the fact that they were preserved.
   EXPECT_CALL(MFPHandle, run(HasName("f"), _)).WillOnce(InvokeWithoutArgs([] {
     auto PA = getLoopPassPreservedAnalyses();
+    if (EnableMSSALoopDependency)
+      PA.preserve<MemorySSAAnalysis>();
     PA.preserveSet<AllAnalysesOn<Loop>>();
     return PA;
   }));
@@ -818,6 +849,8 @@ TEST_F(LoopPassManagerTest, IndirectOuterPassInvalidation) {
   // Which means that no extra invalidation occurs and cached values are used.
   EXPECT_CALL(MFPHandle, run(HasName("g"), _)).WillOnce(InvokeWithoutArgs([] {
     auto PA = getLoopPassPreservedAnalyses();
+    if (EnableMSSALoopDependency)
+      PA.preserve<MemorySSAAnalysis>();
     PA.preserveSet<AllAnalysesOn<Loop>>();
     return PA;
   }));
@@ -893,7 +926,8 @@ TEST_F(LoopPassManagerTest, LoopChildInsertion) {
   ASSERT_THAT(BBI, F.end());
   auto CreateCondBr = [&](BasicBlock *TrueBB, BasicBlock *FalseBB,
                           const char *Name, BasicBlock *BB) {
-    auto *Cond = new LoadInst(&Ptr, Name, /*isVolatile*/ true, BB);
+    auto *Cond = new LoadInst(Type::getInt1Ty(Context), &Ptr, Name,
+                              /*isVolatile*/ true, BB);
     BranchInst::Create(TrueBB, FalseBB, Cond, BB);
   };
 
@@ -935,7 +969,7 @@ TEST_F(LoopPassManagerTest, LoopChildInsertion) {
       .WillOnce(Invoke([&](Loop &L, LoopAnalysisManager &AM,
                            LoopStandardAnalysisResults &AR,
                            LPMUpdater &Updater) {
-        auto *NewLoop = new Loop();
+        auto *NewLoop = AR.LI.AllocateLoop();
         L.addChildLoop(NewLoop);
         auto *NewLoop010PHBB =
             BasicBlock::Create(Context, "loop.0.1.0.ph", &F, &Loop02PHBB);
@@ -951,7 +985,7 @@ TEST_F(LoopPassManagerTest, LoopChildInsertion) {
         AR.DT.addNewBlock(NewLoop010PHBB, &Loop01BB);
         AR.DT.addNewBlock(NewLoop010BB, NewLoop010PHBB);
         AR.DT.addNewBlock(NewLoop01LatchBB, NewLoop010BB);
-        AR.DT.verifyDomTree();
+        EXPECT_TRUE(AR.DT.verify());
         L.addBasicBlockToLoop(NewLoop010PHBB, AR.LI);
         NewLoop->addBasicBlockToLoop(NewLoop010BB, AR.LI);
         L.addBasicBlockToLoop(NewLoop01LatchBB, AR.LI);
@@ -981,7 +1015,7 @@ TEST_F(LoopPassManagerTest, LoopChildInsertion) {
       .WillOnce(Invoke([&](Loop &L, LoopAnalysisManager &AM,
                            LoopStandardAnalysisResults &AR,
                            LPMUpdater &Updater) {
-        auto *NewLoop = new Loop();
+        auto *NewLoop = AR.LI.AllocateLoop();
         L.addChildLoop(NewLoop);
         auto *NewLoop011PHBB = BasicBlock::Create(Context, "loop.0.1.1.ph", &F, NewLoop01LatchBB);
         auto *NewLoop011BB = BasicBlock::Create(Context, "loop.0.1.1", &F, NewLoop01LatchBB);
@@ -993,7 +1027,7 @@ TEST_F(LoopPassManagerTest, LoopChildInsertion) {
         AR.DT.addNewBlock(NewLoop011PHBB, NewLoop010BB);
         auto *NewDTNode = AR.DT.addNewBlock(NewLoop011BB, NewLoop011PHBB);
         AR.DT.changeImmediateDominator(AR.DT[NewLoop01LatchBB], NewDTNode);
-        AR.DT.verifyDomTree();
+        EXPECT_TRUE(AR.DT.verify());
         L.addBasicBlockToLoop(NewLoop011PHBB, AR.LI);
         NewLoop->addBasicBlockToLoop(NewLoop011BB, AR.LI);
         NewLoop->verifyLoop();
@@ -1095,7 +1129,8 @@ TEST_F(LoopPassManagerTest, LoopPeerInsertion) {
   ASSERT_THAT(BBI, F.end());
   auto CreateCondBr = [&](BasicBlock *TrueBB, BasicBlock *FalseBB,
                           const char *Name, BasicBlock *BB) {
-    auto *Cond = new LoadInst(&Ptr, Name, /*isVolatile*/ true, BB);
+    auto *Cond = new LoadInst(Type::getInt1Ty(Context), &Ptr, Name,
+                              /*isVolatile*/ true, BB);
     BranchInst::Create(TrueBB, FalseBB, Cond, BB);
   };
 
@@ -1128,7 +1163,7 @@ TEST_F(LoopPassManagerTest, LoopPeerInsertion) {
       .WillOnce(Invoke([&](Loop &L, LoopAnalysisManager &AM,
                            LoopStandardAnalysisResults &AR,
                            LPMUpdater &Updater) {
-        auto *NewLoop = new Loop();
+        auto *NewLoop = AR.LI.AllocateLoop();
         L.getParentLoop()->addChildLoop(NewLoop);
         auto *NewLoop01PHBB = BasicBlock::Create(Context, "loop.0.1.ph", &F, &Loop02PHBB);
         auto *NewLoop01BB = BasicBlock::Create(Context, "loop.0.1", &F, &Loop02PHBB);
@@ -1138,7 +1173,7 @@ TEST_F(LoopPassManagerTest, LoopPeerInsertion) {
         AR.DT.addNewBlock(NewLoop01PHBB, &Loop00BB);
         auto *NewDTNode = AR.DT.addNewBlock(NewLoop01BB, NewLoop01PHBB);
         AR.DT.changeImmediateDominator(AR.DT[&Loop02PHBB], NewDTNode);
-        AR.DT.verifyDomTree();
+        EXPECT_TRUE(AR.DT.verify());
         L.getParentLoop()->addBasicBlockToLoop(NewLoop01PHBB, AR.LI);
         NewLoop->addBasicBlockToLoop(NewLoop01BB, AR.LI);
         L.getParentLoop()->verifyLoop();
@@ -1170,7 +1205,8 @@ TEST_F(LoopPassManagerTest, LoopPeerInsertion) {
       .WillOnce(Invoke([&](Loop &L, LoopAnalysisManager &AM,
                            LoopStandardAnalysisResults &AR,
                            LPMUpdater &Updater) {
-        Loop *NewLoops[] = {new Loop(), new Loop(), new Loop()};
+        Loop *NewLoops[] = {AR.LI.AllocateLoop(), AR.LI.AllocateLoop(),
+                            AR.LI.AllocateLoop()};
         L.getParentLoop()->addChildLoop(NewLoops[0]);
         L.getParentLoop()->addChildLoop(NewLoops[1]);
         NewLoops[1]->addChildLoop(NewLoops[2]);
@@ -1204,7 +1240,7 @@ TEST_F(LoopPassManagerTest, LoopPeerInsertion) {
         AR.DT.addNewBlock(NewLoop040PHBB, NewLoop04BB);
         AR.DT.addNewBlock(NewLoop040BB, NewLoop040PHBB);
         AR.DT.addNewBlock(NewLoop04LatchBB, NewLoop040BB);
-        AR.DT.verifyDomTree();
+        EXPECT_TRUE(AR.DT.verify());
         L.getParentLoop()->addBasicBlockToLoop(NewLoop03PHBB, AR.LI);
         NewLoops[0]->addBasicBlockToLoop(NewLoop03BB, AR.LI);
         L.getParentLoop()->addBasicBlockToLoop(NewLoop04PHBB, AR.LI);
@@ -1249,7 +1285,7 @@ TEST_F(LoopPassManagerTest, LoopPeerInsertion) {
       .WillOnce(Invoke([&](Loop &L, LoopAnalysisManager &AM,
                            LoopStandardAnalysisResults &AR,
                            LPMUpdater &Updater) {
-        auto *NewLoop = new Loop();
+        auto *NewLoop = AR.LI.AllocateLoop();
         AR.LI.addTopLevelLoop(NewLoop);
         auto *NewLoop1PHBB = BasicBlock::Create(Context, "loop.1.ph", &F, &Loop2BB);
         auto *NewLoop1BB = BasicBlock::Create(Context, "loop.1", &F, &Loop2BB);
@@ -1259,7 +1295,7 @@ TEST_F(LoopPassManagerTest, LoopPeerInsertion) {
         AR.DT.addNewBlock(NewLoop1PHBB, &Loop0BB);
         auto *NewDTNode = AR.DT.addNewBlock(NewLoop1BB, NewLoop1PHBB);
         AR.DT.changeImmediateDominator(AR.DT[&Loop2PHBB], NewDTNode);
-        AR.DT.verifyDomTree();
+        EXPECT_TRUE(AR.DT.verify());
         NewLoop->addBasicBlockToLoop(NewLoop1BB, AR.LI);
         NewLoop->verifyLoop();
         Updater.addSiblingLoops({NewLoop});
@@ -1363,12 +1399,11 @@ TEST_F(LoopPassManagerTest, LoopDeletion) {
   // to isolate ourselves from the rest of LLVM and for simplicity. Here we can
   // egregiously cheat based on knowledge of the test case. For example, we
   // have no PHI nodes and there is always a single i-dom.
-  auto RemoveLoop = [](Loop &L, BasicBlock &IDomBB,
-                             LoopStandardAnalysisResults &AR,
-                             LPMUpdater &Updater) {
-    assert(L.empty() && "Can only delete leaf loops with this routine!");
+  auto EraseLoop = [](Loop &L, BasicBlock &IDomBB,
+                      LoopStandardAnalysisResults &AR, LPMUpdater &Updater) {
+    assert(L.isInnermost() && "Can only delete leaf loops with this routine!");
     SmallVector<BasicBlock *, 4> LoopBBs(L.block_begin(), L.block_end());
-    Updater.markLoopAsDeleted(L);
+    Updater.markLoopAsDeleted(L, L.getName());
     IDomBB.getTerminator()->replaceUsesOfWith(L.getHeader(),
                                               L.getUniqueExitBlock());
     for (BasicBlock *LoopBB : LoopBBs) {
@@ -1383,10 +1418,7 @@ TEST_F(LoopPassManagerTest, LoopDeletion) {
     for (BasicBlock *LoopBB : LoopBBs)
       LoopBB->eraseFromParent();
 
-    if (Loop *ParentL = L.getParentLoop())
-      return ParentL->removeChildLoop(find(*ParentL, &L));
-
-    return AR.LI.removeLoop(find(AR.LI, &L));
+    AR.LI.erase(&L);
   };
 
   // Build up the pass managers.
@@ -1431,7 +1463,7 @@ TEST_F(LoopPassManagerTest, LoopDeletion) {
                      LoopStandardAnalysisResults &AR, LPMUpdater &Updater) {
             Loop *ParentL = L.getParentLoop();
             AR.SE.forgetLoop(&L);
-            delete RemoveLoop(L, Loop01PHBB, AR, Updater);
+            EraseLoop(L, Loop01PHBB, AR, Updater);
             ParentL->verifyLoop();
             return PreservedAnalyses::all();
           }));
@@ -1458,10 +1490,8 @@ TEST_F(LoopPassManagerTest, LoopDeletion) {
       .WillRepeatedly(Invoke(getLoopAnalysisResult));
 
   // Run the loop pipeline again. This time we delete the last loop, which
-  // contains a nested loop within it, and we reuse its inner loop object to
-  // insert a new loop into the nest. This makes sure that we don't reuse
-  // cached analysis results for loop objects when removed just because their
-  // pointers match, and that we can handle nested loop deletion.
+  // contains a nested loop within it and insert a new loop into the nest. This
+  // makes sure we can handle nested loop deletion.
   AddLoopPipelineAndVerificationPasses();
   EXPECT_CALL(MLPHandle, run(HasName("loop.0.0"), _, _, _))
       .Times(3)
@@ -1478,23 +1508,24 @@ TEST_F(LoopPassManagerTest, LoopDeletion) {
       .WillOnce(
           Invoke([&](Loop &L, LoopAnalysisManager &AM,
                      LoopStandardAnalysisResults &AR, LPMUpdater &Updater) {
-            // Remove the inner loop first but retain it to reuse later.
             AR.SE.forgetLoop(*L.begin());
-            auto *OldL = RemoveLoop(**L.begin(), Loop020PHBB, AR, Updater);
+            EraseLoop(**L.begin(), Loop020PHBB, AR, Updater);
 
             auto *ParentL = L.getParentLoop();
             AR.SE.forgetLoop(&L);
-            delete RemoveLoop(L, Loop02PHBB, AR, Updater);
+            EraseLoop(L, Loop02PHBB, AR, Updater);
 
-            // Now insert a new sibling loop, reusing a loop pointer.
-            ParentL->addChildLoop(OldL);
+            // Now insert a new sibling loop.
+            auto *NewSibling = AR.LI.AllocateLoop();
+            ParentL->addChildLoop(NewSibling);
             NewLoop03PHBB =
                 BasicBlock::Create(Context, "loop.0.3.ph", &F, &Loop0LatchBB);
             auto *NewLoop03BB =
                 BasicBlock::Create(Context, "loop.0.3", &F, &Loop0LatchBB);
             BranchInst::Create(NewLoop03BB, NewLoop03PHBB);
-            auto *Cond = new LoadInst(&Ptr, "cond.0.3", /*isVolatile*/ true,
-                                      NewLoop03BB);
+            auto *Cond =
+                new LoadInst(Type::getInt1Ty(Context), &Ptr, "cond.0.3",
+                             /*isVolatile*/ true, NewLoop03BB);
             BranchInst::Create(&Loop0LatchBB, NewLoop03BB, Cond, NewLoop03BB);
             Loop02PHBB.getTerminator()->replaceUsesOfWith(&Loop0LatchBB,
                                                           NewLoop03PHBB);
@@ -1502,12 +1533,12 @@ TEST_F(LoopPassManagerTest, LoopDeletion) {
             AR.DT.addNewBlock(NewLoop03BB, NewLoop03PHBB);
             AR.DT.changeImmediateDominator(AR.DT[&Loop0LatchBB],
                                            AR.DT[NewLoop03BB]);
-            AR.DT.verifyDomTree();
+            EXPECT_TRUE(AR.DT.verify());
             ParentL->addBasicBlockToLoop(NewLoop03PHBB, AR.LI);
-            OldL->addBasicBlockToLoop(NewLoop03BB, AR.LI);
-            OldL->verifyLoop();
+            NewSibling->addBasicBlockToLoop(NewLoop03BB, AR.LI);
+            NewSibling->verifyLoop();
             ParentL->verifyLoop();
-            Updater.addSiblingLoops({OldL});
+            Updater.addSiblingLoops({NewSibling});
             return PreservedAnalyses::all();
           }));
 
@@ -1539,7 +1570,7 @@ TEST_F(LoopPassManagerTest, LoopDeletion) {
           Invoke([&](Loop &L, LoopAnalysisManager &AM,
                      LoopStandardAnalysisResults &AR, LPMUpdater &Updater) {
             AR.SE.forgetLoop(&L);
-            delete RemoveLoop(L, Loop00PHBB, AR, Updater);
+            EraseLoop(L, Loop00PHBB, AR, Updater);
             return PreservedAnalyses::all();
           }));
 
@@ -1550,7 +1581,7 @@ TEST_F(LoopPassManagerTest, LoopDeletion) {
           Invoke([&](Loop &L, LoopAnalysisManager &AM,
                      LoopStandardAnalysisResults &AR, LPMUpdater &Updater) {
             AR.SE.forgetLoop(&L);
-            delete RemoveLoop(L, *NewLoop03PHBB, AR, Updater);
+            EraseLoop(L, *NewLoop03PHBB, AR, Updater);
             return PreservedAnalyses::all();
           }));
 
@@ -1561,7 +1592,7 @@ TEST_F(LoopPassManagerTest, LoopDeletion) {
           Invoke([&](Loop &L, LoopAnalysisManager &AM,
                      LoopStandardAnalysisResults &AR, LPMUpdater &Updater) {
             AR.SE.forgetLoop(&L);
-            delete RemoveLoop(L, EntryBB, AR, Updater);
+            EraseLoop(L, EntryBB, AR, Updater);
             return PreservedAnalyses::all();
           }));
 
@@ -1570,4 +1601,72 @@ TEST_F(LoopPassManagerTest, LoopDeletion) {
   MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
   MPM.run(*M, MAM);
 }
+
+TEST_F(LoopPassManagerTest, HandleLoopNestPass) {
+  ::testing::Sequence FSequence, GSequence;
+
+  EXPECT_CALL(MLPHandle, run(HasName("loop.0.0"), _, _, _))
+      .Times(2)
+      .InSequence(FSequence);
+  EXPECT_CALL(MLPHandle, run(HasName("loop.0.1"), _, _, _))
+      .Times(2)
+      .InSequence(FSequence);
+  EXPECT_CALL(MLPHandle, run(HasName("loop.0"), _, _, _)).InSequence(FSequence);
+  EXPECT_CALL(MLNPHandle, run(HasName("loop.0"), _, _, _))
+      .InSequence(FSequence);
+  EXPECT_CALL(MLPHandle, run(HasName("loop.0"), _, _, _)).InSequence(FSequence);
+  EXPECT_CALL(MLNPHandle, run(HasName("loop.0"), _, _, _))
+      .InSequence(FSequence);
+  EXPECT_CALL(MLPHandle, run(HasName("loop.g.0"), _, _, _))
+      .InSequence(GSequence);
+  EXPECT_CALL(MLNPHandle, run(HasName("loop.g.0"), _, _, _))
+      .InSequence(GSequence);
+  EXPECT_CALL(MLPHandle, run(HasName("loop.g.0"), _, _, _))
+      .InSequence(GSequence);
+  EXPECT_CALL(MLNPHandle, run(HasName("loop.g.0"), _, _, _))
+      .InSequence(GSequence);
+
+  EXPECT_CALL(MLNPHandle, run(HasName("loop.0"), _, _, _))
+      .InSequence(FSequence);
+  EXPECT_CALL(MLNPHandle, run(HasName("loop.g.0"), _, _, _))
+      .InSequence(GSequence);
+
+  EXPECT_CALL(MLNPHandle, run(HasName("loop.0"), _, _, _))
+      .InSequence(FSequence);
+  EXPECT_CALL(MLNPHandle, run(HasName("loop.g.0"), _, _, _))
+      .InSequence(GSequence);
+
+  ModulePassManager MPM(true);
+  FunctionPassManager FPM(true);
+
+  {
+    LoopPassManager LPM(true);
+    LPM.addPass(MLPHandle.getPass());
+    LPM.addPass(MLNPHandle.getPass());
+    LPM.addPass(MLPHandle.getPass());
+    LPM.addPass(MLNPHandle.getPass());
+
+    auto Adaptor = createFunctionToLoopPassAdaptor(std::move(LPM));
+    ASSERT_FALSE(Adaptor.isLoopNestMode());
+    FPM.addPass(std::move(Adaptor));
+  }
+
+  {
+    auto Adaptor = createFunctionToLoopPassAdaptor(MLNPHandle.getPass());
+    ASSERT_TRUE(Adaptor.isLoopNestMode());
+    FPM.addPass(std::move(Adaptor));
+  }
+
+  {
+    LoopPassManager LPM(true);
+    LPM.addPass(MLNPHandle.getPass());
+    auto Adaptor = createFunctionToLoopPassAdaptor(MLNPHandle.getPass());
+    ASSERT_TRUE(Adaptor.isLoopNestMode());
+    FPM.addPass(std::move(Adaptor));
+  }
+
+  MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
+  MPM.run(*M, MAM);
 }
+
+} // namespace

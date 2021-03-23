@@ -1,26 +1,20 @@
 //===-- TypeFormat.h ----------------------------------------------*- C++
 //-*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef lldb_TypeFormat_h_
-#define lldb_TypeFormat_h_
+#ifndef LLDB_DATAFORMATTERS_TYPEFORMAT_H
+#define LLDB_DATAFORMATTERS_TYPEFORMAT_H
 
-// C Includes
-
-// C++ Includes
 #include <functional>
 #include <string>
 #include <unordered_map>
 
-// Other libraries and framework includes
 
-// Project includes
 #include "lldb/lldb-enumerations.h"
 #include "lldb/lldb-public.h"
 
@@ -146,10 +140,9 @@ public:
   virtual Type GetType() { return Type::eTypeUnknown; }
 
   // we are using a ValueObject* instead of a ValueObjectSP because we do not
-  // need to hold on to this for
-  // extended periods of time and we trust the ValueObject to stay around for as
-  // long as it is required
-  // for us to generate its value
+  // need to hold on to this for extended periods of time and we trust the
+  // ValueObject to stay around for as long as it is required for us to
+  // generate its value
   virtual bool FormatObject(ValueObject *valobj, std::string &dest) const = 0;
 
   virtual std::string GetDescription() = 0;
@@ -159,7 +152,8 @@ protected:
   uint32_t m_my_revision;
 
 private:
-  DISALLOW_COPY_AND_ASSIGN(TypeFormatImpl);
+  TypeFormatImpl(const TypeFormatImpl &) = delete;
+  const TypeFormatImpl &operator=(const TypeFormatImpl &) = delete;
 };
 
 class TypeFormatImpl_Format : public TypeFormatImpl {
@@ -187,7 +181,9 @@ protected:
   lldb::Format m_format;
 
 private:
-  DISALLOW_COPY_AND_ASSIGN(TypeFormatImpl_Format);
+  TypeFormatImpl_Format(const TypeFormatImpl_Format &) = delete;
+  const TypeFormatImpl_Format &
+  operator=(const TypeFormatImpl_Format &) = delete;
 };
 
 class TypeFormatImpl_EnumType : public TypeFormatImpl {
@@ -216,8 +212,10 @@ protected:
   mutable std::unordered_map<void *, CompilerType> m_types;
 
 private:
-  DISALLOW_COPY_AND_ASSIGN(TypeFormatImpl_EnumType);
+  TypeFormatImpl_EnumType(const TypeFormatImpl_EnumType &) = delete;
+  const TypeFormatImpl_EnumType &
+  operator=(const TypeFormatImpl_EnumType &) = delete;
 };
 } // namespace lldb_private
 
-#endif // lldb_TypeFormat_h_
+#endif // LLDB_DATAFORMATTERS_TYPEFORMAT_H

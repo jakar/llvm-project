@@ -190,13 +190,13 @@ __isl_give struct isl_tab *isl_tab_from_basic_map(
 	__isl_keep isl_basic_map *bmap, int track);
 __isl_give struct isl_tab *isl_tab_from_basic_set(
 	__isl_keep isl_basic_set *bset, int track);
-struct isl_tab *isl_tab_from_recession_cone(struct isl_basic_set *bset,
+struct isl_tab *isl_tab_from_recession_cone(__isl_keep isl_basic_set *bset,
 	int parametric);
 isl_bool isl_tab_cone_is_bounded(struct isl_tab *tab);
-struct isl_basic_map *isl_basic_map_update_from_tab(struct isl_basic_map *bmap,
-	struct isl_tab *tab);
-struct isl_basic_set *isl_basic_set_update_from_tab(struct isl_basic_set *bset,
-	struct isl_tab *tab);
+__isl_give isl_basic_map *isl_basic_map_update_from_tab(
+	__isl_take isl_basic_map *bmap, struct isl_tab *tab);
+__isl_give isl_basic_set *isl_basic_set_update_from_tab(
+	__isl_take isl_basic_set *bset, struct isl_tab *tab);
 int isl_tab_detect_implicit_equalities(struct isl_tab *tab) WARN_UNUSED;
 __isl_give isl_basic_map *isl_tab_make_equalities_explicit(struct isl_tab *tab,
 	__isl_take isl_basic_map *bmap);
@@ -208,7 +208,7 @@ enum isl_lp_result isl_tab_min(struct isl_tab *tab,
 	unsigned flags) WARN_UNUSED;
 
 isl_stat isl_tab_add_ineq(struct isl_tab *tab, isl_int *ineq) WARN_UNUSED;
-int isl_tab_add_eq(struct isl_tab *tab, isl_int *eq) WARN_UNUSED;
+isl_stat isl_tab_add_eq(struct isl_tab *tab, isl_int *eq) WARN_UNUSED;
 int isl_tab_add_valid_eq(struct isl_tab *tab, isl_int *eq) WARN_UNUSED;
 
 int isl_tab_freeze_constraint(struct isl_tab *tab, int con) WARN_UNUSED;
@@ -223,7 +223,7 @@ int isl_tab_is_equality(struct isl_tab *tab, int con);
 int isl_tab_is_redundant(struct isl_tab *tab, int con);
 
 int isl_tab_sample_is_integer(struct isl_tab *tab);
-struct isl_vec *isl_tab_get_sample_value(struct isl_tab *tab);
+__isl_give isl_vec *isl_tab_get_sample_value(struct isl_tab *tab);
 
 enum isl_ineq_type {
 	isl_ineq_error = -1,
@@ -237,7 +237,7 @@ enum isl_ineq_type {
 enum isl_ineq_type isl_tab_ineq_type(struct isl_tab *tab, isl_int *ineq);
 
 struct isl_tab_undo *isl_tab_snap(struct isl_tab *tab);
-int isl_tab_rollback(struct isl_tab *tab, struct isl_tab_undo *snap) WARN_UNUSED;
+isl_stat isl_tab_rollback(struct isl_tab *tab, struct isl_tab_undo *snap) WARN_UNUSED;
 isl_bool isl_tab_need_undo(struct isl_tab *tab);
 void isl_tab_clear_undo(struct isl_tab *tab);
 
@@ -260,17 +260,19 @@ __isl_give isl_pw_multi_aff *isl_tab_basic_map_partial_lexopt_pw_multi_aff(
 	__isl_take isl_basic_map *bmap, __isl_take isl_basic_set *dom,
 	__isl_give isl_set **empty, unsigned flags);
 
-/* An isl_region represents a sequence of consecutive variables.
+/* An isl_trivial_region represents a non-triviality region.
+ * The region is trivial if applying "trivial" to a given sequence
+ * of variables results in a zero vector.
  * pos is the location (starting at 0) of the first variable in the sequence.
  */
-struct isl_region {
+struct isl_trivial_region {
 	int pos;
-	int len;
+	isl_mat *trivial;
 };
 
 __isl_give isl_vec *isl_tab_basic_set_non_trivial_lexmin(
 	__isl_take isl_basic_set *bset, int n_op, int n_region,
-	struct isl_region *region,
+	struct isl_trivial_region *region,
 	int (*conflict)(int con, void *user), void *user);
 
 struct isl_tab_lexmin;
@@ -281,6 +283,8 @@ __isl_give isl_tab_lexmin *isl_tab_lexmin_from_basic_set(
 int isl_tab_lexmin_dim(__isl_keep isl_tab_lexmin *tl);
 __isl_give isl_tab_lexmin *isl_tab_lexmin_add_eq(__isl_take isl_tab_lexmin *tl,
 	isl_int *eq);
+__isl_give isl_tab_lexmin *isl_tab_lexmin_cut_to_integer(
+	__isl_take isl_tab_lexmin *tl);
 __isl_give isl_vec *isl_tab_lexmin_get_solution(__isl_keep isl_tab_lexmin *tl);
 __isl_null isl_tab_lexmin *isl_tab_lexmin_free(__isl_take isl_tab_lexmin *tl);
 
@@ -295,7 +299,6 @@ struct isl_tab *isl_tab_product(struct isl_tab *tab1, struct isl_tab *tab2);
 int isl_tab_extend_cons(struct isl_tab *tab, unsigned n_new) WARN_UNUSED;
 int isl_tab_allocate_con(struct isl_tab *tab) WARN_UNUSED;
 int isl_tab_extend_vars(struct isl_tab *tab, unsigned n_new) WARN_UNUSED;
-int isl_tab_allocate_var(struct isl_tab *tab) WARN_UNUSED;
 int isl_tab_insert_var(struct isl_tab *tab, int pos) WARN_UNUSED;
 int isl_tab_pivot(struct isl_tab *tab, int row, int col) WARN_UNUSED;
 int isl_tab_add_row(struct isl_tab *tab, isl_int *line) WARN_UNUSED;
@@ -304,23 +307,24 @@ int isl_tab_min_at_most_neg_one(struct isl_tab *tab, struct isl_tab_var *var);
 int isl_tab_sign_of_max(struct isl_tab *tab, int con);
 int isl_tab_kill_col(struct isl_tab *tab, int col) WARN_UNUSED;
 
-int isl_tab_push(struct isl_tab *tab, enum isl_tab_undo_type type) WARN_UNUSED;
-int isl_tab_push_var(struct isl_tab *tab,
+isl_stat isl_tab_push(struct isl_tab *tab, enum isl_tab_undo_type type)
+	WARN_UNUSED;
+isl_stat isl_tab_push_var(struct isl_tab *tab,
 	enum isl_tab_undo_type type, struct isl_tab_var *var) WARN_UNUSED;
-int isl_tab_push_basis(struct isl_tab *tab) WARN_UNUSED;
+isl_stat isl_tab_push_basis(struct isl_tab *tab) WARN_UNUSED;
 
 struct isl_tab *isl_tab_init_samples(struct isl_tab *tab) WARN_UNUSED;
 int isl_tab_add_sample(struct isl_tab *tab,
 	__isl_take isl_vec *sample) WARN_UNUSED;
 struct isl_tab *isl_tab_drop_sample(struct isl_tab *tab, int s);
-int isl_tab_save_samples(struct isl_tab *tab) WARN_UNUSED;
+isl_stat isl_tab_save_samples(struct isl_tab *tab) WARN_UNUSED;
 
 struct isl_tab *isl_tab_detect_equalities(struct isl_tab *tab,
 	struct isl_tab *tab_cone) WARN_UNUSED;
 isl_bool isl_tab_is_constant(struct isl_tab *tab, int var, isl_int *value);
 isl_stat isl_tab_detect_constants(struct isl_tab *tab);
 
-int isl_tab_push_callback(struct isl_tab *tab,
+isl_stat isl_tab_push_callback(struct isl_tab *tab,
 	struct isl_tab_callback *callback) WARN_UNUSED;
 
 int isl_tab_insert_div(struct isl_tab *tab, int pos, __isl_keep isl_vec *div,
@@ -328,5 +332,7 @@ int isl_tab_insert_div(struct isl_tab *tab, int pos, __isl_keep isl_vec *div,
 int isl_tab_add_div(struct isl_tab *tab, __isl_keep isl_vec *div);
 
 int isl_tab_shift_var(struct isl_tab *tab, int pos, isl_int shift) WARN_UNUSED;
+
+isl_stat isl_tab_swap_constraints(struct isl_tab *tab, int con1, int con2);
 
 #endif

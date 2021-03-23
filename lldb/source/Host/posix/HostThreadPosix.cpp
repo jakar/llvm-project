@@ -1,14 +1,13 @@
-//===-- HostThreadPosix.cpp -------------------------------------*- C++ -*-===//
+//===-- HostThreadPosix.cpp -----------------------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
 #include "lldb/Host/posix/HostThreadPosix.h"
-#include "lldb/Utility/Error.h"
+#include "lldb/Utility/Status.h"
 
 #include <errno.h>
 #include <pthread.h>
@@ -23,14 +22,14 @@ HostThreadPosix::HostThreadPosix(lldb::thread_t thread)
 
 HostThreadPosix::~HostThreadPosix() {}
 
-Error HostThreadPosix::Join(lldb::thread_result_t *result) {
-  Error error;
+Status HostThreadPosix::Join(lldb::thread_result_t *result) {
+  Status error;
   if (IsJoinable()) {
     int err = ::pthread_join(m_thread, result);
     error.SetError(err, lldb::eErrorTypePOSIX);
   } else {
     if (result)
-      *result = NULL;
+      *result = nullptr;
     error.SetError(EINVAL, eErrorTypePOSIX);
   }
 
@@ -38,24 +37,21 @@ Error HostThreadPosix::Join(lldb::thread_result_t *result) {
   return error;
 }
 
-Error HostThreadPosix::Cancel() {
-  Error error;
+Status HostThreadPosix::Cancel() {
+  Status error;
   if (IsJoinable()) {
-#ifndef __ANDROID__
 #ifndef __FreeBSD__
-    assert(false && "someone is calling HostThread::Cancel()");
-#endif
+    llvm_unreachable("someone is calling HostThread::Cancel()");
+#else
     int err = ::pthread_cancel(m_thread);
     error.SetError(err, eErrorTypePOSIX);
-#else
-    error.SetErrorString("HostThreadPosix::Cancel() not supported on Android");
 #endif
   }
   return error;
 }
 
-Error HostThreadPosix::Detach() {
-  Error error;
+Status HostThreadPosix::Detach() {
+  Status error;
   if (IsJoinable()) {
     int err = ::pthread_detach(m_thread);
     error.SetError(err, eErrorTypePOSIX);

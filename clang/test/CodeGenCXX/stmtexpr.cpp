@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -Wno-unused-value -triple %itanium_abi_triple -emit-llvm -o - %s | FileCheck %s
+// RUN: %clang_cc1 -Wno-unused-value -triple i686-linux-gnu -emit-llvm -o - %s | FileCheck %s
 // rdar: //8540501
 extern "C" int printf(...);
 extern "C" void abort();
@@ -130,7 +130,7 @@ extern "C" int cleanup_exit_lvalue(bool cond) {
 // CHECK-LABEL: define{{.*}} i32 @cleanup_exit_lvalue({{.*}})
 // CHECK: call {{.*}} @_ZN1AC1Ei
 //    Spill after bar.
-// CHECK: %[[v:[^ ]*]] = call dereferenceable(4) i32* @_Z6getrefv({{.*}})
+// CHECK: %[[v:[^ ]*]] = call nonnull align 4 dereferenceable(4) i32* @_Z6getrefv({{.*}})
 // CHECK-NEXT: store i32* %[[v]], i32** %[[tmp:[^, ]*]]
 //    Do cleanup.
 // CHECK: call {{.*}} @_ZN1AD1Ev
@@ -139,13 +139,41 @@ extern "C" int cleanup_exit_lvalue(bool cond) {
 // CHECK: %[[v:[^ ]*]] = load i32*, i32** %[[tmp]]
 // CHECK-NEXT: store i32* %[[v]], i32** %r
 
+// Bind the reference to a byval argument. It is not an instruction or Constant,
+// so it's a bit of a corner case.
+struct ByVal { int x[3]; };
+extern "C" int cleanup_exit_lvalue_byval(bool cond, ByVal arg) {
+  ByVal &r = (A(1), ({ if (cond) return 0; (void)ByVal(); }), arg);
+  return r.x[0];
+}
+// CHECK-LABEL: define{{.*}} i32 @cleanup_exit_lvalue_byval({{.*}}, %struct.ByVal* byval(%struct.ByVal) align 4 %arg)
+// CHECK: call {{.*}} @_ZN1AC1Ei
+// CHECK: call {{.*}} @_ZN1AD1Ev
+// CHECK: switch
+// CHECK: store %struct.ByVal* %arg, %struct.ByVal** %r
+
+// Bind the reference to a local variable. We don't need to spill it. Binding a
+// reference to it doesn't generate any instructions.
+extern "C" int cleanup_exit_lvalue_local(bool cond) {
+  int local = 42;
+  int &r = (A(1), ({ if (cond) return 0; (void)0; }), local);
+  return r;
+}
+// CHECK-LABEL: define{{.*}} i32 @cleanup_exit_lvalue_local({{.*}})
+// CHECK: %local = alloca i32
+// CHECK: store i32 42, i32* %local
+// CHECK: call {{.*}} @_ZN1AC1Ei
+// CHECK-NOT: store i32* %local
+// CHECK: call {{.*}} @_ZN1AD1Ev
+// CHECK: switch
+// CHECK: store i32* %local, i32** %r, align 4
 
 // We handle ExprWithCleanups for complex evaluation type separately, and it had
 // the same bug.
 _Complex float bar_complex(A, int);
 extern "C" int cleanup_exit_complex(bool b) {
   _Complex float v = bar_complex(A(1), ({ if (b) return 42; 13; }));
-  return v;
+  return (float)v;
 }
 
 // CHECK-LABEL: define{{.*}} i32 @cleanup_exit_complex({{.*}})
@@ -162,3 +190,79 @@ extern "C" int cleanup_exit_complex(bool b) {
 // CHECK: %[[v2:[^ ]*]] = load float, float* %[[tmp2]]
 // CHECK: store float %[[v1]], float* %v.realp
 // CHECK: store float %[[v2]], float* %v.imagp
+
+extern "C" void then(int);
+
+// CHECK-LABEL: @{{.*}}volatile_load
+void volatile_load() {
+  volatile int n;
+
+  // CHECK-NOT: load volatile
+  // CHECK: load volatile
+  // CHECK-NOT: load volatile
+  ({n;});
+
+  // CHECK-LABEL: @then(i32 1)
+  then(1);
+
+  // CHECK-NOT: load volatile
+  // CHECK: load volatile
+  // CHECK-NOT: load volatile
+  ({goto lab; lab: n;});
+
+  // CHECK-LABEL: @then(i32 2)
+  then(2);
+
+  // CHECK-NOT: load volatile
+  // CHECK: load volatile
+  // CHECK-NOT: load volatile
+  ({[[gsl::suppress("foo")]] n;});
+
+  // CHECK-LABEL: @then(i32 3)
+  then(3);
+
+  // CHECK-NOT: load volatile
+  // CHECK: load volatile
+  // CHECK-NOT: load volatile
+  ({if (true) n;});
+
+  // CHECK: }
+}
+
+// CHECK-LABEL: @{{.*}}volatile_load_template
+template<typename T>
+void volatile_load_template() {
+  volatile T n;
+
+  // CHECK-NOT: load volatile
+  // CHECK: load volatile
+  // CHECK-NOT: load volatile
+  ({n;});
+
+  // CHECK-LABEL: @then(i32 1)
+  then(1);
+
+  // CHECK-NOT: load volatile
+  // CHECK: load volatile
+  // CHECK-NOT: load volatile
+  ({goto lab; lab: n;});
+
+  // CHECK-LABEL: @then(i32 2)
+  then(2);
+
+  // CHECK-NOT: load volatile
+  // CHECK: load volatile
+  // CHECK-NOT: load volatile
+  ({[[gsl::suppress("foo")]] n;});
+
+  // CHECK-LABEL: @then(i32 3)
+  then(3);
+
+  // CHECK-NOT: load volatile
+  // CHECK: load volatile
+  // CHECK-NOT: load volatile
+  ({if (true) n;});
+
+  // CHECK: }
+}
+template void volatile_load_template<int>();

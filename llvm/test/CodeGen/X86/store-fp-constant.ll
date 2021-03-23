@@ -1,4 +1,4 @@
-; RUN: llc < %s -march=x86 | FileCheck %s
+; RUN: llc < %s -mtriple=i686-- | FileCheck %s
 
 ; CHECK-NOT: rodata
 ; CHECK-NOT: literal
@@ -7,7 +7,7 @@
 ; Check that no FP constants in this testcase ends up in the 
 ; constant pool.
 
-@G = external global float              ; <float*> [#uses=1]
+@G = external dso_local global float              ; <float*> [#uses=1]
 
 declare void @extfloat(float)
 

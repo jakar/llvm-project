@@ -1,9 +1,8 @@
 //===- unittest/ASTMatchers/Dynamic/RegistryTest.cpp - Registry unit tests -===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===-----------------------------------------------------------------------===//
 
@@ -440,7 +439,8 @@ TEST_F(RegistryTest, Errors) {
       Error.get()).isNull());
   EXPECT_EQ("Incorrect type for arg 1. "
             "(Expected = Matcher<CXXRecordDecl>) != "
-            "(Actual = Matcher<CXXRecordDecl>&Matcher<MemberExpr>)",
+            "(Actual = Matcher<CXXRecordDecl|ObjCInterfaceDecl>&Matcher"
+            "<MemberExpr|UnresolvedMemberExpr|CXXDependentScopeMemberExpr>)",
             Error->toString());
 }
 
@@ -497,6 +497,26 @@ TEST_F(RegistryTest, Completion) {
       "Matcher<CXXRecordDecl> isSameOrDerivedFrom(string|Matcher<NamedDecl>)"));
 }
 
+TEST_F(RegistryTest, MatcherBuilder) {
+  auto Ctor = *lookupMatcherCtor("mapAnyOf");
+  EXPECT_TRUE(Registry::isBuilderMatcher(Ctor));
+  auto BuiltCtor = Registry::buildMatcherCtor(Ctor, {}, Args(ASTNodeKind::getFromNodeKind<WhileStmt>(), ASTNodeKind::getFromNodeKind<ForStmt>()), nullptr);
+  EXPECT_TRUE(BuiltCtor.get());
+  auto LoopMatcher = Registry::constructMatcher(BuiltCtor.get(), SourceRange(), Args(), nullptr).getTypedMatcher<Stmt>();
+  EXPECT_TRUE(matches("void f() { for (;;) {} }", LoopMatcher));
+  EXPECT_TRUE(matches("void f() { while (true) {} }", LoopMatcher));
+  EXPECT_FALSE(matches("void f() { if (true) {} }", LoopMatcher));
+
+  auto NotBuiltCtor = Registry::buildMatcherCtor(Ctor, {}, Args(ASTNodeKind::getFromNodeKind<FunctionDecl>(), ASTNodeKind::getFromNodeKind<ForStmt>()), nullptr);
+  EXPECT_FALSE(NotBuiltCtor.get());
+}
+
+TEST_F(RegistryTest, NodeType) {
+  EXPECT_TRUE(Registry::nodeMatcherType(*lookupMatcherCtor("callExpr")).isSame(ASTNodeKind::getFromNodeKind<CallExpr>()));
+  EXPECT_TRUE(Registry::nodeMatcherType(*lookupMatcherCtor("has")).isNone());
+  EXPECT_TRUE(Registry::nodeMatcherType(*lookupMatcherCtor("allOf")).isNone());
+}
+
 TEST_F(RegistryTest, HasArgs) {
   Matcher<Decl> Value = constructMatcher(
       "decl", constructMatcher("hasAttr", StringRef("attr::WarnUnused")))
@@ -507,8 +527,51 @@ TEST_F(RegistryTest, HasArgs) {
 
 TEST_F(RegistryTest, ParenExpr) {
   Matcher<Stmt> Value = constructMatcher("parenExpr").getTypedMatcher<Stmt>();
-  EXPECT_TRUE(matches("int i = (1);", Value));
-  EXPECT_FALSE(matches("int i = 1;", Value));
+  EXPECT_TRUE(matches("int i = (1);", traverse(TK_AsIs, Value)));
+  EXPECT_FALSE(matches("int i = 1;", traverse(TK_AsIs, Value)));
+}
+
+TEST_F(RegistryTest, EqualsMatcher) {
+  Matcher<Stmt> BooleanStmt = constructMatcher(
+      "cxxBoolLiteral", constructMatcher("equals", VariantValue(true)))
+      .getTypedMatcher<Stmt>();
+  EXPECT_TRUE(matches("bool x = true;", BooleanStmt));
+  EXPECT_FALSE(matches("bool x = false;", BooleanStmt));
+  EXPECT_FALSE(matches("bool x = 0;", BooleanStmt));
+
+  BooleanStmt = constructMatcher(
+      "cxxBoolLiteral", constructMatcher("equals", VariantValue(0)))
+      .getTypedMatcher<Stmt>();
+  EXPECT_TRUE(matches("bool x = false;", BooleanStmt));
+  EXPECT_FALSE(matches("bool x = true;", BooleanStmt));
+  EXPECT_FALSE(matches("bool x = 0;", BooleanStmt));
+
+  Matcher<Stmt> DoubleStmt = constructMatcher(
+      "floatLiteral", constructMatcher("equals", VariantValue(1.2)))
+      .getTypedMatcher<Stmt>();
+  EXPECT_TRUE(matches("double x = 1.2;", DoubleStmt));
+#if 0
+  // FIXME floatLiteral matching should work regardless of suffix.
+  EXPECT_TRUE(matches("double x = 1.2f;", DoubleStmt));
+  EXPECT_TRUE(matches("double x = 1.2l;", DoubleStmt));
+#endif
+  EXPECT_TRUE(matches("double x = 12e-1;", DoubleStmt));
+  EXPECT_FALSE(matches("double x = 1.23;", DoubleStmt));
+
+  Matcher<Stmt> IntegerStmt = constructMatcher(
+      "integerLiteral", constructMatcher("equals", VariantValue(42)))
+      .getTypedMatcher<Stmt>();
+  EXPECT_TRUE(matches("int x = 42;", IntegerStmt));
+  EXPECT_FALSE(matches("int x = 1;", IntegerStmt));
+
+  Matcher<Stmt> CharStmt = constructMatcher(
+      "characterLiteral", constructMatcher("equals", VariantValue('x')))
+      .getTypedMatcher<Stmt>();
+  EXPECT_TRUE(matches("int x = 'x';", CharStmt));
+  EXPECT_TRUE(matches("int x = L'x';", CharStmt));
+  EXPECT_TRUE(matches("int x = u'x';", CharStmt));
+  EXPECT_TRUE(matches("int x = U'x';", CharStmt));
+  EXPECT_FALSE(matches("int x = 120;", CharStmt));
 }
 
 } // end anonymous namespace

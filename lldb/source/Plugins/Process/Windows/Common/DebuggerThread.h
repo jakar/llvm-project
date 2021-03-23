@@ -1,9 +1,8 @@
 //===-- DebuggerThread.h ----------------------------------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -16,24 +15,22 @@
 #include "ForwardDecl.h"
 #include "lldb/Host/HostProcess.h"
 #include "lldb/Host/HostThread.h"
-#include "lldb/Host/Predicate.h"
 #include "lldb/Host/windows/windows.h"
+#include "lldb/Utility/Predicate.h"
 
 namespace lldb_private {
 
-//----------------------------------------------------------------------
 // DebuggerThread
 //
 // Debugs a single process, notifying listeners as appropriate when interesting
 // things occur.
-//----------------------------------------------------------------------
 class DebuggerThread : public std::enable_shared_from_this<DebuggerThread> {
 public:
   DebuggerThread(DebugDelegateSP debug_delegate);
   virtual ~DebuggerThread();
 
-  Error DebugLaunch(const ProcessLaunchInfo &launch_info);
-  Error DebugAttach(lldb::pid_t pid, const ProcessAttachInfo &attach_info);
+  Status DebugLaunch(const ProcessLaunchInfo &launch_info);
+  Status DebugAttach(lldb::pid_t pid, const ProcessAttachInfo &attach_info);
 
   HostProcess GetProcess() const { return m_process; }
   HostThread GetMainThread() const { return m_main_thread; }
@@ -41,7 +38,7 @@ public:
     return m_active_exception;
   }
 
-  Error StopDebugging(bool terminate);
+  Status StopDebugging(bool terminate);
 
   void ContinueAsyncException(ExceptionResult result);
 

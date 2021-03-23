@@ -161,8 +161,8 @@
 # CHECK-BE: mfbhrbe 9, 983                  # encoding: [0x7d,0x3e,0xba,0x5c]
 # CHECK-LE: mfbhrbe 9, 983                  # encoding: [0x5c,0xba,0x3e,0x7d]
             mfbhrbe 9, 983
-# CHECK-BE: rfebb 1                         # encoding: [0x4c,0x00,0x09,0x24]
-# CHECK-LE: rfebb 1                         # encoding: [0x24,0x09,0x00,0x4c]
+# CHECK-BE: rfebb                           # encoding: [0x4c,0x00,0x09,0x24]
+# CHECK-LE: rfebb                           # encoding: [0x24,0x09,0x00,0x4c]
             rfebb 1
 
 # Fixed-point facility
@@ -339,16 +339,24 @@
 # CHECK-BE: add. 2, 3, 4                    # encoding: [0x7c,0x43,0x22,0x15]
 # CHECK-LE: add. 2, 3, 4                    # encoding: [0x15,0x22,0x43,0x7c]
             add. 2, 3, 4
-# FIXME:    addo 2, 3, 4
-# FIXME:    addo. 2, 3, 4
-# CHECK-BE: subf 2, 3, 4                    # encoding: [0x7c,0x43,0x20,0x50]
-# CHECK-LE: subf 2, 3, 4                    # encoding: [0x50,0x20,0x43,0x7c]
+# CHECK-BE: addo 2, 3, 4                    # encoding: [0x7c,0x43,0x26,0x14]
+# CHECK-LE: addo 2, 3, 4                    # encoding: [0x14,0x26,0x43,0x7c]
+            addo 2, 3, 4
+# CHECK-BE: addo. 2, 3, 4                   # encoding: [0x7c,0x43,0x26,0x15]
+# CHECK-LE: addo. 2, 3, 4                   # encoding: [0x15,0x26,0x43,0x7c]
+            addo. 2, 3, 4
+# CHECK-BE: sub 2, 4, 3                     # encoding: [0x7c,0x43,0x20,0x50]
+# CHECK-LE: sub 2, 4, 3                     # encoding: [0x50,0x20,0x43,0x7c]
             subf 2, 3, 4
-# CHECK-BE: subf. 2, 3, 4                   # encoding: [0x7c,0x43,0x20,0x51]
-# CHECK-LE: subf. 2, 3, 4                   # encoding: [0x51,0x20,0x43,0x7c]
+# CHECK-BE: sub. 2, 4, 3                    # encoding: [0x7c,0x43,0x20,0x51]
+# CHECK-LE: sub. 2, 4, 3                    # encoding: [0x51,0x20,0x43,0x7c]
             subf. 2, 3, 4
-# FIXME:    subfo 2, 3, 4
-# FIXME:    subfo. 2, 3, 4
+# CHECK-BE: subfo 2, 3, 4                   # encoding: [0x7c,0x43,0x24,0x50]
+# CHECK-LE: subfo 2, 3, 4                   # encoding: [0x50,0x24,0x43,0x7c]
+            subfo 2, 3, 4
+# CHECK-BE: subfo. 2, 3, 4                  # encoding: [0x7c,0x43,0x24,0x51]
+# CHECK-LE: subfo. 2, 3, 4                  # encoding: [0x51,0x24,0x43,0x7c]
+            subfo. 2, 3, 4
 # CHECK-BE: addic 2, 3, 128                 # encoding: [0x30,0x43,0x00,0x80]
 # CHECK-LE: addic 2, 3, 128                 # encoding: [0x80,0x00,0x43,0x30]
             addic 2, 3, 128
@@ -365,16 +373,24 @@
 # CHECK-BE: addc. 2, 3, 4                   # encoding: [0x7c,0x43,0x20,0x15]
 # CHECK-LE: addc. 2, 3, 4                   # encoding: [0x15,0x20,0x43,0x7c]
             addc. 2, 3, 4
-# FIXME:    addco 2, 3, 4
-# FIXME:    addco. 2, 3, 4
-# CHECK-BE: subfc 2, 3, 4                   # encoding: [0x7c,0x43,0x20,0x10]
-# CHECK-LE: subfc 2, 3, 4                   # encoding: [0x10,0x20,0x43,0x7c]
+# CHECK-BE: addco 2, 3, 4                   # encoding: [0x7c,0x43,0x24,0x14]
+# CHECK-LE: addco 2, 3, 4                   # encoding: [0x14,0x24,0x43,0x7c]
+            addco 2, 3, 4
+# CHECK-BE: addco. 2, 3, 4                  # encoding: [0x7c,0x43,0x24,0x15]
+# CHECK-LE: addco. 2, 3, 4                  # encoding: [0x15,0x24,0x43,0x7c]
+            addco. 2, 3, 4
+# CHECK-BE: subc 2, 4, 3                    # encoding: [0x7c,0x43,0x20,0x10]
+# CHECK-LE: subc 2, 4, 3                    # encoding: [0x10,0x20,0x43,0x7c]
             subfc 2, 3, 4
-# CHECK-BE: subfc 2, 3, 4                   # encoding: [0x7c,0x43,0x20,0x10]
-# CHECK-LE: subfc 2, 3, 4                   # encoding: [0x10,0x20,0x43,0x7c]
+# CHECK-BE: subc 2, 4, 3                    # encoding: [0x7c,0x43,0x20,0x10]
+# CHECK-LE: subc 2, 4, 3                    # encoding: [0x10,0x20,0x43,0x7c]
             subfc 2, 3, 4
-# FIXME:    subfco 2, 3, 4
-# FIXME:    subfco. 2, 3, 4
+# CHECK-BE: subfco 2, 3, 4                  # encoding: [0x7c,0x43,0x24,0x10]
+# CHECK-LE: subfco 2, 3, 4                  # encoding: [0x10,0x24,0x43,0x7c]
+            subfco 2, 3, 4
+# CHECK-BE: subfco. 2, 3, 4                 # encoding: [0x7c,0x43,0x24,0x11]
+# CHECK-LE: subfco. 2, 3, 4                 # encoding: [0x11,0x24,0x43,0x7c]
+            subfco. 2, 3, 4
 
 # CHECK-BE: adde 2, 3, 4                    # encoding: [0x7c,0x43,0x21,0x14]
 # CHECK-LE: adde 2, 3, 4                    # encoding: [0x14,0x21,0x43,0x7c]
@@ -382,16 +398,24 @@
 # CHECK-BE: adde. 2, 3, 4                   # encoding: [0x7c,0x43,0x21,0x15]
 # CHECK-LE: adde. 2, 3, 4                   # encoding: [0x15,0x21,0x43,0x7c]
             adde. 2, 3, 4
-# FIXME:    addeo 2, 3, 4
-# FIXME:    addeo. 2, 3, 4
+# CHECK-BE: addeo 2, 3, 4                   # encoding: [0x7c,0x43,0x25,0x14]
+# CHECK-LE: addeo 2, 3, 4                   # encoding: [0x14,0x25,0x43,0x7c]
+            addeo 2, 3, 4
+# CHECK-BE: addeo. 2, 3, 4                  # encoding: [0x7c,0x43,0x25,0x15]
+# CHECK-LE: addeo. 2, 3, 4                  # encoding: [0x15,0x25,0x43,0x7c]
+            addeo. 2, 3, 4
 # CHECK-BE: subfe 2, 3, 4                   # encoding: [0x7c,0x43,0x21,0x10]
 # CHECK-LE: subfe 2, 3, 4                   # encoding: [0x10,0x21,0x43,0x7c]
             subfe 2, 3, 4
 # CHECK-BE: subfe. 2, 3, 4                  # encoding: [0x7c,0x43,0x21,0x11]
 # CHECK-LE: subfe. 2, 3, 4                  # encoding: [0x11,0x21,0x43,0x7c]
             subfe. 2, 3, 4
-# FIXME:    subfeo 2, 3, 4
-# FIXME:    subfeo. 2, 3, 4
+# CHECK-BE: subfeo 2, 3, 4                  # encoding: [0x7c,0x43,0x25,0x10]
+# CHECK-LE: subfeo 2, 3, 4                  # encoding: [0x10,0x25,0x43,0x7c]
+            subfeo 2, 3, 4
+# CHECK-BE: subfeo. 2, 3, 4                 # encoding: [0x7c,0x43,0x25,0x11]
+# CHECK-LE: subfeo. 2, 3, 4                 # encoding: [0x11,0x25,0x43,0x7c]
+            subfeo. 2, 3, 4
 
 # CHECK-BE: addme 2, 3                      # encoding: [0x7c,0x43,0x01,0xd4]
 # CHECK-LE: addme 2, 3                      # encoding: [0xd4,0x01,0x43,0x7c]
@@ -399,16 +423,24 @@
 # CHECK-BE: addme. 2, 3                     # encoding: [0x7c,0x43,0x01,0xd5]
 # CHECK-LE: addme. 2, 3                     # encoding: [0xd5,0x01,0x43,0x7c]
             addme. 2, 3
-# FIXME:    addmeo 2, 3
-# FIXME:    addmeo. 2, 3
+# CHECK-BE: addmeo 2, 3                     # encoding: [0x7c,0x43,0x05,0xd4]
+# CHECK-LE: addmeo 2, 3                     # encoding: [0xd4,0x05,0x43,0x7c]
+            addmeo 2, 3
+# CHECK-BE: addmeo. 2, 3                    # encoding: [0x7c,0x43,0x05,0xd5]
+# CHECK-LE: addmeo. 2, 3                    # encoding: [0xd5,0x05,0x43,0x7c]
+            addmeo. 2, 3
 # CHECK-BE: subfme 2, 3                     # encoding: [0x7c,0x43,0x01,0xd0]
 # CHECK-LE: subfme 2, 3                     # encoding: [0xd0,0x01,0x43,0x7c]
             subfme 2, 3
 # CHECK-BE: subfme. 2, 3                    # encoding: [0x7c,0x43,0x01,0xd1]
 # CHECK-LE: subfme. 2, 3                    # encoding: [0xd1,0x01,0x43,0x7c]
             subfme. 2, 3
-# FIXME:    subfmeo 2, 3
-# FIXME:    subfmeo. 2, 3
+# CHECK-BE: subfmeo 2, 3                    # encoding: [0x7c,0x43,0x05,0xd0]
+# CHECK-LE: subfmeo 2, 3                    # encoding: [0xd0,0x05,0x43,0x7c]
+            subfmeo 2, 3
+# CHECK-BE: subfmeo. 2, 3                   # encoding: [0x7c,0x43,0x05,0xd1]
+# CHECK-LE: subfmeo. 2, 3                   # encoding: [0xd1,0x05,0x43,0x7c]
+            subfmeo. 2, 3
 
 # CHECK-BE: addze 2, 3                      # encoding: [0x7c,0x43,0x01,0x94]
 # CHECK-LE: addze 2, 3                      # encoding: [0x94,0x01,0x43,0x7c]
@@ -416,16 +448,24 @@
 # CHECK-BE: addze. 2, 3                     # encoding: [0x7c,0x43,0x01,0x95]
 # CHECK-LE: addze. 2, 3                     # encoding: [0x95,0x01,0x43,0x7c]
             addze. 2, 3
-# FIXME:    addzeo 2, 3
-# FIXME:    addzeo. 2, 3
+# CHECK-BE: addzeo 2, 3                     # encoding: [0x7c,0x43,0x05,0x94]
+# CHECK-LE: addzeo 2, 3                     # encoding: [0x94,0x05,0x43,0x7c]
+            addzeo 2, 3
+# CHECK-BE: addzeo. 2, 3                    # encoding: [0x7c,0x43,0x05,0x95]
+# CHECK-LE: addzeo. 2, 3                    # encoding: [0x95,0x05,0x43,0x7c]
+            addzeo. 2, 3
 # CHECK-BE: subfze 2, 3                     # encoding: [0x7c,0x43,0x01,0x90]
 # CHECK-LE: subfze 2, 3                     # encoding: [0x90,0x01,0x43,0x7c]
             subfze 2, 3
 # CHECK-BE: subfze. 2, 3                    # encoding: [0x7c,0x43,0x01,0x91]
 # CHECK-LE: subfze. 2, 3                    # encoding: [0x91,0x01,0x43,0x7c]
             subfze. 2, 3
-# FIXME:    subfzeo 2, 3
-# FIXME:    subfzeo. 2, 3
+# CHECK-BE: subfzeo 2, 3                    # encoding: [0x7c,0x43,0x05,0x90]
+# CHECK-LE: subfzeo 2, 3                    # encoding: [0x90,0x05,0x43,0x7c]
+            subfzeo 2, 3
+# CHECK-BE: subfzeo. 2, 3                   # encoding: [0x7c,0x43,0x05,0x91]
+# CHECK-LE: subfzeo. 2, 3                   # encoding: [0x91,0x05,0x43,0x7c]
+            subfzeo. 2, 3
 
 # CHECK-BE: neg 2, 3                        # encoding: [0x7c,0x43,0x00,0xd0]
 # CHECK-LE: neg 2, 3                        # encoding: [0xd0,0x00,0x43,0x7c]
@@ -433,8 +473,12 @@
 # CHECK-BE: neg. 2, 3                       # encoding: [0x7c,0x43,0x00,0xd1]
 # CHECK-LE: neg. 2, 3                       # encoding: [0xd1,0x00,0x43,0x7c]
             neg. 2, 3
-# FIXME:    nego 2, 3
-# FIXME:    nego. 2, 3
+# CHECK-BE: nego 2, 3                       # encoding: [0x7c,0x43,0x04,0xd0]
+# CHECK-LE: nego 2, 3                       # encoding: [0xd0,0x04,0x43,0x7c]
+            nego 2, 3
+# CHECK-BE: nego. 2, 3                      # encoding: [0x7c,0x43,0x04,0xd1]
+# CHECK-LE: nego. 2, 3                      # encoding: [0xd1,0x04,0x43,0x7c]
+            nego. 2, 3
 
 # CHECK-BE: mulli 2, 3, 128                 # encoding: [0x1c,0x43,0x00,0x80]
 # CHECK-LE: mulli 2, 3, 128                 # encoding: [0x80,0x00,0x43,0x1c]
@@ -451,8 +495,12 @@
 # CHECK-BE: mullw. 2, 3, 4                  # encoding: [0x7c,0x43,0x21,0xd7]
 # CHECK-LE: mullw. 2, 3, 4                  # encoding: [0xd7,0x21,0x43,0x7c]
             mullw. 2, 3, 4
-# FIXME:    mullwo 2, 3, 4
-# FIXME:    mullwo. 2, 3, 4
+# CHECK-BE: mullwo 2, 3, 4                  # encoding: [0x7c,0x43,0x25,0xd6]
+# CHECK-LE: mullwo 2, 3, 4                  # encoding: [0xd6,0x25,0x43,0x7c]
+            mullwo 2, 3, 4
+# CHECK-BE: mullwo. 2, 3, 4                 # encoding: [0x7c,0x43,0x25,0xd7]
+# CHECK-LE: mullwo. 2, 3, 4                 # encoding: [0xd7,0x25,0x43,0x7c]
+            mullwo. 2, 3, 4
 # CHECK-BE: mulhwu 2, 3, 4                  # encoding: [0x7c,0x43,0x20,0x16]
 # CHECK-LE: mulhwu 2, 3, 4                  # encoding: [0x16,0x20,0x43,0x7c]
             mulhwu 2, 3, 4
@@ -460,38 +508,99 @@
 # CHECK-LE: mulhwu. 2, 3, 4                 # encoding: [0x17,0x20,0x43,0x7c]
             mulhwu. 2, 3, 4
 
+# CHECK-BE: maddhd 2, 3, 4, 5               # encoding: [0x10,0x43,0x21,0x70]
+# CHECK-LE: maddhd 2, 3, 4, 5               # encoding: [0x70,0x21,0x43,0x10]
+            maddhd 2, 3, 4, 5
+
+# CHECK-BE: maddhdu 2, 3, 4, 5              # encoding: [0x10,0x43,0x21,0x71]
+# CHECK-LE: maddhdu 2, 3, 4, 5              # encoding: [0x71,0x21,0x43,0x10]
+            maddhdu 2, 3, 4, 5
+
+# CHECK-BE: maddld 2, 3, 4, 5               # encoding: [0x10,0x43,0x21,0x73]
+# CHECK-LE: maddld 2, 3, 4, 5               # encoding: [0x73,0x21,0x43,0x10]
+            maddld 2, 3, 4, 5
+
+# CHECK-BE: setb 2, 3                       # encoding: [0x7c,0x4c,0x01,0x00]
+# CHECK-LE: setb 2, 3                       # encoding: [0x00,0x01,0x4c,0x7c]
+            setb 2, 3
+
+# CHECK-BE: darn 2, 3                       # encoding: [0x7c,0x43,0x05,0xe6]
+# CHECK-LE: darn 2, 3                       # encoding: [0xe6,0x05,0x43,0x7c]
+            darn 2, 3
+
+# CHECK-BE: addpcis 3, 22627                # encoding: [0x4c,0x71,0x58,0x45]
+# CHECK-LE: addpcis 3, 22627                # encoding: [0x45,0x58,0x71,0x4c]
+            addpcis 3, 22627
+
+# CHECK-BE: addpcis 3, 22627                # encoding: [0x4c,0x71,0x58,0x45]
+# CHECK-LE: addpcis 3, 22627                # encoding: [0x45,0x58,0x71,0x4c]
+            subpcis 3, -22627
+
+# CHECK-BE: lnia 3                          # encoding: [0x4c,0x60,0x00,0x04]
+# CHECK-LE: lnia 3                          # encoding: [0x04,0x00,0x60,0x4c]
+            lnia 3
+
 # CHECK-BE: divw 2, 3, 4                    # encoding: [0x7c,0x43,0x23,0xd6]
 # CHECK-LE: divw 2, 3, 4                    # encoding: [0xd6,0x23,0x43,0x7c]
             divw 2, 3, 4
 # CHECK-BE: divw. 2, 3, 4                   # encoding: [0x7c,0x43,0x23,0xd7]
 # CHECK-LE: divw. 2, 3, 4                   # encoding: [0xd7,0x23,0x43,0x7c]
             divw. 2, 3, 4
-# FIXME:    divwo 2, 3, 4
-# FIXME:    divwo. 2, 3, 4
+# CHECK-BE: divwo 2, 3, 4                   # encoding: [0x7c,0x43,0x27,0xd6]
+# CHECK-LE: divwo 2, 3, 4                   # encoding: [0xd6,0x27,0x43,0x7c]
+            divwo 2, 3, 4
+# CHECK-BE: divwo. 2, 3, 4                  # encoding: [0x7c,0x43,0x27,0xd7]
+# CHECK-LE: divwo. 2, 3, 4                  # encoding: [0xd7,0x27,0x43,0x7c]
+            divwo. 2, 3, 4
 # CHECK-BE: divwu 2, 3, 4                   # encoding: [0x7c,0x43,0x23,0x96]
 # CHECK-LE: divwu 2, 3, 4                   # encoding: [0x96,0x23,0x43,0x7c]
             divwu 2, 3, 4
 # CHECK-BE: divwu. 2, 3, 4                  # encoding: [0x7c,0x43,0x23,0x97]
 # CHECK-LE: divwu. 2, 3, 4                  # encoding: [0x97,0x23,0x43,0x7c]
             divwu. 2, 3, 4
-# FIXME:    divwuo 2, 3, 4
-# FIXME:    divwuo. 2, 3, 4
+# CHECK-BE: divwuo 2, 3, 4                  # encoding: [0x7c,0x43,0x27,0x96]
+# CHECK-LE: divwuo 2, 3, 4                  # encoding: [0x96,0x27,0x43,0x7c]
+            divwuo 2, 3, 4
+# CHECK-BE: divwuo. 2, 3, 4                 # encoding: [0x7c,0x43,0x27,0x97]
+# CHECK-LE: divwuo. 2, 3, 4                 # encoding: [0x97,0x27,0x43,0x7c]
+            divwuo. 2, 3, 4
 # CHECK-BE: divwe 2, 3, 4                   # encoding: [0x7c,0x43,0x23,0x56]
 # CHECK-LE: divwe 2, 3, 4                   # encoding: [0x56,0x23,0x43,0x7c]
             divwe 2, 3, 4
 # CHECK-BE: divwe. 2, 3, 4                  # encoding: [0x7c,0x43,0x23,0x57]
 # CHECK-LE: divwe. 2, 3, 4                  # encoding: [0x57,0x23,0x43,0x7c]
             divwe. 2, 3, 4
-# FIXME:    divweo 2, 3, 4
-# FIXME:    divweo. 2, 3, 4
+# CHECK-BE: divweo 2, 3, 4                  # encoding: [0x7c,0x43,0x27,0x56]
+# CHECK-LE: divweo 2, 3, 4                  # encoding: [0x56,0x27,0x43,0x7c]
+            divweo 2, 3, 4
+# CHECK-BE: divweo. 2, 3, 4                 # encoding: [0x7c,0x43,0x27,0x57]
+# CHECK-LE: divweo. 2, 3, 4                 # encoding: [0x57,0x27,0x43,0x7c]
+            divweo. 2, 3, 4
 # CHECK-BE: divweu 2, 3, 4                  # encoding: [0x7c,0x43,0x23,0x16]
 # CHECK-LE: divweu 2, 3, 4                  # encoding: [0x16,0x23,0x43,0x7c]
             divweu 2, 3, 4
 # CHECK-BE: divweu. 2, 3, 4                 # encoding: [0x7c,0x43,0x23,0x17]
 # CHECK-LE: divweu. 2, 3, 4                 # encoding: [0x17,0x23,0x43,0x7c]
             divweu. 2, 3, 4
-# FIXME:    divweuo 2, 3, 4
-# FIXME:    divweuo. 2, 3, 4
+# CHECK-BE: divweuo 2, 3, 4                 # encoding: [0x7c,0x43,0x27,0x16]
+# CHECK-LE: divweuo 2, 3, 4                 # encoding: [0x16,0x27,0x43,0x7c]
+            divweuo 2, 3, 4
+# CHECK-BE: divweuo. 2, 3, 4                # encoding: [0x7c,0x43,0x27,0x17]
+# CHECK-LE: divweuo. 2, 3, 4                # encoding: [0x17,0x27,0x43,0x7c]
+            divweuo. 2, 3, 4
+
+# CHECK-BE: modsw 2, 3, 4                   # encoding: [0x7c,0x43,0x26,0x16]
+# CHECK-LE: modsw 2, 3, 4                   # encoding: [0x16,0x26,0x43,0x7c]
+            modsw 2, 3, 4
+# CHECK-BE: moduw 2, 3, 4                   # encoding: [0x7c,0x43,0x22,0x16]
+# CHECK-LE: moduw 2, 3, 4                   # encoding: [0x16,0x22,0x43,0x7c]
+            moduw 2, 3, 4
+# CHECK-BE: modsd 2, 3, 4                   # encoding: [0x7c,0x43,0x26,0x12]
+# CHECK-LE: modsd 2, 3, 4                   # encoding: [0x12,0x26,0x43,0x7c]
+            modsd 2, 3, 4
+# CHECK-BE: modud 2, 3, 4                   # encoding: [0x7c,0x43,0x22,0x12]
+# CHECK-LE: modud 2, 3, 4                   # encoding: [0x12,0x22,0x43,0x7c]
+            modud 2, 3, 4
 
 # CHECK-BE: mulld 2, 3, 4                   # encoding: [0x7c,0x43,0x21,0xd2]
 # CHECK-LE: mulld 2, 3, 4                   # encoding: [0xd2,0x21,0x43,0x7c]
@@ -499,8 +608,12 @@
 # CHECK-BE: mulld. 2, 3, 4                  # encoding: [0x7c,0x43,0x21,0xd3]
 # CHECK-LE: mulld. 2, 3, 4                  # encoding: [0xd3,0x21,0x43,0x7c]
             mulld. 2, 3, 4
-# FIXME:    mulldo 2, 3, 4
-# FIXME:    mulldo. 2, 3, 4
+# CHECK-BE: mulldo 2, 3, 4                  # encoding: [0x7c,0x43,0x25,0xd2]
+# CHECK-LE: mulldo 2, 3, 4                  # encoding: [0xd2,0x25,0x43,0x7c]
+            mulldo 2, 3, 4
+# CHECK-BE: mulldo. 2, 3, 4                 # encoding: [0x7c,0x43,0x25,0xd3]
+# CHECK-LE: mulldo. 2, 3, 4                 # encoding: [0xd3,0x25,0x43,0x7c]
+            mulldo. 2, 3, 4
 # CHECK-BE: mulhd 2, 3, 4                   # encoding: [0x7c,0x43,0x20,0x92]
 # CHECK-LE: mulhd 2, 3, 4                   # encoding: [0x92,0x20,0x43,0x7c]
             mulhd 2, 3, 4
@@ -520,32 +633,48 @@
 # CHECK-BE: divd. 2, 3, 4                   # encoding: [0x7c,0x43,0x23,0xd3]
 # CHECK-LE: divd. 2, 3, 4                   # encoding: [0xd3,0x23,0x43,0x7c]
             divd. 2, 3, 4
-# FIXME:    divdo 2, 3, 4
-# FIXME:    divdo. 2, 3, 4
+# CHECK-BE: divdo 2, 3, 4                   # encoding: [0x7c,0x43,0x27,0xd2]
+# CHECK-LE: divdo 2, 3, 4                   # encoding: [0xd2,0x27,0x43,0x7c]
+            divdo 2, 3, 4
+# CHECK-BE: divdo. 2, 3, 4                  # encoding: [0x7c,0x43,0x27,0xd3]
+# CHECK-LE: divdo. 2, 3, 4                  # encoding: [0xd3,0x27,0x43,0x7c]
+            divdo. 2, 3, 4
 # CHECK-BE: divdu 2, 3, 4                   # encoding: [0x7c,0x43,0x23,0x92]
 # CHECK-LE: divdu 2, 3, 4                   # encoding: [0x92,0x23,0x43,0x7c]
             divdu 2, 3, 4
 # CHECK-BE: divdu. 2, 3, 4                  # encoding: [0x7c,0x43,0x23,0x93]
 # CHECK-LE: divdu. 2, 3, 4                  # encoding: [0x93,0x23,0x43,0x7c]
             divdu. 2, 3, 4
-# FIXME:    divduo 2, 3, 4
-# FIXME:    divduo. 2, 3, 4
+# CHECK-BE: divduo 2, 3, 4                  # encoding: [0x7c,0x43,0x27,0x92]
+# CHECK-LE: divduo 2, 3, 4                  # encoding: [0x92,0x27,0x43,0x7c]
+            divduo 2, 3, 4
+# CHECK-BE: divduo. 2, 3, 4                 # encoding: [0x7c,0x43,0x27,0x93]
+# CHECK-LE: divduo. 2, 3, 4                 # encoding: [0x93,0x27,0x43,0x7c]
+            divduo. 2, 3, 4
 # CHECK-BE: divde 2, 3, 4                   # encoding: [0x7c,0x43,0x23,0x52]
 # CHECK-LE: divde 2, 3, 4                   # encoding: [0x52,0x23,0x43,0x7c]
             divde 2, 3, 4
 # CHECK-BE: divde. 2, 3, 4                  # encoding: [0x7c,0x43,0x23,0x53]
 # CHECK-LE: divde. 2, 3, 4                  # encoding: [0x53,0x23,0x43,0x7c]
             divde. 2, 3, 4
-# FIXME:    divdeo 2, 3, 4
-# FIXME:    divdeo. 2, 3, 4
+# CHECK-BE: divdeo 2, 3, 4                  # encoding: [0x7c,0x43,0x27,0x52]
+# CHECK-LE: divdeo 2, 3, 4                  # encoding: [0x52,0x27,0x43,0x7c]
+            divdeo 2, 3, 4
+# CHECK-BE: divdeo. 2, 3, 4                 # encoding: [0x7c,0x43,0x27,0x53]
+# CHECK-LE: divdeo. 2, 3, 4                 # encoding: [0x53,0x27,0x43,0x7c]
+            divdeo. 2, 3, 4
 # CHECK-BE: divdeu 2, 3, 4                  # encoding: [0x7c,0x43,0x23,0x12]
 # CHECK-LE: divdeu 2, 3, 4                  # encoding: [0x12,0x23,0x43,0x7c]
             divdeu 2, 3, 4
 # CHECK-BE: divdeu. 2, 3, 4                 # encoding: [0x7c,0x43,0x23,0x13]
 # CHECK-LE: divdeu. 2, 3, 4                 # encoding: [0x13,0x23,0x43,0x7c]
             divdeu. 2, 3, 4
-# FIXME:    divdeuo 2, 3, 4
-# FIXME:    divdeuo. 2, 3, 4
+# CHECK-BE: divdeuo 2, 3, 4                 # encoding: [0x7c,0x43,0x27,0x12]
+# CHECK-LE: divdeuo 2, 3, 4                 # encoding: [0x12,0x27,0x43,0x7c]
+            divdeuo 2, 3, 4
+# CHECK-BE: divdeuo. 2, 3, 4                # encoding: [0x7c,0x43,0x27,0x13]
+# CHECK-LE: divdeuo. 2, 3, 4                # encoding: [0x13,0x27,0x43,0x7c]
+            divdeuo. 2, 3, 4
 
 # Fixed-point compare instructions
 
@@ -713,7 +842,9 @@
             cmpb 7, 21, 4
 # CHECK-BE: cmpb 7, 21, 4                   # encoding: [0x7e,0xa7,0x23,0xf8]
 # CHECK-LE: cmpb 7, 21, 4                   # encoding: [0xf8,0x23,0xa7,0x7e]
-# FIXME:    popcntb 2, 3
+# CHECK-BE: popcntb 2, 3                    # encoding: [0x7c,0x62,0x00,0xf4]
+# CHECK-LE: popcntb 2, 3                    # encoding: [0xf4,0x00,0x62,0x7c]
+            popcntb 2, 3
 # CHECK-BE: popcntw 2, 3                    # encoding: [0x7c,0x62,0x02,0xf4]
 # CHECK-LE: popcntw 2, 3                    # encoding: [0xf4,0x02,0x62,0x7c]
             popcntw 2, 3
@@ -872,6 +1003,13 @@
 # CHECK-BE: srad. 2, 3, 4                   # encoding: [0x7c,0x62,0x26,0x35]
 # CHECK-LE: srad. 2, 3, 4                   # encoding: [0x35,0x26,0x62,0x7c]
             srad. 2, 3, 4
+# CHECK-BE: extswsli 2, 3, 4                # encoding: [0x7c,0x62,0x26,0xf4]
+# CHECK-LE: extswsli 2, 3, 4                # encoding: [0xf4,0x26,0x62,0x7c]
+            extswsli 2, 3, 4
+# CHECK-BE: extswsli. 2, 3, 4               # encoding: [0x7c,0x62,0x26,0xf5]
+# CHECK-LE: extswsli. 2, 3, 4               # encoding: [0xf5,0x26,0x62,0x7c]
+            extswsli. 2, 3, 4
+
 
 # FIXME: BCD assist instructions
 
@@ -915,15 +1053,16 @@
             mfsrin  %r10,%r12
 
 # Copy-Paste Facility
-# CHECK-BE: copy 2, 19, 1                      # encoding: [0x7c,0x22,0x9e,0x0c]
-# CHECK-LE: copy 2, 19, 1                      # encoding: [0x0c,0x9e,0x22,0x7c]
-            copy 2, 19, 1
-# CHECK-BE: paste 17, 1, 1                     # encoding: [0x7c,0x31,0x0f,0x0c]
-# CHECK-LE: paste 17, 1, 1                     # encoding: [0x0c,0x0f,0x31,0x7c]
-            paste 17, 1, 1
-# CHECK-BE: cp_abort                           # encoding: [0x7c,0x00,0x06,0x8c]
-# CHECK-LE: cp_abort                           # encoding: [0x8c,0x06,0x00,0x7c]
-            cp_abort
+# CHECK-BE: copy 2, 19                        # encoding: [0x7c,0x22,0x9e,0x0c]
+# CHECK-LE: copy 2, 19                        # encoding: [0x0c,0x9e,0x22,0x7c]
+            copy 2, 19
+# CHECK-BE: paste. 17, 1                      # encoding: [0x7c,0x31,0x0f,0x0d]
+# CHECK-LE: paste. 17, 1                      # encoding: [0x0d,0x0f,0x31,0x7c]
+            paste. 17, 1, 1
+# CHECK-BE: cpabort                           # encoding: [0x7c,0x00,0x06,0x8c]
+# CHECK-LE: cpabort                           # encoding: [0x8c,0x06,0x00,0x7c]
+            cpabort
+
 
 # Message Synchronize
 # CHECK-BE: msgsync                            # encoding: [0x7c,0x00,0x06,0xec]

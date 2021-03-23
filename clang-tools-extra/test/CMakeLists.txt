@@ -15,14 +15,22 @@ endif ()
 
 string(REPLACE ${CMAKE_CFG_INTDIR} ${LLVM_BUILD_MODE} CLANG_TOOLS_DIR ${LLVM_RUNTIME_OUTPUT_INTDIR})
 
-configure_lit_site_cfg(
-  ${CMAKE_CURRENT_SOURCE_DIR}/lit.site.cfg.in
-  ${CMAKE_CURRENT_BINARY_DIR}/lit.site.cfg
+llvm_canonicalize_cmake_booleans(
+  CLANG_TIDY_ENABLE_STATIC_ANALYZER
   )
 
 configure_lit_site_cfg(
-  ${CMAKE_CURRENT_SOURCE_DIR}/Unit/lit.site.cfg.in
-  ${CMAKE_CURRENT_BINARY_DIR}/Unit/lit.site.cfg
+  ${CMAKE_CURRENT_SOURCE_DIR}/lit.site.cfg.py.in
+  ${CMAKE_CURRENT_BINARY_DIR}/lit.site.cfg.py
+  MAIN_CONFIG
+  ${CMAKE_CURRENT_SOURCE_DIR}/lit.cfg.py
+  )
+
+configure_lit_site_cfg(
+  ${CMAKE_CURRENT_SOURCE_DIR}/Unit/lit.site.cfg.py.in
+  ${CMAKE_CURRENT_BINARY_DIR}/Unit/lit.site.cfg.py
+  MAIN_CONFIG
+  ${CMAKE_CURRENT_SOURCE_DIR}/Unit/lit.cfg.py
   )
 
 option(CLANG_TOOLS_TEST_USE_VG "Run Clang tools' tests under Valgrind" OFF)
@@ -31,37 +39,42 @@ if(CLANG_TOOLS_TEST_USE_VG)
 endif()
 
 set(CLANG_TOOLS_TEST_DEPS
-  # clang-tidy tests require it.
-  clang-headers
+  # For the clang-apply-replacements test that uses clang-rename.
+  clang-rename
 
-  # For the clang-tidy libclang integration test.
-  c-index-test
+  # For the clang-doc tests that emit bitcode files.
+  llvm-bcanalyzer
 
   # Individual tools we test.
   clang-apply-replacements
   clang-change-namespace
-  clangd
+  clang-doc
   clang-include-fixer
   clang-move
   clang-query
-  clang-rename
   clang-reorder-fields
-  clang-tidy
   find-all-symbols
   modularize
   pp-trace
 
   # Unit tests
   ExtraToolsUnitTests
-  )
 
-set(llvm_utils
+  # clang-tidy tests require it.
+  clang-resource-headers
+
+  clang-tidy
+  # Clang-tidy tests need clang for building modules.
+  clang
+)
+
+# Add lit test dependencies.
+set(LLVM_UTILS_DEPS
   FileCheck count not
-  )
-
-foreach(t ${llvm_utils})
-  if(TARGET ${t})
-    list(APPEND CLANG_TOOLS_TEST_DEPS ${t})
+)
+foreach(dep ${LLVM_UTILS_DEPS})
+  if(TARGET ${dep})
+    list(APPEND CLANG_TOOLS_TEST_DEPS ${dep})
   endif()
 endforeach()
 
@@ -70,5 +83,9 @@ add_lit_testsuite(check-clang-tools "Running the Clang extra tools' regression t
   DEPENDS ${CLANG_TOOLS_TEST_DEPS}
   ARGS ${CLANG_TOOLS_TEST_EXTRA_ARGS}
   )
+
 set_target_properties(check-clang-tools PROPERTIES FOLDER "Clang extra tools' tests")
 
+add_lit_testsuites(CLANG-EXTRA ${CMAKE_CURRENT_SOURCE_DIR}
+  DEPENDS ${CLANG_TOOLS_TEST_DEPS}
+  )

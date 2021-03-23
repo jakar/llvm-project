@@ -1,9 +1,8 @@
 //===-- Editline.h ----------------------------------------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -20,38 +19,25 @@
 //    good amount of the text will
 //    disappear.  It's still in the buffer, just invisible.
 // b) The prompt printing logic for dealing with ANSI formatting characters is
-// broken, which is why we're
-//    working around it here.
-// c) When resizing the terminal window, if the cursor moves between rows
-// libedit will get confused.
-// d) The incremental search uses escape to cancel input, so it's confused by
+// broken, which is why we're working around it here.
+// c) The incremental search uses escape to cancel input, so it's confused by
 // ANSI sequences starting with escape.
-// e) Emoji support is fairly terrible, presumably it doesn't understand
+// d) Emoji support is fairly terrible, presumably it doesn't understand
 // composed characters?
 
-#ifndef liblldb_Editline_h_
-#define liblldb_Editline_h_
+#ifndef LLDB_HOST_EDITLINE_H
+#define LLDB_HOST_EDITLINE_H
 #if defined(__cplusplus)
 
+#include "lldb/Host/Config.h"
+
+#if LLDB_EDITLINE_USE_WCHAR
+#include <codecvt>
+#endif
 #include <locale>
 #include <sstream>
 #include <vector>
 
-// components needed to handle wide characters ( <codecvt>, codecvt_utf8,
-// libedit built with '--enable-widec' )
-// are available on some platforms. The wchar_t versions of libedit functions
-// will only be
-// used in cases where this is true.  This is a compile time dependecy, for now
-// selected per target Platform
-#if defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__) ||       \
-    defined(__OpenBSD__)
-#define LLDB_EDITLINE_USE_WCHAR 1
-#include <codecvt>
-#else
-#define LLDB_EDITLINE_USE_WCHAR 0
-#endif
-
-#include "lldb/Host/ConnectionFileDescriptor.h"
 #include "lldb/lldb-private.h"
 
 #if defined(_WIN32)
@@ -60,13 +46,18 @@
 #include <histedit.h>
 #endif
 
+#include <csignal>
 #include <mutex>
 #include <string>
 #include <vector>
 
 #include "lldb/Host/ConnectionFileDescriptor.h"
-#include "lldb/Host/Predicate.h"
+#include "lldb/Utility/CompletionRequest.h"
 #include "lldb/Utility/FileSpec.h"
+#include "lldb/Utility/Predicate.h"
+#include "lldb/Utility/StringList.h"
+
+#include "llvm/ADT/FunctionExtras.h"
 
 namespace lldb_private {
 namespace line_editor {
@@ -82,27 +73,36 @@ using EditLineStringStreamType = std::stringstream;
 using EditLineCharType = char;
 #endif
 
-typedef int (*EditlineGetCharCallbackType)(::EditLine *editline,
-                                           EditLineCharType *c);
-typedef unsigned char (*EditlineCommandCallbackType)(::EditLine *editline,
-                                                     int ch);
-typedef const char *(*EditlinePromptCallbackType)(::EditLine *editline);
+// At one point the callback type of el_set getchar callback changed from char
+// to wchar_t. It is not possible to detect differentiate between the two
+// versions exactly, but this is a pretty good approximation and allows us to
+// build against almost any editline version out there.
+#if LLDB_EDITLINE_USE_WCHAR || defined(EL_CLIENTDATA) || LLDB_HAVE_EL_RFUNC_T
+using EditLineGetCharType = wchar_t;
+#else
+using EditLineGetCharType = char;
+#endif
+
+using EditlineGetCharCallbackType = int (*)(::EditLine *editline,
+                                            EditLineGetCharType *c);
+using EditlineCommandCallbackType = unsigned char (*)(::EditLine *editline,
+                                                      int ch);
+using EditlinePromptCallbackType = const char *(*)(::EditLine *editline);
 
 class EditlineHistory;
 
-typedef std::shared_ptr<EditlineHistory> EditlineHistorySP;
+using EditlineHistorySP = std::shared_ptr<EditlineHistory>;
 
-typedef bool (*IsInputCompleteCallbackType)(Editline *editline,
-                                            StringList &lines, void *baton);
+using IsInputCompleteCallbackType =
+    llvm::unique_function<bool(Editline *, StringList &)>;
 
-typedef int (*FixIndentationCallbackType)(Editline *editline,
-                                          const StringList &lines,
-                                          int cursor_position, void *baton);
+using FixIndentationCallbackType =
+    llvm::unique_function<int(Editline *, StringList &, int)>;
 
-typedef int (*CompleteCallbackType)(const char *current_line,
-                                    const char *cursor, const char *last_char,
-                                    int skip_first_n_matches, int max_matches,
-                                    StringList &matches, void *baton);
+using SuggestionCallbackType =
+    llvm::unique_function<llvm::Optional<std::string>(llvm::StringRef)>;
+
+using CompleteCallbackType = llvm::unique_function<void(CompletionRequest &)>;
 
 /// Status used to decide when and how to start editing another line in
 /// multi-line sessions
@@ -137,6 +137,15 @@ enum class CursorLocation {
   /// session
   BlockEnd
 };
+
+/// Operation for the history.
+enum class HistoryOperation {
+  Oldest,
+  Older,
+  Current,
+  Newer,
+  Newest
+};
 }
 
 using namespace line_editor;
@@ -164,9 +173,7 @@ public:
   /// editing scenarios.
   void SetContinuationPrompt(const char *continuation_prompt);
 
-  /// Required to update the width of the terminal registered for I/O.  It is
-  /// critical that this
-  /// be correct at all times.
+  /// Call when the terminal size changes
   void TerminalSizeChanged();
 
   /// Returns the prompt established by SetPrompt()
@@ -181,19 +188,29 @@ public:
   /// Cancel this edit and oblitarate all trace of it
   bool Cancel();
 
+  /// Register a callback for autosuggestion.
+  void SetSuggestionCallback(SuggestionCallbackType callback) {
+    m_suggestion_callback = std::move(callback);
+  }
+
   /// Register a callback for the tab key
-  void SetAutoCompleteCallback(CompleteCallbackType callback, void *baton);
+  void SetAutoCompleteCallback(CompleteCallbackType callback) {
+    m_completion_callback = std::move(callback);
+  }
 
   /// Register a callback for testing whether multi-line input is complete
-  void SetIsInputCompleteCallback(IsInputCompleteCallbackType callback,
-                                  void *baton);
+  void SetIsInputCompleteCallback(IsInputCompleteCallbackType callback) {
+    m_is_input_complete_callback = std::move(callback);
+  }
 
   /// Register a callback for determining the appropriate indentation for a line
   /// when creating a newline.  An optional set of insertable characters can
-  /// also
-  /// trigger the callback.
-  bool SetFixIndentationCallback(FixIndentationCallbackType callback,
-                                 void *baton, const char *indent_chars);
+  /// also trigger the callback.
+  void SetFixIndentationCallback(FixIndentationCallbackType callback,
+                                 const char *indent_chars) {
+    m_fix_indentation_callback = std::move(callback);
+    m_fix_indentation_callback_chars = indent_chars;
+  }
 
   /// Prompts for and reads a single line of user input.
   bool GetLine(std::string &line, bool &interrupted);
@@ -262,15 +279,11 @@ private:
   StringList GetInputAsStringList(int line_count = UINT32_MAX);
 
   /// Replaces the current multi-line session with the next entry from history.
-  /// When the parameter is
-  /// true it will take the next earlier entry from history, when it is false it
-  /// takes the next most
-  /// recent.
-  unsigned char RecallHistory(bool earlier);
+  unsigned char RecallHistory(HistoryOperation op);
 
   /// Character reading implementation for EditLine that supports our multi-line
   /// editing trickery.
-  int GetCharacter(EditLineCharType *c);
+  int GetCharacter(EditLineGetCharType *c);
 
   /// Prompt implementation for EditLine.
   const char *Prompt();
@@ -313,6 +326,12 @@ private:
   /// tab key is typed.
   unsigned char TabCommand(int ch);
 
+  /// Apply autosuggestion part in gray as editline.
+  unsigned char ApplyAutosuggestCommand(int ch);
+
+  /// Command used when a character is typed.
+  unsigned char TypedCharacter(int ch);
+
   /// Respond to normal character insertion by fixing line indentation
   unsigned char FixIndentationCommand(int ch);
 
@@ -323,9 +342,10 @@ private:
   /// single or multi-line editing.
   void ConfigureEditor(bool multiline);
 
-  bool CompleteCharacter(char ch, EditLineCharType &out);
+  bool CompleteCharacter(char ch, EditLineGetCharType &out);
 
-private:
+  void ApplyTerminalSizeChange();
+
 #if LLDB_EDITLINE_USE_WCHAR
   std::wstring_convert<std::codecvt_utf8<wchar_t>> m_utf8conv;
 #endif
@@ -347,22 +367,26 @@ private:
   std::string m_set_continuation_prompt;
   std::string m_current_prompt;
   bool m_needs_prompt_repaint = false;
+  volatile std::sig_atomic_t m_terminal_size_has_changed = 0;
   std::string m_editor_name;
   FILE *m_input_file;
   FILE *m_output_file;
   FILE *m_error_file;
   ConnectionFileDescriptor m_input_connection;
-  IsInputCompleteCallbackType m_is_input_complete_callback = nullptr;
-  void *m_is_input_complete_callback_baton = nullptr;
-  FixIndentationCallbackType m_fix_indentation_callback = nullptr;
-  void *m_fix_indentation_callback_baton = nullptr;
-  const char *m_fix_indentation_callback_chars = nullptr;
-  CompleteCallbackType m_completion_callback = nullptr;
-  void *m_completion_callback_baton = nullptr;
 
+  IsInputCompleteCallbackType m_is_input_complete_callback;
+
+  FixIndentationCallbackType m_fix_indentation_callback;
+  const char *m_fix_indentation_callback_chars = nullptr;
+
+  CompleteCallbackType m_completion_callback;
+
+  SuggestionCallbackType m_suggestion_callback;
+
+  std::size_t m_previous_autosuggestion_size = 0;
   std::mutex m_output_mutex;
 };
 }
 
 #endif // #if defined(__cplusplus)
-#endif // liblldb_Editline_h_
+#endif // LLDB_HOST_EDITLINE_H

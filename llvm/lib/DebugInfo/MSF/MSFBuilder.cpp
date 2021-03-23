@@ -1,34 +1,45 @@
+//===- MSFBuilder.cpp -----------------------------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
 #include "llvm/DebugInfo/MSF/MSFBuilder.h"
+#include "llvm/ADT/ArrayRef.h"
 #include "llvm/DebugInfo/MSF/MSFError.h"
+#include "llvm/DebugInfo/MSF/MappedBlockStream.h"
+#include "llvm/Support/BinaryByteStream.h"
+#include "llvm/Support/BinaryStreamWriter.h"
+#include "llvm/Support/Endian.h"
+#include "llvm/Support/Error.h"
+#include "llvm/Support/FileOutputBuffer.h"
+#include <algorithm>
+#include <cassert>
+#include <cstdint>
+#include <cstring>
+#include <memory>
+#include <utility>
+#include <vector>
 
 using namespace llvm;
 using namespace llvm::msf;
 using namespace llvm::support;
 
-namespace {
-const uint32_t kSuperBlockBlock = 0;
-const uint32_t kFreePageMap0Block = 1;
-const uint32_t kFreePageMap1Block = 2;
-const uint32_t kNumReservedPages = 3;
+static const uint32_t kSuperBlockBlock = 0;
+static const uint32_t kFreePageMap0Block = 1;
+static const uint32_t kFreePageMap1Block = 2;
+static const uint32_t kNumReservedPages = 3;
 
-const uint32_t kDefaultFreePageMap = kFreePageMap0Block;
-const uint32_t kDefaultBlockMapAddr = kNumReservedPages;
-}
+static const uint32_t kDefaultFreePageMap = kFreePageMap1Block;
+static const uint32_t kDefaultBlockMapAddr = kNumReservedPages;
 
 MSFBuilder::MSFBuilder(uint32_t BlockSize, uint32_t MinBlockCount, bool CanGrow,
                        BumpPtrAllocator &Allocator)
     : Allocator(Allocator), IsGrowable(CanGrow),
       FreePageMap(kDefaultFreePageMap), BlockSize(BlockSize),
-      MininumBlocks(MinBlockCount), BlockMapAddr(kDefaultBlockMapAddr),
-      FreeBlocks(MinBlockCount, true) {
+      BlockMapAddr(kDefaultBlockMapAddr), FreeBlocks(MinBlockCount, true) {
   FreeBlocks[kSuperBlockBlock] = false;
   FreeBlocks[kFreePageMap0Block] = false;
   FreeBlocks[kFreePageMap1Block] = false;
@@ -98,7 +109,23 @@ Error MSFBuilder::allocateBlocks(uint32_t NumBlocks,
       return make_error<MSFError>(msf_error_code::insufficient_buffer,
                                   "There are no free Blocks in the file");
     uint32_t AllocBlocks = NumBlocks - NumFreeBlocks;
-    FreeBlocks.resize(AllocBlocks + FreeBlocks.size(), true);
+    uint32_t OldBlockCount = FreeBlocks.size();
+    uint32_t NewBlockCount = AllocBlocks + OldBlockCount;
+    uint32_t NextFpmBlock = alignTo(OldBlockCount, BlockSize) + 1;
+    FreeBlocks.resize(NewBlockCount, true);
+    // If we crossed over an fpm page, we actually need to allocate 2 extra
+    // blocks for each FPM group crossed and mark both blocks from the group as
+    // used.  FPM blocks are marked as allocated regardless of whether or not
+    // they ultimately describe the status of blocks in the file.  This means
+    // that not only are extraneous blocks at the end of the main FPM marked as
+    // allocated, but also blocks from the alternate FPM are always marked as
+    // allocated.
+    while (NextFpmBlock < NewBlockCount) {
+      NewBlockCount += 2;
+      FreeBlocks.resize(NewBlockCount, true);
+      FreeBlocks.reset(NextFpmBlock, NextFpmBlock + 2);
+      NextFpmBlock += BlockSize;
+    }
   }
 
   int I = 0;
@@ -177,8 +204,7 @@ Error MSFBuilder::setStreamSize(uint32_t Idx, uint32_t Size) {
     if (auto EC = allocateBlocks(AddedBlocks, AddedBlockList))
       return EC;
     auto &CurrentBlocks = StreamData[Idx].second;
-    CurrentBlocks.insert(CurrentBlocks.end(), AddedBlockList.begin(),
-                         AddedBlockList.end());
+    llvm::append_range(CurrentBlocks, AddedBlockList);
   } else if (OldBlocks > NewBlocks) {
     // For shrinking, free all the Blocks in the Block map, update the stream
     // data, then shrink the directory.
@@ -220,7 +246,7 @@ uint32_t MSFBuilder::computeDirectoryByteSize() const {
   return Size;
 }
 
-Expected<MSFLayout> MSFBuilder::build() {
+Expected<MSFLayout> MSFBuilder::generateLayout() {
   SuperBlock *SB = Allocator.Allocate<SuperBlock>();
   MSFLayout L;
   L.SB = SB;
@@ -241,8 +267,7 @@ Expected<MSFLayout> MSFBuilder::build() {
     ExtraBlocks.resize(NumExtraBlocks);
     if (auto EC = allocateBlocks(NumExtraBlocks, ExtraBlocks))
       return std::move(EC);
-    DirectoryBlocks.insert(DirectoryBlocks.end(), ExtraBlocks.begin(),
-                           ExtraBlocks.end());
+    llvm::append_range(DirectoryBlocks, ExtraBlocks);
   } else if (NumDirectoryBlocks < DirectoryBlocks.size()) {
     uint32_t NumUnnecessaryBlocks = DirectoryBlocks.size() - NumDirectoryBlocks;
     for (auto B :
@@ -263,7 +288,7 @@ Expected<MSFLayout> MSFBuilder::build() {
 
   // The stream sizes should be re-allocated as a stable pointer and the stream
   // map should have each of its entries allocated as a separate stable pointer.
-  if (StreamData.size() > 0) {
+  if (!StreamData.empty()) {
     ulittle32_t *Sizes = Allocator.Allocate<ulittle32_t>(StreamData.size());
     L.StreamSizes = ArrayRef<ulittle32_t>(Sizes, StreamData.size());
     L.StreamMap.resize(StreamData.size());
@@ -278,5 +303,87 @@ Expected<MSFLayout> MSFBuilder::build() {
     }
   }
 
+  L.FreePageMap = FreeBlocks;
+
   return L;
+}
+
+static void commitFpm(WritableBinaryStream &MsfBuffer, const MSFLayout &Layout,
+                      BumpPtrAllocator &Allocator) {
+  auto FpmStream =
+      WritableMappedBlockStream::createFpmStream(Layout, MsfBuffer, Allocator);
+
+  // We only need to create the alt fpm stream so that it gets initialized.
+  WritableMappedBlockStream::createFpmStream(Layout, MsfBuffer, Allocator,
+                                             true);
+
+  uint32_t BI = 0;
+  BinaryStreamWriter FpmWriter(*FpmStream);
+  while (BI < Layout.SB->NumBlocks) {
+    uint8_t ThisByte = 0;
+    for (uint32_t I = 0; I < 8; ++I) {
+      bool IsFree =
+          (BI < Layout.SB->NumBlocks) ? Layout.FreePageMap.test(BI) : true;
+      uint8_t Mask = uint8_t(IsFree) << I;
+      ThisByte |= Mask;
+      ++BI;
+    }
+    cantFail(FpmWriter.writeObject(ThisByte));
+  }
+  assert(FpmWriter.bytesRemaining() == 0);
+}
+
+Expected<FileBufferByteStream> MSFBuilder::commit(StringRef Path,
+                                                  MSFLayout &Layout) {
+  Expected<MSFLayout> L = generateLayout();
+  if (!L)
+    return L.takeError();
+
+  Layout = std::move(*L);
+
+  uint64_t FileSize = uint64_t(Layout.SB->BlockSize) * Layout.SB->NumBlocks;
+  if (FileSize > UINT32_MAX) {
+    // FIXME: Changing the BinaryStream classes to use 64-bit numbers lets
+    // us create PDBs larger than 4 GiB successfully. The file format is
+    // block-based and as long as each stream is small enough, PDBs larger than
+    // 4 GiB might work. Check if tools can handle these large PDBs, and if so
+    // add support for writing them.
+    return make_error<MSFError>(msf_error_code::invalid_format,
+                                "Output larger than 4 GiB");
+  }
+
+  auto OutFileOrError = FileOutputBuffer::create(Path, FileSize);
+  if (auto EC = OutFileOrError.takeError())
+    return std::move(EC);
+
+  FileBufferByteStream Buffer(std::move(*OutFileOrError),
+                              llvm::support::little);
+  BinaryStreamWriter Writer(Buffer);
+
+  if (auto EC = Writer.writeObject(*Layout.SB))
+    return std::move(EC);
+
+  commitFpm(Buffer, Layout, Allocator);
+
+  uint32_t BlockMapOffset =
+      msf::blockToOffset(Layout.SB->BlockMapAddr, Layout.SB->BlockSize);
+  Writer.setOffset(BlockMapOffset);
+  if (auto EC = Writer.writeArray(Layout.DirectoryBlocks))
+    return std::move(EC);
+
+  auto DirStream = WritableMappedBlockStream::createDirectoryStream(
+      Layout, Buffer, Allocator);
+  BinaryStreamWriter DW(*DirStream);
+  if (auto EC = DW.writeInteger<uint32_t>(Layout.StreamSizes.size()))
+    return std::move(EC);
+
+  if (auto EC = DW.writeArray(Layout.StreamSizes))
+    return std::move(EC);
+
+  for (const auto &Blocks : Layout.StreamMap) {
+    if (auto EC = DW.writeArray(Blocks))
+      return std::move(EC);
+  }
+
+  return std::move(Buffer);
 }

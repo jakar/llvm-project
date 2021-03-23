@@ -1,5 +1,5 @@
 // RUN: llvm-mc -triple=powerpc64-pc-linux -filetype=obj %s -o - | \
-// RUN: llvm-readobj -r | FileCheck %s
+// RUN: llvm-readobj -r - | FileCheck %s
 
 // Test correct relocation generation for thread-local storage using
 // the general dynamic model and integrated assembly.
@@ -18,7 +18,7 @@ main:                                   # @main
 	.quad	0
 	.text
 .L.main:
-# BB#0:                                 # %entry
+# %bb.0:                                # %entry
 	addis 3, 2, a@got@tlsgd@ha
 	addi 3, 3, a@got@tlsgd@l
 	li 4, 0

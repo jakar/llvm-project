@@ -1,9 +1,8 @@
 //===------------------------ memory_resource.cpp -------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is dual licensed under the MIT and the University of Illinois Open
-// Source Licenses. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -13,6 +12,9 @@
 #include "atomic"
 #elif !defined(_LIBCPP_HAS_NO_THREADS)
 #include "mutex"
+#if defined(__ELF__) && defined(_LIBCPP_LINK_PTHREAD_LIB)
+#pragma comment(lib, "pthread")
+#endif
 #endif
 
 _LIBCPP_BEGIN_NAMESPACE_LFTS_PMR
@@ -26,18 +28,23 @@ _LIBCPP_BEGIN_NAMESPACE_LFTS_PMR
 class _LIBCPP_TYPE_VIS __new_delete_memory_resource_imp
     : public memory_resource
 {
+    void *do_allocate(size_t size, size_t align) override {
+#ifdef _LIBCPP_HAS_NO_ALIGNED_ALLOCATION
+        if (__is_overaligned_for_new(align))
+            __throw_bad_alloc();
+#endif
+        return _VSTD::__libcpp_allocate(size, align);
+    }
+
+    void do_deallocate(void *p, size_t n, size_t align) override {
+      _VSTD::__libcpp_deallocate(p, n, align);
+    }
+
+    bool do_is_equal(memory_resource const & other) const noexcept override
+        { return &other == this; }
+
 public:
-    ~__new_delete_memory_resource_imp() = default;
-
-protected:
-    virtual void* do_allocate(size_t __size, size_t __align)
-        { return __allocate(__size); }
-
-    virtual void do_deallocate(void * __p, size_t, size_t)
-        { _VSTD::__libcpp_deallocate(__p); }
-
-    virtual bool do_is_equal(memory_resource const & __other) const _NOEXCEPT
-        { return &__other == this; }
+    ~__new_delete_memory_resource_imp() override = default;
 };
 
 // null_memory_resource()
@@ -53,7 +60,7 @@ protected:
         __throw_bad_alloc();
     }
     virtual void do_deallocate(void *, size_t, size_t) {}
-    virtual bool do_is_equal(memory_resource const & __other) const _NOEXCEPT
+    virtual bool do_is_equal(memory_resource const & __other) const noexcept
     { return &__other == this; }
 };
 
@@ -68,28 +75,24 @@ union ResourceInitHelper {
   _LIBCPP_CONSTEXPR_AFTER_CXX11 ResourceInitHelper() : resources() {}
   ~ResourceInitHelper() {}
 };
-// When compiled in C++14 this initialization should be a constant expression.
-// Only in C++11 is "init_priority" needed to ensure initialization order.
-#if _LIBCPP_STD_VER > 11
-_LIBCPP_SAFE_STATIC
-#endif
-ResourceInitHelper res_init  __attribute__((init_priority (101)));
+
+_LIBCPP_SAFE_STATIC ResourceInitHelper res_init _LIBCPP_INIT_PRIORITY_MAX;
 
 } // end namespace
 
 
-memory_resource * new_delete_resource() _NOEXCEPT {
+memory_resource * new_delete_resource() noexcept {
     return &res_init.resources.new_delete_res;
 }
 
-memory_resource * null_memory_resource() _NOEXCEPT {
+memory_resource * null_memory_resource() noexcept {
     return &res_init.resources.null_res;
 }
 
 // default_memory_resource()
 
 static memory_resource *
-__default_memory_resource(bool set = false, memory_resource * new_res = nullptr) _NOEXCEPT
+__default_memory_resource(bool set = false, memory_resource * new_res = nullptr) noexcept
 {
 #ifndef _LIBCPP_HAS_NO_ATOMIC_HEADER
     _LIBCPP_SAFE_STATIC static atomic<memory_resource*> __res =
@@ -98,11 +101,11 @@ __default_memory_resource(bool set = false, memory_resource * new_res = nullptr)
         new_res = new_res ? new_res : new_delete_resource();
         // TODO: Can a weaker ordering be used?
         return _VSTD::atomic_exchange_explicit(
-            &__res, new_res, memory_order::memory_order_acq_rel);
+            &__res, new_res, memory_order_acq_rel);
     }
     else {
         return _VSTD::atomic_load_explicit(
-            &__res, memory_order::memory_order_acquire);
+            &__res, memory_order_acquire);
     }
 #elif !defined(_LIBCPP_HAS_NO_THREADS)
     _LIBCPP_SAFE_STATIC static memory_resource * res = &res_init.resources.new_delete_res;
@@ -130,12 +133,12 @@ __default_memory_resource(bool set = false, memory_resource * new_res = nullptr)
 #endif
 }
 
-memory_resource * get_default_resource() _NOEXCEPT
+memory_resource * get_default_resource() noexcept
 {
     return __default_memory_resource();
 }
 
-memory_resource * set_default_resource(memory_resource * __new_res) _NOEXCEPT
+memory_resource * set_default_resource(memory_resource * __new_res) noexcept
 {
     return __default_memory_resource(true, __new_res);
 }

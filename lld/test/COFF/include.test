@@ -1,4 +1,4 @@
-# RUN: yaml2obj < %s > %t.obj
+# RUN: yaml2obj %s -o %t.obj
 
 # RUN: lld-link /out:%t.exe /entry:main %t.obj /verbose >& %t.log
 ### FileCheck doesn't like empty input, so write something.
@@ -52,6 +52,19 @@ symbols:
   - Name:            '.text$mn'
     Value:           0
     SectionNumber:   2
+    SimpleType:      IMAGE_SYM_TYPE_NULL
+    ComplexType:     IMAGE_SYM_DTYPE_NULL
+    StorageClass:    IMAGE_SYM_CLASS_STATIC
+    SectionDefinition:
+      Length:          6
+      NumberOfRelocations: 0
+      NumberOfLinenumbers: 0
+      CheckSum:        0
+      Number:          0
+      Selection:       IMAGE_COMDAT_SELECT_ANY
+  - Name:            '.text$mn'
+    Value:           0
+    SectionNumber:   3
     SimpleType:      IMAGE_SYM_TYPE_NULL
     ComplexType:     IMAGE_SYM_DTYPE_NULL
     StorageClass:    IMAGE_SYM_CLASS_STATIC

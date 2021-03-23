@@ -1,5 +1,7 @@
 set(LLVM_LINK_COMPONENTS
   Analysis
+  AsmParser
+  BitWriter
   Core
   Support
   TransformUtils
@@ -7,9 +9,21 @@ set(LLVM_LINK_COMPONENTS
 
 add_llvm_unittest(UtilsTests
   ASanStackFrameLayoutTest.cpp
-  Cloning.cpp
-  FunctionComparator.cpp
-  IntegerDivision.cpp
-  Local.cpp
+  BasicBlockUtilsTest.cpp
+  CallPromotionUtilsTest.cpp
+  CloningTest.cpp
+  CodeExtractorTest.cpp
+  CodeMoverUtilsTest.cpp
+  DebugifyTest.cpp
+  FunctionComparatorTest.cpp
+  IntegerDivisionTest.cpp
+  LocalTest.cpp
+  LoopRotationUtilsTest.cpp
+  LoopUtilsTest.cpp
+  ScalarEvolutionExpanderTest.cpp
+  SizeOptsTest.cpp
+  SSAUpdaterBulkTest.cpp
+  UnrollLoopTest.cpp
   ValueMapperTest.cpp
+  VFABIUtils.cpp
   )

@@ -1,14 +1,13 @@
 //===-- AMDGPUInstrInfo.h - AMDGPU Instruction Information ------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
 /// \file
-/// \brief Contains the definition of a TargetInstrInfo class that is common
+/// Contains the definition of a TargetInstrInfo class that is common
 /// to all AMD GPUs.
 //
 //===----------------------------------------------------------------------===//
@@ -16,44 +15,71 @@
 #ifndef LLVM_LIB_TARGET_AMDGPU_AMDGPUINSTRINFO_H
 #define LLVM_LIB_TARGET_AMDGPU_AMDGPUINSTRINFO_H
 
-#include "AMDGPU.h"
-#include "llvm/Target/TargetInstrInfo.h"
 #include "Utils/AMDGPUBaseInfo.h"
-
-#define GET_INSTRINFO_HEADER
-#include "AMDGPUGenInstrInfo.inc"
 
 namespace llvm {
 
-class AMDGPUSubtarget;
+class GCNSubtarget;
 class MachineFunction;
 class MachineInstr;
 class MachineInstrBuilder;
+class MachineMemOperand;
 
-class AMDGPUInstrInfo : public AMDGPUGenInstrInfo {
-private:
-  const AMDGPUSubtarget &ST;
-
-  virtual void anchor();
-protected:
-  AMDGPUAS AMDGPUASI;
-
+class AMDGPUInstrInfo {
 public:
-  explicit AMDGPUInstrInfo(const AMDGPUSubtarget &st);
+  explicit AMDGPUInstrInfo(const GCNSubtarget &st);
 
-  bool shouldScheduleLoadsNear(SDNode *Load1, SDNode *Load2,
-                               int64_t Offset1, int64_t Offset2,
-                               unsigned NumLoads) const override;
-
-  /// \brief Return a target-specific opcode if Opcode is a pseudo instruction.
-  /// Return -1 if the target-specific opcode for the pseudo instruction does
-  /// not exist. If Opcode is not a pseudo instruction, this is identity.
-  int pseudoToMCOpcode(int Opcode) const;
-
-  /// \brief Given a MIMG \p Opcode that writes all 4 channels, return the
-  /// equivalent opcode that writes \p Channels Channels.
-  int getMaskedMIMGOp(uint16_t Opcode, unsigned Channels) const;
+  static bool isUniformMMO(const MachineMemOperand *MMO);
 };
+
+namespace AMDGPU {
+
+struct RsrcIntrinsic {
+  unsigned Intr;
+  uint8_t RsrcArg;
+  bool IsImage;
+};
+const RsrcIntrinsic *lookupRsrcIntrinsic(unsigned Intr);
+
+struct D16ImageDimIntrinsic {
+  unsigned Intr;
+  unsigned D16HelperIntr;
+};
+const D16ImageDimIntrinsic *lookupD16ImageDimIntrinsic(unsigned Intr);
+
+struct ImageDimIntrinsicInfo {
+  unsigned Intr;
+  unsigned BaseOpcode;
+  MIMGDim Dim;
+
+  uint8_t NumGradients;
+  uint8_t NumDmask;
+  uint8_t NumData;
+  uint8_t NumVAddrs;
+  uint8_t NumArgs;
+
+  uint8_t DMaskIndex;
+  uint8_t VAddrStart;
+  uint8_t GradientStart;
+  uint8_t CoordStart;
+  uint8_t LodIndex;
+  uint8_t MipIndex;
+  uint8_t VAddrEnd;
+  uint8_t RsrcIndex;
+  uint8_t SampIndex;
+  uint8_t UnormIndex;
+  uint8_t TexFailCtrlIndex;
+  uint8_t CachePolicyIndex;
+
+  uint8_t GradientTyArg;
+  uint8_t CoordTyArg;
+};
+const ImageDimIntrinsicInfo *getImageDimIntrinsicInfo(unsigned Intr);
+
+const ImageDimIntrinsicInfo *getImageDimInstrinsicByBaseOpcode(unsigned BaseOpcode,
+                                                               unsigned Dim);
+
+} // end AMDGPU namespace
 } // End llvm namespace
 
 #endif

@@ -1,4 +1,5 @@
-// RUN: %clang_cc1 -fsyntax-only -Wno-unused-value -verify -std=c++11 %s
+// RUN: %clang_cc1 -fsyntax-only -Wno-unused-value -verify -std=c++11 -Wno-c99-designator %s
+// RUN: %clang_cc1 -fsyntax-only -Wno-unused-value -verify -std=c++2a -Wno-c99-designator %s
 
 enum E { e };
 
@@ -43,38 +44,63 @@ class C {
     int a4[1] = {[&b] = 1 }; // expected-error{{integral constant expression must have integral or unscoped enumeration type, not 'const int *'}}
     int a5[3] = { []{return 0;}() };
     int a6[1] = {[this] = 1 }; // expected-error{{integral constant expression must have integral or unscoped enumeration type, not 'C *'}}
-    int a7[1] = {[d(0)] { return d; } ()}; // expected-warning{{extension}}
-    int a8[1] = {[d = 0] { return d; } ()}; // expected-warning{{extension}}
+    int a7[1] = {[d(0)] { return d; } ()};
+    int a8[1] = {[d = 0] { return d; } ()};
+    int a10[1] = {[id(0)] { return id; } ()};
+#if __cplusplus <= 201103L
+    // expected-warning@-4{{extension}}
+    // expected-warning@-4{{extension}}
+    // expected-warning@-4{{extension}}
+#endif
     int a9[1] = {[d = 0] = 1}; // expected-error{{is not an integral constant expression}}
-    int a10[1] = {[id(0)] { return id; } ()}; // expected-warning{{extension}}
+#if __cplusplus >= 201402L
+    // expected-note@-2{{constant expression cannot modify an object that is visible outside that expression}}
+#endif
     int a11[1] = {[id(0)] = 1};
   }
 
   void delete_lambda(int *p) {
     delete [] p;
     delete [] (int*) { new int }; // ok, compound-literal, not lambda
-    delete [] { return new int; } (); // expected-error{{expected expression}}
+    delete [] { return new int; } (); // expected-error {{'[]' after delete interpreted as 'delete[]'}}
     delete [&] { return new int; } (); // ok, lambda
+
+    delete []() { return new int; }(); // expected-error{{'[]' after delete interpreted as 'delete[]'}}
+    delete [](E Enum) { return new int((int)Enum); }(e); // expected-error{{'[]' after delete interpreted as 'delete[]'}}
+#if __cplusplus > 201703L
+    delete []<int = 0>() { return new int; }(); // expected-error{{'[]' after delete interpreted as 'delete[]'}}
+#endif
   }
 
   // We support init-captures in C++11 as an extension.
   int z;
   void init_capture() {
-    [n(0)] () mutable -> int { return ++n; }; // expected-warning{{extension}}
-    [n{0}] { return; }; // expected-warning{{extension}}
-    [n = 0] { return ++n; }; // expected-error {{captured by copy in a non-mutable}} expected-warning{{extension}}
-    [n = {0}] { return; }; // expected-error {{<initializer_list>}} expected-warning{{extension}}
-    [a([&b = z]{})](){}; // expected-warning 2{{extension}}
+    [n(0)] () mutable -> int { return ++n; };
+    [n{0}] { return; };
+    [a([&b = z]{})](){};
+    [n = 0] { return ++n; }; // expected-error {{captured by copy in a non-mutable}}
+    [n = {0}] { return; }; // expected-error {{<initializer_list>}}
+#if __cplusplus <= 201103L
+    // expected-warning@-6{{extension}}
+    // expected-warning@-6{{extension}}
+    // expected-warning@-6{{extension}}
+    // expected-warning@-7{{extension}}
+    // expected-warning@-7{{extension}}
+    // expected-warning@-7{{extension}}
+#endif
 
     int x = 4;
-    auto y = [&r = x, x = x + 1]() -> int { // expected-warning 2{{extension}}
+    auto y = [&r = x, x = x + 1]() -> int {
+#if __cplusplus <= 201103L
+      // expected-warning@-2{{extension}}
+      // expected-warning@-3{{extension}}
+#endif
       r += 2;
       return x + 2;
     } ();
   }
 
   void attributes() {
-    [] [[]] {}; // expected-error {{lambda requires '()' before attribute specifier}}
     [] __attribute__((noreturn)) {}; // expected-error {{lambda requires '()' before attribute specifier}}
     []() [[]]
       mutable {}; // expected-error {{expected body of lambda expression}}
@@ -89,6 +115,14 @@ class C {
     []() __attribute__((noreturn)) mutable { while(1); };
     []() mutable
       __attribute__((noreturn)) { while(1); }; // expected-error {{expected body of lambda expression}}
+
+    // Testing support for P2173 on adding attributes to the declaration
+    // rather than the type.
+    [] [[]] () {}; // expected-warning {{an attribute specifier sequence in this position is a C++2b extension}}
+#if __cplusplus > 201703L
+    [] <typename> [[]] () {};  // expected-warning {{an attribute specifier sequence in this position is a C++2b extension}}
+#endif
+    [] [[]] {}; // expected-warning {{an attribute specifier sequence in this position is a C++2b extension}}
   }
 };
 
@@ -98,6 +132,19 @@ void PR22122() {
 }
 
 template void PR22122<int>();
+
+namespace PR42778 {
+struct A {
+  template <class F> A(F&&) {}
+};
+
+struct S {
+  void mf() { A{[*this]{}}; }
+#if __cplusplus < 201703L
+  // expected-warning@-2 {{C++17 extension}}
+#endif
+};
+}
 
 struct S {
   template <typename T>

@@ -57,15 +57,15 @@ Adding an Option to an existing Flavor
 
 #. Modify :cpp:func:`lld::FlavorDriver::parse` in :file:
    `lib/Driver/{Flavor}Driver.cpp` to call the targetInfo setter
-   for corresponding to the option.
+   for the option.
 
-#. Modify {Flavor}Reader and {Flavor}Writer to use the new targtInfo option.
+#. Modify {Flavor}Reader and {Flavor}Writer to use the new targetInfo option.
 
 
 Adding a Flavor
 ===============
 
-#. Add an entry for the flavor in :file:`include/lld/Driver/Driver.h` to
+#. Add an entry for the flavor in :file:`include/lld/Common/Driver.h` to
    :cpp:class:`lld::UniversalDriver::Flavor`.
 
 #. Add an entry in :file:`lib/Driver/UniversalDriver.cpp` to

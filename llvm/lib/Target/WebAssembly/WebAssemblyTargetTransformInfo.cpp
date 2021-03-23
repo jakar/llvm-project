@@ -1,21 +1,20 @@
 //===-- WebAssemblyTargetTransformInfo.cpp - WebAssembly-specific TTI -----===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 ///
 /// \file
-/// \brief This file defines the WebAssembly-specific TargetTransformInfo
+/// This file defines the WebAssembly-specific TargetTransformInfo
 /// implementation.
 ///
 //===----------------------------------------------------------------------===//
 
 #include "WebAssemblyTargetTransformInfo.h"
+#include "llvm/CodeGen/CostTable.h"
 #include "llvm/Support/Debug.h"
-#include "llvm/Target/CostTable.h"
 using namespace llvm;
 
 #define DEBUG_TYPE "wasmtti"
@@ -26,17 +25,18 @@ WebAssemblyTTIImpl::getPopcntSupport(unsigned TyWidth) const {
   return TargetTransformInfo::PSK_FastHardware;
 }
 
-unsigned WebAssemblyTTIImpl::getNumberOfRegisters(bool Vector) {
-  unsigned Result = BaseT::getNumberOfRegisters(Vector);
+unsigned WebAssemblyTTIImpl::getNumberOfRegisters(unsigned ClassID) const {
+  unsigned Result = BaseT::getNumberOfRegisters(ClassID);
 
   // For SIMD, use at least 16 registers, as a rough guess.
+  bool Vector = (ClassID == 1);
   if (Vector)
     Result = std::max(Result, 16u);
 
   return Result;
 }
 
-unsigned WebAssemblyTTIImpl::getRegisterBitWidth(bool Vector) {
+unsigned WebAssemblyTTIImpl::getRegisterBitWidth(bool Vector) const {
   if (Vector && getST()->hasSIMD128())
     return 128;
 
@@ -44,14 +44,16 @@ unsigned WebAssemblyTTIImpl::getRegisterBitWidth(bool Vector) {
 }
 
 unsigned WebAssemblyTTIImpl::getArithmeticInstrCost(
-    unsigned Opcode, Type *Ty, TTI::OperandValueKind Opd1Info,
+    unsigned Opcode, Type *Ty, TTI::TargetCostKind CostKind,
+    TTI::OperandValueKind Opd1Info,
     TTI::OperandValueKind Opd2Info, TTI::OperandValueProperties Opd1PropInfo,
-    TTI::OperandValueProperties Opd2PropInfo, ArrayRef<const Value *> Args) {
+    TTI::OperandValueProperties Opd2PropInfo, ArrayRef<const Value *> Args,
+    const Instruction *CxtI) {
 
   unsigned Cost = BasicTTIImplBase<WebAssemblyTTIImpl>::getArithmeticInstrCost(
-      Opcode, Ty, Opd1Info, Opd2Info, Opd1PropInfo, Opd2PropInfo);
+      Opcode, Ty, CostKind, Opd1Info, Opd2Info, Opd1PropInfo, Opd2PropInfo);
 
-  if (VectorType *VTy = dyn_cast<VectorType>(Ty)) {
+  if (auto *VTy = dyn_cast<VectorType>(Ty)) {
     switch (Opcode) {
     case Instruction::LShr:
     case Instruction::AShr:
@@ -61,10 +63,11 @@ unsigned WebAssemblyTTIImpl::getArithmeticInstrCost(
       // approxmation.
       if (Opd2Info != TTI::OK_UniformValue &&
           Opd2Info != TTI::OK_UniformConstantValue)
-        Cost = VTy->getNumElements() *
-               (TargetTransformInfo::TCC_Basic +
-                getArithmeticInstrCost(Opcode, VTy->getElementType()) +
-                TargetTransformInfo::TCC_Basic);
+        Cost =
+            cast<FixedVectorType>(VTy)->getNumElements() *
+            (TargetTransformInfo::TCC_Basic +
+             getArithmeticInstrCost(Opcode, VTy->getElementType(), CostKind) +
+             TargetTransformInfo::TCC_Basic);
       break;
     }
   }
@@ -80,4 +83,48 @@ unsigned WebAssemblyTTIImpl::getVectorInstrCost(unsigned Opcode, Type *Val,
     return Cost + 25 * TargetTransformInfo::TCC_Expensive;
 
   return Cost;
+}
+
+bool WebAssemblyTTIImpl::areInlineCompatible(const Function *Caller,
+                                             const Function *Callee) const {
+  // Allow inlining only when the Callee has a subset of the Caller's
+  // features. In principle, we should be able to inline regardless of any
+  // features because WebAssembly supports features at module granularity, not
+  // function granularity, but without this restriction it would be possible for
+  // a module to "forget" about features if all the functions that used them
+  // were inlined.
+  const TargetMachine &TM = getTLI()->getTargetMachine();
+
+  const FeatureBitset &CallerBits =
+      TM.getSubtargetImpl(*Caller)->getFeatureBits();
+  const FeatureBitset &CalleeBits =
+      TM.getSubtargetImpl(*Callee)->getFeatureBits();
+
+  return (CallerBits & CalleeBits) == CalleeBits;
+}
+
+void WebAssemblyTTIImpl::getUnrollingPreferences(
+  Loop *L, ScalarEvolution &SE, TTI::UnrollingPreferences &UP) const {
+  // Scan the loop: don't unroll loops with calls. This is a standard approach
+  // for most (all?) targets.
+  for (BasicBlock *BB : L->blocks())
+    for (Instruction &I : *BB)
+      if (isa<CallInst>(I) || isa<InvokeInst>(I))
+        if (const Function *F = cast<CallBase>(I).getCalledFunction())
+          if (isLoweredToCall(F))
+            return;
+
+  // The chosen threshold is within the range of 'LoopMicroOpBufferSize' of
+  // the various microarchitectures that use the BasicTTI implementation and
+  // has been selected through heuristics across multiple cores and runtimes.
+  UP.Partial = UP.Runtime = UP.UpperBound = true;
+  UP.PartialThreshold = 30;
+
+  // Avoid unrolling when optimizing for size.
+  UP.OptSizeThreshold = 0;
+  UP.PartialOptSizeThreshold = 0;
+
+  // Set number of instructions optimized when "back edge"
+  // becomes "fall through" to default value of 2.
+  UP.BEInsns = 2;
 }

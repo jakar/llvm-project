@@ -1,10 +1,10 @@
-; RUN: llc < %s -march=x86    -mattr=+mmx,+sse,+soft-float \
+; RUN: llc < %s -mtriple=i686--    -mattr=+mmx,+sse,+soft-float \
 ; RUN:     | FileCheck %s --check-prefix=SOFT1 --check-prefix=CHECK
-; RUN: llc < %s -march=x86-64 -mattr=+mmx,+sse2,+soft-float \
+; RUN: llc < %s -mtriple=x86_64-- -mattr=+mmx,+sse2,+soft-float \
 ; RUN:     | FileCheck %s --check-prefix=SOFT2 --check-prefix=CHECK
-; RUN: llc < %s -march=x86-64 -mattr=+mmx,+sse \
+; RUN: llc < %s -mtriple=x86_64-- -mattr=+mmx,+sse \
 ; RUN:     | FileCheck %s --check-prefix=SSE1 --check-prefix=CHECK
-; RUN: llc < %s -march=x86-64 -mattr=+mmx,+sse2 \
+; RUN: llc < %s -mtriple=x86_64-- -mattr=+mmx,+sse2 \
 ; RUN:     | FileCheck %s --check-prefix=SSE2 --check-prefix=CHECK
 ; RUN: llc < %s -mtriple=x86_64-gnux32 -mattr=+mmx,+sse2,+soft-float | FileCheck %s
 
@@ -53,5 +53,8 @@ entry:
 ; SOFT2-NOT:   xmm{{[0-9]+}}
 ; SSE1:        xmm{{[0-9]+}}
 ; SSE2:        xmm{{[0-9]+}}
-; CHECK:       ret{{[lq]}}
+; SOFT1:       ret{{[lq]}}
+; SOFT2:       ret{{[lq]}}
+; SSE1:       jmp __addtf3
+; SSE2:       jmp __addtf3
 }

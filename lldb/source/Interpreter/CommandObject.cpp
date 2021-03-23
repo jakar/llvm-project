@@ -1,9 +1,8 @@
-//===-- CommandObject.cpp ---------------------------------------*- C++ -*-===//
+//===-- CommandObject.cpp -------------------------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -17,8 +16,9 @@
 #include <stdlib.h>
 
 #include "lldb/Core/Address.h"
-#include "lldb/Core/ArchSpec.h"
 #include "lldb/Interpreter/Options.h"
+#include "lldb/Utility/ArchSpec.h"
+#include "llvm/ADT/ScopeExit.h"
 
 // These are for the Sourcename completers.
 // FIXME: Make a separate file for the completers.
@@ -36,28 +36,26 @@
 using namespace lldb;
 using namespace lldb_private;
 
-//-------------------------------------------------------------------------
 // CommandObject
-//-------------------------------------------------------------------------
 
-CommandObject::CommandObject(CommandInterpreter &interpreter, llvm::StringRef name,
-  llvm::StringRef help, llvm::StringRef syntax, uint32_t flags)
-    : m_interpreter(interpreter), m_cmd_name(name),
-      m_cmd_help_short(), m_cmd_help_long(), m_cmd_syntax(), m_flags(flags),
-      m_arguments(), m_deprecated_command_override_callback(nullptr),
+CommandObject::CommandObject(CommandInterpreter &interpreter,
+                             llvm::StringRef name, llvm::StringRef help,
+                             llvm::StringRef syntax, uint32_t flags)
+    : m_interpreter(interpreter), m_cmd_name(std::string(name)),
+      m_flags(flags), m_deprecated_command_override_callback(nullptr),
       m_command_override_callback(nullptr), m_command_override_baton(nullptr) {
-  m_cmd_help_short = help;
-  m_cmd_syntax = syntax;
+  m_cmd_help_short = std::string(help);
+  m_cmd_syntax = std::string(syntax);
 }
 
-CommandObject::~CommandObject() {}
+Debugger &CommandObject::GetDebugger() { return m_interpreter.GetDebugger(); }
 
 llvm::StringRef CommandObject::GetHelp() { return m_cmd_help_short; }
 
 llvm::StringRef CommandObject::GetHelpLong() { return m_cmd_help_long; }
 
 llvm::StringRef CommandObject::GetSyntax() {
-  if (m_cmd_syntax.empty())
+  if (!m_cmd_syntax.empty())
     return m_cmd_syntax;
 
   StreamString syntax_str;
@@ -74,24 +72,32 @@ llvm::StringRef CommandObject::GetSyntax() {
       syntax_str.PutCString("-- ");
     GetFormattedCommandArguments(syntax_str);
   }
-  m_cmd_syntax = syntax_str.GetString();
+  m_cmd_syntax = std::string(syntax_str.GetString());
 
   return m_cmd_syntax;
 }
 
 llvm::StringRef CommandObject::GetCommandName() const { return m_cmd_name; }
 
-void CommandObject::SetCommandName(llvm::StringRef name) { m_cmd_name = name; }
+void CommandObject::SetCommandName(llvm::StringRef name) {
+  m_cmd_name = std::string(name);
+}
 
-void CommandObject::SetHelp(llvm::StringRef str) { m_cmd_help_short = str; }
+void CommandObject::SetHelp(llvm::StringRef str) {
+  m_cmd_help_short = std::string(str);
+}
 
-void CommandObject::SetHelpLong(llvm::StringRef str) { m_cmd_help_long = str; }
+void CommandObject::SetHelpLong(llvm::StringRef str) {
+  m_cmd_help_long = std::string(str);
+}
 
-void CommandObject::SetSyntax(llvm::StringRef str) { m_cmd_syntax = str; }
+void CommandObject::SetSyntax(llvm::StringRef str) {
+  m_cmd_syntax = std::string(str);
+}
 
 Options *CommandObject::GetOptions() {
-  // By default commands don't have options unless this virtual function
-  // is overridden by base classes.
+  // By default commands don't have options unless this virtual function is
+  // overridden by base classes.
   return nullptr;
 }
 
@@ -99,25 +105,21 @@ bool CommandObject::ParseOptions(Args &args, CommandReturnObject &result) {
   // See if the subclass has options?
   Options *options = GetOptions();
   if (options != nullptr) {
-    Error error;
+    Status error;
 
     auto exe_ctx = GetCommandInterpreter().GetExecutionContext();
     options->NotifyOptionParsingStarting(&exe_ctx);
 
-    // ParseOptions calls getopt_long_only, which always skips the zero'th item
-    // in the array and starts at position 1,
-    // so we need to push a dummy value into position zero.
-    args.Unshift(llvm::StringRef("dummy_string"));
     const bool require_validation = true;
-    error = args.ParseOptions(*options, &exe_ctx,
-                              GetCommandInterpreter().GetPlatform(true),
-                              require_validation);
+    llvm::Expected<Args> args_or = options->Parse(
+        args, &exe_ctx, GetCommandInterpreter().GetPlatform(true),
+        require_validation);
 
-    // The "dummy_string" will have already been removed by ParseOptions,
-    // so no need to remove it.
-
-    if (error.Success())
+    if (args_or) {
+      args = std::move(*args_or);
       error = options->NotifyOptionParsingFinished(&exe_ctx);
+    } else
+      error = args_or.takeError();
 
     if (error.Success()) {
       if (options->VerifyOptions(result))
@@ -141,21 +143,19 @@ bool CommandObject::ParseOptions(Args &args, CommandReturnObject &result) {
 }
 
 bool CommandObject::CheckRequirements(CommandReturnObject &result) {
-#ifdef LLDB_CONFIGURATION_DEBUG
-  // Nothing should be stored in m_exe_ctx between running commands as m_exe_ctx
-  // has shared pointers to the target, process, thread and frame and we don't
-  // want any CommandObject instances to keep any of these objects around
-  // longer than for a single command. Every command should call
-  // CommandObject::Cleanup() after it has completed
-  assert(m_exe_ctx.GetTargetPtr() == NULL);
-  assert(m_exe_ctx.GetProcessPtr() == NULL);
-  assert(m_exe_ctx.GetThreadPtr() == NULL);
-  assert(m_exe_ctx.GetFramePtr() == NULL);
-#endif
+  // Nothing should be stored in m_exe_ctx between running commands as
+  // m_exe_ctx has shared pointers to the target, process, thread and frame and
+  // we don't want any CommandObject instances to keep any of these objects
+  // around longer than for a single command. Every command should call
+  // CommandObject::Cleanup() after it has completed.
+  assert(!m_exe_ctx.GetTargetPtr());
+  assert(!m_exe_ctx.GetProcessPtr());
+  assert(!m_exe_ctx.GetThreadPtr());
+  assert(!m_exe_ctx.GetFramePtr());
 
-  // Lock down the interpreter's execution context prior to running the
-  // command so we guarantee the selected target, process, thread and frame
-  // can't go away during the execution
+  // Lock down the interpreter's execution context prior to running the command
+  // so we guarantee the selected target, process, thread and frame can't go
+  // away during the execution
   m_exe_ctx = m_interpreter.GetExecutionContext();
 
   const uint32_t flags = GetFlags().Get();
@@ -255,6 +255,15 @@ bool CommandObject::CheckRequirements(CommandReturnObject &result) {
       }
     }
   }
+
+  if (GetFlags().Test(eCommandProcessMustBeTraced)) {
+    Target *target = m_exe_ctx.GetTargetPtr();
+    if (target && !target->GetTrace()) {
+      result.SetError("Process is not being traced.");
+      return false;
+    }
+  }
+
   return true;
 }
 
@@ -264,55 +273,36 @@ void CommandObject::Cleanup() {
     m_api_locker.unlock();
 }
 
-int CommandObject::HandleCompletion(Args &input, int &cursor_index,
-                                    int &cursor_char_position,
-                                    int match_start_point,
-                                    int max_return_elements,
-                                    bool &word_complete, StringList &matches) {
+void CommandObject::HandleCompletion(CompletionRequest &request) {
+
+  m_exe_ctx = m_interpreter.GetExecutionContext();
+  auto reset_ctx = llvm::make_scope_exit([this]() { Cleanup(); });
+
   // Default implementation of WantsCompletion() is !WantsRawCommandString().
-  // Subclasses who want raw command string but desire, for example,
-  // argument completion should override WantsCompletion() to return true,
-  // instead.
+  // Subclasses who want raw command string but desire, for example, argument
+  // completion should override WantsCompletion() to return true, instead.
   if (WantsRawCommandString() && !WantsCompletion()) {
     // FIXME: Abstract telling the completion to insert the completion
     // character.
-    matches.Clear();
-    return -1;
+    return;
   } else {
     // Can we do anything generic with the options?
     Options *cur_options = GetOptions();
-    CommandReturnObject result;
+    CommandReturnObject result(m_interpreter.GetDebugger().GetUseColor());
     OptionElementVector opt_element_vector;
 
     if (cur_options != nullptr) {
-      // Re-insert the dummy command name string which will have been
-      // stripped off:
-      input.Unshift(llvm::StringRef("dummy-string"));
-      cursor_index++;
+      opt_element_vector = cur_options->ParseForCompletion(
+          request.GetParsedLine(), request.GetCursorIndex());
 
-      // I stick an element on the end of the input, because if the last element
-      // is option that requires an argument, getopt_long_only will freak out.
-
-      input.AppendArgument(llvm::StringRef("<FAKE-VALUE>"));
-
-      input.ParseArgsForCompletion(*cur_options, opt_element_vector,
-                                   cursor_index);
-
-      input.DeleteArgumentAtIndex(input.GetArgumentCount() - 1);
-
-      bool handled_by_options;
-      handled_by_options = cur_options->HandleOptionCompletion(
-          input, opt_element_vector, cursor_index, cursor_char_position,
-          match_start_point, max_return_elements, GetCommandInterpreter(),
-          word_complete, matches);
+      bool handled_by_options = cur_options->HandleOptionCompletion(
+          request, opt_element_vector, GetCommandInterpreter());
       if (handled_by_options)
-        return matches.GetSize();
+        return;
     }
 
     // If we got here, the last word is not an option or an option argument.
-    return HandleArgumentCompletion(
-        input, cursor_index, cursor_char_position, opt_element_vector,
-        match_start_point, max_return_elements, word_complete, matches);
+    HandleArgumentCompletion(request, opt_element_vector);
   }
 }
 
@@ -349,6 +339,22 @@ bool CommandObject::HelpTextContainsWord(llvm::StringRef search_word,
   }
 
   return found_word;
+}
+
+bool CommandObject::ParseOptionsAndNotify(Args &args,
+                                          CommandReturnObject &result,
+                                          OptionGroupOptions &group_options,
+                                          ExecutionContext &exe_ctx) {
+  if (!ParseOptions(args, result))
+    return false;
+
+  Status error(group_options.NotifyOptionParsingFinished(&exe_ctx));
+  if (error.Fail()) {
+    result.AppendError(error.AsCString());
+    result.SetStatus(eReturnStatusFailed);
+    return false;
+  }
+  return true;
 }
 
 int CommandObject::GetNumArgumentEntries() { return m_arguments.size(); }
@@ -420,15 +426,12 @@ const char *CommandObject::GetArgumentName(CommandArgumentType arg_type) {
 }
 
 bool CommandObject::IsPairType(ArgumentRepetitionType arg_repeat_type) {
-  if ((arg_repeat_type == eArgRepeatPairPlain) ||
-      (arg_repeat_type == eArgRepeatPairOptional) ||
-      (arg_repeat_type == eArgRepeatPairPlus) ||
-      (arg_repeat_type == eArgRepeatPairStar) ||
-      (arg_repeat_type == eArgRepeatPairRange) ||
-      (arg_repeat_type == eArgRepeatPairRangeOptional))
-    return true;
-
-  return false;
+  return (arg_repeat_type == eArgRepeatPairPlain) ||
+         (arg_repeat_type == eArgRepeatPairOptional) ||
+         (arg_repeat_type == eArgRepeatPairPlus) ||
+         (arg_repeat_type == eArgRepeatPairStar) ||
+         (arg_repeat_type == eArgRepeatPairRange) ||
+         (arg_repeat_type == eArgRepeatPairRangeOptional);
 }
 
 static CommandObject::CommandArgumentEntry
@@ -441,9 +444,10 @@ OptSetFiltered(uint32_t opt_set_mask,
   return ret_val;
 }
 
-// Default parameter value of opt_set_mask is LLDB_OPT_SET_ALL, which means take
-// all the argument data into account.  On rare cases where some argument sticks
-// with certain option sets, this function returns the option set filtered args.
+// Default parameter value of opt_set_mask is LLDB_OPT_SET_ALL, which means
+// take all the argument data into account.  On rare cases where some argument
+// sticks with certain option sets, this function returns the option set
+// filtered args.
 void CommandObject::GetFormattedCommandArguments(Stream &str,
                                                  uint32_t opt_set_mask) {
   int num_args = m_arguments.size();
@@ -483,8 +487,7 @@ void CommandObject::GetFormattedCommandArguments(Stream &str,
                    first_name, second_name);
         break;
       // Explicitly test for all the rest of the cases, so if new types get
-      // added we will notice the
-      // missing case statement(s).
+      // added we will notice the missing case statement(s).
       case eArgRepeatPlain:
       case eArgRepeatOptional:
       case eArgRepeatPlus:
@@ -502,7 +505,7 @@ void CommandObject::GetFormattedCommandArguments(Stream &str,
         names.Printf("%s", GetArgumentName(arg_entry[j].arg_type));
       }
 
-      std::string name_str = names.GetString();
+      std::string name_str = std::string(names.GetString());
       switch (arg_entry[0].arg_repetition) {
       case eArgRepeatPlain:
         str.Printf("<%s>", name_str.c_str());
@@ -520,8 +523,7 @@ void CommandObject::GetFormattedCommandArguments(Stream &str,
         str.Printf("<%s_1> .. <%s_n>", name_str.c_str(), name_str.c_str());
         break;
       // Explicitly test for all the rest of the cases, so if new types get
-      // added we will notice the
-      // missing case statement(s).
+      // added we will notice the missing case statement(s).
       case eArgRepeatPairPlain:
       case eArgRepeatPairOptional:
       case eArgRepeatPairPlus:
@@ -529,8 +531,8 @@ void CommandObject::GetFormattedCommandArguments(Stream &str,
       case eArgRepeatPairRange:
       case eArgRepeatPairRangeOptional:
         // These should not be hit, as they should pass the IsPairType test
-        // above, and control should
-        // have gone into the other branch of the if statement.
+        // above, and control should have gone into the other branch of the if
+        // statement.
         break;
       }
     }
@@ -691,7 +693,7 @@ static llvm::StringRef FormatHelpTextCallback() {
 
   sstr.Flush();
 
-  help_text = sstr.GetString();
+  help_text = std::string(sstr.GetString());
 
   return help_text;
 }
@@ -709,7 +711,7 @@ static llvm::StringRef LanguageTypeHelpTextCallback() {
 
   sstr.Flush();
 
-  help_text = sstr.GetString();
+  help_text = std::string(sstr.GetString());
 
   return help_text;
 }
@@ -827,7 +829,7 @@ static llvm::StringRef ExprPathHelpTextCallback() {
 void CommandObject::FormatLongHelpText(Stream &output_strm,
                                        llvm::StringRef long_help) {
   CommandInterpreter &interpreter = GetCommandInterpreter();
-  std::stringstream lineStream(long_help);
+  std::stringstream lineStream{std::string(long_help)};
   std::string line;
   while (std::getline(lineStream, line)) {
     if (line.empty()) {
@@ -840,8 +842,8 @@ void CommandObject::FormatLongHelpText(Stream &output_strm,
     }
     std::string whitespace_prefix = line.substr(0, result);
     std::string remainder = line.substr(result);
-    interpreter.OutputFormattedHelpText(output_strm, whitespace_prefix.c_str(),
-                                        remainder.c_str());
+    interpreter.OutputFormattedHelpText(output_strm, whitespace_prefix,
+                                        remainder);
   }
 }
 
@@ -853,13 +855,11 @@ void CommandObject::GenerateHelpText(CommandReturnObject &result) {
 
 void CommandObject::GenerateHelpText(Stream &output_strm) {
   CommandInterpreter &interpreter = GetCommandInterpreter();
+  std::string help_text(GetHelp());
   if (WantsRawCommandString()) {
-    std::string help_text(GetHelp());
     help_text.append("  Expects 'raw' input (see 'help raw-input'.)");
-    interpreter.OutputFormattedHelpText(output_strm, "", "", help_text.c_str(),
-                                        1);
-  } else
-    interpreter.OutputFormattedHelpText(output_strm, "", "", GetHelp(), 1);
+  }
+  interpreter.OutputFormattedHelpText(output_strm, "", help_text);
   output_strm << "\nSyntax: " << GetSyntax() << "\n";
   Options *options = GetOptions();
   if (options != nullptr) {
@@ -874,9 +874,8 @@ void CommandObject::GenerateHelpText(Stream &output_strm) {
   if (!IsDashDashCommand() && options && options->NumCommandOptions() > 0) {
     if (WantsRawCommandString() && !WantsCompletion()) {
       // Emit the message about using ' -- ' between the end of the command
-      // options and the raw input
-      // conditionally, i.e., only if the command object does not want
-      // completion.
+      // options and the raw input conditionally, i.e., only if the command
+      // object does not want completion.
       interpreter.OutputFormattedHelpText(
           output_strm, "", "",
           "\nImportant Note: Because this command takes 'raw' input, if you "
@@ -916,8 +915,8 @@ void CommandObject::AddIDsArgumentData(CommandArgumentEntry &arg,
   id_range_arg.arg_repetition = eArgRepeatOptional;
 
   // The first (and only) argument for this command could be either an id or an
-  // id_range.
-  // Push both variants into the entry for the first argument for this command.
+  // id_range. Push both variants into the entry for the first argument for
+  // this command.
   arg.push_back(id_arg);
   arg.push_back(id_range_arg);
 }
@@ -936,12 +935,21 @@ const char *CommandObject::GetArgumentDescriptionAsCString(
   return g_arguments_data[arg_type].help_text;
 }
 
-Target *CommandObject::GetDummyTarget() {
+Target &CommandObject::GetDummyTarget() {
   return m_interpreter.GetDebugger().GetDummyTarget();
 }
 
-Target *CommandObject::GetSelectedOrDummyTarget(bool prefer_dummy) {
+Target &CommandObject::GetSelectedOrDummyTarget(bool prefer_dummy) {
   return m_interpreter.GetDebugger().GetSelectedOrDummyTarget(prefer_dummy);
+}
+
+Target &CommandObject::GetSelectedTarget() {
+  assert(m_flags.AnySet(eCommandRequiresTarget | eCommandProcessMustBePaused |
+                        eCommandProcessMustBeLaunched | eCommandRequiresFrame |
+                        eCommandRequiresThread | eCommandRequiresProcess |
+                        eCommandRequiresRegContext) &&
+         "GetSelectedTarget called from object that may have no target");
+  return *m_interpreter.GetDebugger().GetSelectedTarget();
 }
 
 Thread *CommandObject::GetDefaultThread() {
@@ -977,7 +985,7 @@ bool CommandObjectParsed::Execute(const char *args_string,
   }
   if (!handled) {
     for (auto entry : llvm::enumerate(cmd_args.entries())) {
-      if (!entry.value().ref.empty() && entry.value().ref.front() == '`') {
+      if (!entry.value().ref().empty() && entry.value().ref().front() == '`') {
         cmd_args.ReplaceArgumentAtIndex(
             entry.index(),
             m_interpreter.ProcessEmbeddedScriptCommands(entry.value().c_str()));
@@ -1021,7 +1029,8 @@ static llvm::StringRef arch_helper() {
   static StreamString g_archs_help;
   if (g_archs_help.Empty()) {
     StringList archs;
-    ArchSpec::AutoComplete(llvm::StringRef(), archs);
+
+    ArchSpec::ListSupportedArchNames(archs);
     g_archs_help.Printf("These are the supported architecture names:\n");
     archs.Join("\n", g_archs_help);
   }
@@ -1038,13 +1047,13 @@ CommandObject::ArgumentTableEntry CommandObject::g_arguments_data[] = {
     { eArgTypeBoolean, "boolean", CommandCompletions::eNoCompletion, { nullptr, false }, "A Boolean value: 'true' or 'false'" },
     { eArgTypeBreakpointID, "breakpt-id", CommandCompletions::eNoCompletion, { BreakpointIDHelpTextCallback, false }, nullptr },
     { eArgTypeBreakpointIDRange, "breakpt-id-list", CommandCompletions::eNoCompletion, { BreakpointIDRangeHelpTextCallback, false }, nullptr },
-    { eArgTypeBreakpointName, "breakpoint-name", CommandCompletions::eNoCompletion, { BreakpointNameHelpTextCallback, false }, nullptr },
+    { eArgTypeBreakpointName, "breakpoint-name", CommandCompletions::eBreakpointNameCompletion, { BreakpointNameHelpTextCallback, false }, nullptr },
     { eArgTypeByteSize, "byte-size", CommandCompletions::eNoCompletion, { nullptr, false }, "Number of bytes to use." },
     { eArgTypeClassName, "class-name", CommandCompletions::eNoCompletion, { nullptr, false }, "Then name of a class from the debug information in the program." },
     { eArgTypeCommandName, "cmd-name", CommandCompletions::eNoCompletion, { nullptr, false }, "A debugger command (may be multiple words), without any options or arguments." },
     { eArgTypeCount, "count", CommandCompletions::eNoCompletion, { nullptr, false }, "An unsigned integer." },
     { eArgTypeDirectoryName, "directory", CommandCompletions::eDiskDirectoryCompletion, { nullptr, false }, "A directory name." },
-    { eArgTypeDisassemblyFlavor, "disassembly-flavor", CommandCompletions::eNoCompletion, { nullptr, false }, "A disassembly flavor recognized by your disassembly plugin.  Currently the only valid options are \"att\" and \"intel\" for Intel targets" },
+    { eArgTypeDisassemblyFlavor, "disassembly-flavor", CommandCompletions::eDisassemblyFlavorCompletion, { nullptr, false }, "A disassembly flavor recognized by your disassembly plugin.  Currently the only valid options are \"att\" and \"intel\" for Intel targets" },
     { eArgTypeDescriptionVerbosity, "description-verbosity", CommandCompletions::eNoCompletion, { nullptr, false }, "How verbose the output of 'po' should be." },
     { eArgTypeEndAddress, "end-address", CommandCompletions::eNoCompletion, { nullptr, false }, "Help text goes here." },
     { eArgTypeExpression, "expr", CommandCompletions::eNoCompletion, { nullptr, false }, "Help text goes here." },
@@ -1052,19 +1061,20 @@ CommandObject::ArgumentTableEntry CommandObject::g_arguments_data[] = {
     { eArgTypeExprFormat, "expression-format", CommandCompletions::eNoCompletion, { nullptr, false }, "[ [bool|b] | [bin] | [char|c] | [oct|o] | [dec|i|d|u] | [hex|x] | [float|f] | [cstr|s] ]" },
     { eArgTypeFilename, "filename", CommandCompletions::eDiskFileCompletion, { nullptr, false }, "The name of a file (can include path)." },
     { eArgTypeFormat, "format", CommandCompletions::eNoCompletion, { FormatHelpTextCallback, true }, nullptr },
-    { eArgTypeFrameIndex, "frame-index", CommandCompletions::eNoCompletion, { nullptr, false }, "Index into a thread's list of frames." },
+    { eArgTypeFrameIndex, "frame-index", CommandCompletions::eFrameIndexCompletion, { nullptr, false }, "Index into a thread's list of frames." },
     { eArgTypeFullName, "fullname", CommandCompletions::eNoCompletion, { nullptr, false }, "Help text goes here." },
     { eArgTypeFunctionName, "function-name", CommandCompletions::eNoCompletion, { nullptr, false }, "The name of a function." },
     { eArgTypeFunctionOrSymbol, "function-or-symbol", CommandCompletions::eNoCompletion, { nullptr, false }, "The name of a function or symbol." },
     { eArgTypeGDBFormat, "gdb-format", CommandCompletions::eNoCompletion, { GDBFormatHelpTextCallback, true }, nullptr },
     { eArgTypeHelpText, "help-text", CommandCompletions::eNoCompletion, { nullptr, false }, "Text to be used as help for some other entity in LLDB" },
     { eArgTypeIndex, "index", CommandCompletions::eNoCompletion, { nullptr, false }, "An index into a list." },
-    { eArgTypeLanguage, "source-language", CommandCompletions::eNoCompletion, { LanguageTypeHelpTextCallback, true }, nullptr },
+    { eArgTypeLanguage, "source-language", CommandCompletions::eTypeLanguageCompletion, { LanguageTypeHelpTextCallback, true }, nullptr },
     { eArgTypeLineNum, "linenum", CommandCompletions::eNoCompletion, { nullptr, false }, "Line number in a source file." },
+    { eArgTypeFileLineColumn, "linespec", CommandCompletions::eNoCompletion, { nullptr, false }, "A source specifier in the form file:line[:column]" },
     { eArgTypeLogCategory, "log-category", CommandCompletions::eNoCompletion, { nullptr, false }, "The name of a category within a log channel, e.g. all (try \"log list\" to see a list of all channels and their categories." },
     { eArgTypeLogChannel, "log-channel", CommandCompletions::eNoCompletion, { nullptr, false }, "The name of a log channel, e.g. process.gdb-remote (try \"log list\" to see a list of all channels and their categories)." },
     { eArgTypeMethod, "method", CommandCompletions::eNoCompletion, { nullptr, false }, "A C++ method name." },
-    { eArgTypeName, "name", CommandCompletions::eNoCompletion, { nullptr, false }, "Help text goes here." },
+    { eArgTypeName, "name", CommandCompletions::eTypeCategoryNameCompletion, { nullptr, false }, "Help text goes here." },
     { eArgTypeNewPathPrefix, "new-path-prefix", CommandCompletions::eNoCompletion, { nullptr, false }, "Help text goes here." },
     { eArgTypeNumLines, "num-lines", CommandCompletions::eNoCompletion, { nullptr, false }, "The number of lines to use." },
     { eArgTypeNumberPerLine, "number-per-line", CommandCompletions::eNoCompletion, { nullptr, false }, "The number of items per line to display." },
@@ -1074,19 +1084,19 @@ CommandObject::ArgumentTableEntry CommandObject::g_arguments_data[] = {
     { eArgTypePath, "path", CommandCompletions::eDiskFileCompletion, { nullptr, false }, "Path." },
     { eArgTypePermissionsNumber, "perms-numeric", CommandCompletions::eNoCompletion, { nullptr, false }, "Permissions given as an octal number (e.g. 755)." },
     { eArgTypePermissionsString, "perms=string", CommandCompletions::eNoCompletion, { nullptr, false }, "Permissions given as a string value (e.g. rw-r-xr--)." },
-    { eArgTypePid, "pid", CommandCompletions::eNoCompletion, { nullptr, false }, "The process ID number." },
-    { eArgTypePlugin, "plugin", CommandCompletions::eNoCompletion, { nullptr, false }, "Help text goes here." },
-    { eArgTypeProcessName, "process-name", CommandCompletions::eNoCompletion, { nullptr, false }, "The name of the process." },
+    { eArgTypePid, "pid", CommandCompletions::eProcessIDCompletion, { nullptr, false }, "The process ID number." },
+    { eArgTypePlugin, "plugin", CommandCompletions::eProcessPluginCompletion, { nullptr, false }, "Help text goes here." },
+    { eArgTypeProcessName, "process-name", CommandCompletions::eProcessNameCompletion, { nullptr, false }, "The name of the process." },
     { eArgTypePythonClass, "python-class", CommandCompletions::eNoCompletion, { nullptr, false }, "The name of a Python class." },
     { eArgTypePythonFunction, "python-function", CommandCompletions::eNoCompletion, { nullptr, false }, "The name of a Python function." },
     { eArgTypePythonScript, "python-script", CommandCompletions::eNoCompletion, { nullptr, false }, "Source code written in Python." },
     { eArgTypeQueueName, "queue-name", CommandCompletions::eNoCompletion, { nullptr, false }, "The name of the thread queue." },
     { eArgTypeRegisterName, "register-name", CommandCompletions::eNoCompletion, { RegisterNameHelpTextCallback, true }, nullptr },
-    { eArgTypeRegularExpression, "regular-expression", CommandCompletions::eNoCompletion, { nullptr, false }, "A regular expression." },
+    { eArgTypeRegularExpression, "regular-expression", CommandCompletions::eNoCompletion, { nullptr, false }, "A POSIX-compliant extended regular expression." },
     { eArgTypeRunArgs, "run-args", CommandCompletions::eNoCompletion, { nullptr, false }, "Arguments to be passed to the target program when it starts executing." },
     { eArgTypeRunMode, "run-mode", CommandCompletions::eNoCompletion, { nullptr, false }, "Help text goes here." },
     { eArgTypeScriptedCommandSynchronicity, "script-cmd-synchronicity", CommandCompletions::eNoCompletion, { nullptr, false }, "The synchronicity to use to run scripted commands with regard to LLDB event system." },
-    { eArgTypeScriptLang, "script-language", CommandCompletions::eNoCompletion, { nullptr, false }, "The scripting language to be used for script-based commands.  Currently only Python is valid." },
+    { eArgTypeScriptLang, "script-language", CommandCompletions::eNoCompletion, { nullptr, false }, "The scripting language to be used for script-based commands.  Supported languages are python and lua." },
     { eArgTypeSearchWord, "search-word", CommandCompletions::eNoCompletion, { nullptr, false }, "Any word of interest for search purposes." },
     { eArgTypeSelector, "selector", CommandCompletions::eNoCompletion, { nullptr, false }, "An Objective-C selector name." },
     { eArgTypeSettingIndex, "setting-index", CommandCompletions::eNoCompletion, { nullptr, false }, "An index into a settings variable that is an array (try 'settings list' to see all the possible settings variables and their types)." },
@@ -1113,14 +1123,18 @@ CommandObject::ArgumentTableEntry CommandObject::g_arguments_data[] = {
     { eArgTypeWatchpointID, "watchpt-id", CommandCompletions::eNoCompletion, { nullptr, false }, "Watchpoint IDs are positive integers." },
     { eArgTypeWatchpointIDRange, "watchpt-id-list", CommandCompletions::eNoCompletion, { nullptr, false }, "For example, '1-3' or '1 to 3'." },
     { eArgTypeWatchType, "watch-type", CommandCompletions::eNoCompletion, { nullptr, false }, "Specify the type for a watchpoint." },
-    { eArgRawInput, "raw-input", CommandCompletions::eNoCompletion, { nullptr, false }, "Free-form text passed to a command without prior interpretation, allowing spaces without requiring quotes.  To pass arguments and free form text put two dashes ' -- ' between the last argument and any raw input." }
+    { eArgRawInput, "raw-input", CommandCompletions::eNoCompletion, { nullptr, false }, "Free-form text passed to a command without prior interpretation, allowing spaces without requiring quotes.  To pass arguments and free form text put two dashes ' -- ' between the last argument and any raw input." },
+    { eArgTypeCommand, "command", CommandCompletions::eNoCompletion, { nullptr, false }, "An LLDB Command line command." },
+    { eArgTypeColumnNum, "column", CommandCompletions::eNoCompletion, { nullptr, false }, "Column number in a source file." },
+    { eArgTypeModuleUUID, "module-uuid", CommandCompletions::eModuleUUIDCompletion, { nullptr, false }, "A module UUID value." }
     // clang-format on
 };
 
 const CommandObject::ArgumentTableEntry *CommandObject::GetArgumentTable() {
   // If this assertion fires, then the table above is out of date with the
   // CommandArgumentType enumeration
-  assert((sizeof(CommandObject::g_arguments_data) /
-          sizeof(CommandObject::ArgumentTableEntry)) == eArgTypeLastArg);
+  static_assert((sizeof(CommandObject::g_arguments_data) /
+                 sizeof(CommandObject::ArgumentTableEntry)) == eArgTypeLastArg,
+                "");
   return CommandObject::g_arguments_data;
 }

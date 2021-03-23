@@ -1,3 +1,4 @@
+! XFAIL: *
 ! Test that Clang can forward all of the flags which are documented as
 ! being supported by gfortran to GCC when falling back to GCC for
 ! a fortran input file.
@@ -106,7 +107,6 @@
 ! RUN:     -fsyntax-only \
 ! RUN:     -funderscoring \
 ! RUN:     -fwhole-file \
-! RUN:     -fworking-directory \
 ! RUN:     -imultilib \
 ! RUN:     -iprefix \
 ! RUN:     -iquote \
@@ -226,7 +226,6 @@
 ! CHECK: "-fstack-arrays"
 ! CHECK: "-funderscoring"
 ! CHECK: "-fwhole-file"
-! CHECK: "-fworking-directory"
 ! CHECK: "-imultilib"
 ! CHECK: "-iprefix"
 ! CHECK: "-iquote"

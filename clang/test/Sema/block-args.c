@@ -31,13 +31,13 @@ int main(int argc, char** argv) {
 
 // radar 7528255
 void f0() {
-  ^(int, double d, char) {}(1, 1.34, 'a'); // expected-error {{parameter name omitted}} \
-				 	   // expected-error {{parameter name omitted}}
+  ^(int, double d, char) {}(1, 1.34, 'a'); // expected-warning {{omitting the parameter name in a function definition is a C2x extension}} \
+                                           // expected-warning {{omitting the parameter name in a function definition is a C2x extension}}
 }
 
 // rdar://problem/8962770
 void test4() {
-  int (^f)() = ^((x)) { }; // expected-error {{expected ')'}} expected-warning {{type specifier missing}} expected-note {{to match this}}
+  int (^f)() = ^((x)) { }; // expected-warning {{type specifier missing}} expected-error {{type-id cannot have a name}}
 }
 
 // rdar://problem/9170609

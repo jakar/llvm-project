@@ -1,16 +1,16 @@
 //===-- HexagonELFObjectWriter.cpp - Hexagon Target Descriptions ----------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
-#include "Hexagon.h"
 #include "MCTargetDesc/HexagonFixupKinds.h"
+#include "MCTargetDesc/HexagonMCTargetDesc.h"
 #include "llvm/MC/MCAssembler.h"
 #include "llvm/MC/MCELFObjectWriter.h"
+#include "llvm/MC/MCObjectWriter.h"
 #include "llvm/MC/MCValue.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
@@ -44,7 +44,7 @@ unsigned HexagonELFObjectWriter::getRelocType(MCContext &Ctx,
                                               MCFixup const &Fixup,
                                               bool IsPCRel) const {
   MCSymbolRefExpr::VariantKind Variant = Target.getAccessVariant();
-  switch ((unsigned)Fixup.getKind()) {
+  switch (Fixup.getTargetKind()) {
   default:
     report_fatal_error("Unrecognized relocation type");
     break;
@@ -64,7 +64,7 @@ unsigned HexagonELFObjectWriter::getRelocType(MCContext &Ctx,
       return ELF::R_HEX_IE_GOT_32;
     case MCSymbolRefExpr::VariantKind::VK_Hexagon_LD_GOT:
       return ELF::R_HEX_LD_GOT_32;
-    case MCSymbolRefExpr::VariantKind::VK_Hexagon_PCREL:
+    case MCSymbolRefExpr::VariantKind::VK_PCREL:
       return ELF::R_HEX_32_PCREL;
     case MCSymbolRefExpr::VariantKind::VK_TPREL:
       return ELF::R_HEX_TPREL_32;
@@ -297,9 +297,7 @@ unsigned HexagonELFObjectWriter::getRelocType(MCContext &Ctx,
   }
 }
 
-MCObjectWriter *llvm::createHexagonELFObjectWriter(raw_pwrite_stream &OS,
-                                                   uint8_t OSABI,
-                                                   StringRef CPU) {
-  MCELFObjectTargetWriter *MOTW = new HexagonELFObjectWriter(OSABI, CPU);
-  return createELFObjectWriter(MOTW, OS, /*IsLittleEndian*/ true);
+std::unique_ptr<MCObjectTargetWriter>
+llvm::createHexagonELFObjectWriter(uint8_t OSABI, StringRef CPU) {
+  return std::make_unique<HexagonELFObjectWriter>(OSABI, CPU);
 }

@@ -1,9 +1,8 @@
 //===----------------------------------------------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is dual licensed under the MIT and the University of Illinois Open
-// Source Licenses. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -13,7 +12,7 @@
 
 // tuple& operator=(const tuple& u);
 
-// UNSUPPORTED: c++98, c++03
+// UNSUPPORTED: c++03
 
 #include <tuple>
 #include <memory>
@@ -35,8 +34,18 @@ struct MoveAssignable {
   MoveAssignable& operator=(MoveAssignable const&) = delete;
   MoveAssignable& operator=(MoveAssignable&&) = default;
 };
+struct NothrowCopyAssignable {
+  NothrowCopyAssignable& operator=(NothrowCopyAssignable const&) noexcept { return *this; }
+};
+struct PotentiallyThrowingCopyAssignable {
+  PotentiallyThrowingCopyAssignable& operator=(PotentiallyThrowingCopyAssignable const&) { return *this; }
+};
 
-int main()
+struct CopyAssignableInt {
+  CopyAssignableInt& operator=(int&) { return *this; }
+};
+
+int main(int, char**)
 {
     {
         typedef std::tuple<> T;
@@ -90,8 +99,8 @@ int main()
         static_assert(!std::is_copy_assignable<T>::value, "");
     }
     {
-        using T = std::tuple<int, NonAssignable>;
-        static_assert(!std::is_copy_assignable<T>::value, "");
+      using T = std::tuple<int, NonAssignable>;
+      static_assert(!std::is_copy_assignable<T>::value, "");
     }
     {
         using T = std::tuple<int, CopyAssignable>;
@@ -101,4 +110,30 @@ int main()
         using T = std::tuple<int, MoveAssignable>;
         static_assert(!std::is_copy_assignable<T>::value, "");
     }
+    {
+        using T = std::tuple<int, int, int>;
+        using P = std::pair<int, int>;
+        static_assert(!std::is_assignable<T&, P>::value, "");
+    }
+    {
+        // test const requirement
+        using T = std::tuple<CopyAssignableInt, CopyAssignableInt>;
+        using P = std::pair<int, int>;
+        static_assert(!std::is_assignable<T&, P const>::value, "");
+    }
+    {
+        using T = std::tuple<int, MoveAssignable>;
+        using P = std::pair<int, MoveAssignable>;
+        static_assert(!std::is_assignable<T&, P&>::value, "");
+    }
+    {
+        using T = std::tuple<NothrowCopyAssignable, int>;
+        static_assert(std::is_nothrow_copy_assignable<T>::value, "");
+    }
+    {
+        using T = std::tuple<PotentiallyThrowingCopyAssignable, int>;
+        static_assert(!std::is_nothrow_copy_assignable<T>::value, "");
+    }
+
+    return 0;
 }

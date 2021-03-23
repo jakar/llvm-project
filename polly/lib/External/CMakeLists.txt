@@ -179,6 +179,7 @@ if (POLLY_BUNDLED_ISL)
   set (ISL_FILES
     isl/basis_reduction_tab.c
     isl/isl_aff.c
+    isl/isl_aff_map.c
     isl/isl_affine_hull.c
     isl/isl_arg.c
     isl/isl_ast_build.c
@@ -186,10 +187,10 @@ if (POLLY_BUNDLED_ISL)
     isl/isl_ast.c
     isl/isl_ast_codegen.c
     isl/isl_ast_graft.c
-    isl/isl_band.c
     isl/isl_bernstein.c
     isl/isl_blk.c
     isl/isl_bound.c
+    isl/isl_box.c
     isl/isl_coalesce.c
     isl/isl_constraint.c
     isl/isl_convex_hull.c
@@ -240,8 +241,10 @@ if (POLLY_BUNDLED_ISL)
     isl/isl_scheduler.c
     isl/isl_seq.c
     isl/isl_set_list.c
+    isl/isl_set_to_ast_graft_list.c
     isl/isl_sort.c
     isl/isl_space.c
+    isl/isl_stride.c
     isl/isl_stream.c
     isl/isl_tab.c
     isl/isl_tab_pip.c
@@ -254,6 +257,10 @@ if (POLLY_BUNDLED_ISL)
     isl/isl_version.c
     isl/isl_vertices.c
     isl/print.c
+    isl/set_to_map.c
+    isl/set_from_map.c
+    isl/uset_to_umap.c
+    isl/uset_from_umap.c
     isl/imath/gmp_compat.c
     isl/imath/imath.c
     isl/imath/imrat.c
@@ -272,7 +279,6 @@ if (POLLY_BUNDLED_ISL)
       FILES_MATCHING
       PATTERN "*.h"
       PATTERN "CMakeFiles" EXCLUDE
-      PATTERN ".svn" EXCLUDE
       )
   endif()
 
@@ -281,13 +287,12 @@ if (POLLY_BUNDLED_ISL)
     )
   set_target_properties(polly-isl-test PROPERTIES FOLDER "Polly")
 
-  target_link_libraries(polly-isl-test
+  target_link_libraries(polly-isl-test PRIVATE
     PollyISL
     )
 
   # ISL requires at least C99 to compile. gcc < 5.0 use -std=gnu89 as default.
-  target_enable_c99(PollyISL)
-  target_enable_c99(polly-isl-test)
+  set_property(TARGET PollyISL polly-isl-test PROPERTY C_STANDARD 99)
 endif (POLLY_BUNDLED_ISL)
 
 set(PET_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/pet")
@@ -314,15 +319,21 @@ message(STATUS "PPCG version: ${PPCG_GIT_HEAD_ID}")
 set (PPCG_FILES
      ppcg/cuda.c
      ppcg/cuda_common.c
+     ppcg/external.c
      ppcg/gpu_array_tile.c
      ppcg/gpu.c
+     ppcg/gpu_array_tile.c
      ppcg/gpu_group.c
+     ppcg/gpu_hybrid.c
      ppcg/gpu_print.c
      ppcg/gpu_tree.c
+     ppcg/grouping.c
+     ppcg/hybrid.c
      ppcg/ppcg.c
      ppcg/ppcg_options.c
+     ppcg/print.c
      ppcg/schedule.c
-     ppcg/external.c
+     ppcg/util.c
      )
 
 include_directories(BEFORE
@@ -336,7 +347,7 @@ add_polly_library(PollyPPCG
   ${PPCG_FILES}
 )
 
-target_link_libraries(PollyPPCG ${ISL_TARGET})
+target_link_libraries(PollyPPCG PUBLIC ${ISL_TARGET})
 
 # Disable warnings for upstream projects.
 if (MSVC)
@@ -346,6 +357,7 @@ if (MSVC)
     -wd4200 # nonstandard extension used: zero-sized array in struct/union
     -wd4201 # nonstandard extension used: nameless struct/union
     -wd4334 # 'operator': result of 32-bit shift implicitly converted to 64 bits (was 64-bit shift intended?)
+    -wd4221 # nonstandard extension used : 'identifier' : cannot be initialized using address of automatic variable
   )
   if (POLLY_BUNDLED_ISL)
     target_compile_options(PollyISL PRIVATE ${DISABLE_WARNING_FLAGS})
@@ -361,6 +373,6 @@ endif ()
 
 if(MSVC)
   # In the Windows API (with some exceptions), the maximum length for a path is
-  # MAX_PATH, which is defined as 260 characters. 
+  # MAX_PATH, which is defined as 260 characters.
   target_compile_definitions(PollyPPCG PRIVATE "-DPATH_MAX=260")
 endif ()

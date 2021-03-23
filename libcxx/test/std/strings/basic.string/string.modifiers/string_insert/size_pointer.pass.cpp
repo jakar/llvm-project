@@ -1,9 +1,8 @@
 //===----------------------------------------------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is dual licensed under the MIT and the University of Illinois Open
-// Source Licenses. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -48,7 +47,7 @@ test(S s, typename S::size_type pos, const typename S::value_type* str, S expect
 #endif
 }
 
-int main()
+int main(int, char**)
 {
     {
     typedef std::string S;
@@ -219,19 +218,21 @@ int main()
     }
 #endif
 
-	{ // test inserting into self
+    { // test inserting into self
     typedef std::string S;
-	S s_short = "123/";
-	S s_long  = "Lorem ipsum dolor sit amet, consectetur/";
+    S s_short = "123/";
+    S s_long  = "Lorem ipsum dolor sit amet, consectetur/";
 
-	s_short.insert(0, s_short.c_str());
-	assert(s_short == "123/123/");
-	s_short.insert(0, s_short.c_str());
-	assert(s_short == "123/123/123/123/");
-	s_short.insert(0, s_short.c_str());
-	assert(s_short == "123/123/123/123/123/123/123/123/");
+    s_short.insert(0, s_short.c_str());
+    assert(s_short == "123/123/");
+    s_short.insert(0, s_short.c_str());
+    assert(s_short == "123/123/123/123/");
+    s_short.insert(0, s_short.c_str());
+    assert(s_short == "123/123/123/123/123/123/123/123/");
 
-	s_long.insert(0, s_long.c_str());
-	assert(s_long == "Lorem ipsum dolor sit amet, consectetur/Lorem ipsum dolor sit amet, consectetur/");
-	}
+    s_long.insert(0, s_long.c_str());
+    assert(s_long == "Lorem ipsum dolor sit amet, consectetur/Lorem ipsum dolor sit amet, consectetur/");
+    }
+
+  return 0;
 }

@@ -1,9 +1,8 @@
 //===- SimplifyCFG.h - Simplify and canonicalize the CFG --------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 /// \file
@@ -17,28 +16,30 @@
 
 #include "llvm/IR/Function.h"
 #include "llvm/IR/PassManager.h"
+#include "llvm/Transforms/Utils/SimplifyCFGOptions.h"
 
 namespace llvm {
 
-/// \brief A pass to simplify and canonicalize the CFG of a function.
+/// A pass to simplify and canonicalize the CFG of a function.
 ///
-/// This pass iteratively simplifies the entire CFG of a function, removing
-/// unnecessary control flows and bringing it into the canonical form expected
-/// by the rest of the mid-level optimizer.
+/// This pass iteratively simplifies the entire CFG of a function. It may change
+/// or remove control flow to put the CFG into a canonical form expected by
+/// other passes of the mid-level optimizer. Depending on the specified options,
+/// it may further optimize control-flow to create non-canonical forms.
 class SimplifyCFGPass : public PassInfoMixin<SimplifyCFGPass> {
-  int BonusInstThreshold;
-  bool LateSimplifyCFG;
+  SimplifyCFGOptions Options;
 
 public:
-  /// \brief Construct a pass with the default thresholds
-  /// and switch optimizations.
+  /// The default constructor sets the pass options to create canonical IR,
+  /// rather than optimal IR. That is, by default we bypass transformations that
+  /// are likely to improve performance but make analysis for other passes more
+  /// difficult.
   SimplifyCFGPass();
 
-  /// \brief Construct a pass with a specific bonus threshold
-  /// and optional switch optimizations.
-  SimplifyCFGPass(int BonusInstThreshold, bool LateSimplifyCFG);
+  /// Construct a pass with optional optimizations.
+  SimplifyCFGPass(const SimplifyCFGOptions &PassOptions);
 
-  /// \brief Run the pass over the function.
+  /// Run the pass over the function.
   PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM);
 };
 

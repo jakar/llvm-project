@@ -1,9 +1,8 @@
 //===-- SparcInstrAliases.td - Instruction Aliases for Sparc Target -------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -282,7 +281,7 @@ defm : int_cond_alias<"pos",  0b1110>;
 defm : int_cond_alias<"neg",  0b0110>;
 defm : int_cond_alias<"vc",   0b1111>;
 defm : int_cond_alias<"vs",   0b0111>;
-let EmitPriority = 0 in 
+let EmitPriority = 0 in
 {
   defm : int_cond_alias<"",     0b1000>; // same as a; gnu asm, not in manual
   defm : int_cond_alias<"nz",   0b1001>; // same as ne
@@ -307,7 +306,7 @@ defm : fp_cond_alias<"uge",   0b1100>;
 defm : fp_cond_alias<"le",    0b1101>;
 defm : fp_cond_alias<"ule",   0b1110>;
 defm : fp_cond_alias<"o",     0b1111>;
-let EmitPriority = 0 in 
+let EmitPriority = 0 in
 {
   defm : fp_cond_alias<"",      0b1000>; // same as a; gnu asm, not in manual
   defm : fp_cond_alias<"nz",    0b0001>; // same as ne
@@ -470,10 +469,28 @@ def : InstAlias<"wr $simm13, %wim", (WRWIMri G0, i32imm:$simm13), 0>;
 def : InstAlias<"wr $rs2, %tbr", (WRTBRrr G0, IntRegs:$rs2), 0>;
 def : InstAlias<"wr $simm13, %tbr", (WRTBRri G0, i32imm:$simm13), 0>;
 
+def : InstAlias<"pwr $rs2, %psr", (PWRPSRrr G0, IntRegs:$rs2), 0>;
+def : InstAlias<"pwr $simm13, %psr", (PWRPSRri G0, i32imm:$simm13), 0>;
 
 // flush -> flush %g0
 def : InstAlias<"flush", (FLUSH), 0>;
 
+// unimp -> unimp 0
+def : InstAlias<"unimp", (UNIMP 0), 0>;
+
+def : MnemonicAlias<"iflush", "flush">;
+
+def : MnemonicAlias<"stub", "stb">;
+def : MnemonicAlias<"stsb", "stb">;
+
+def : MnemonicAlias<"stuba", "stba">;
+def : MnemonicAlias<"stsba", "stba">;
+
+def : MnemonicAlias<"stuh", "sth">;
+def : MnemonicAlias<"stsh", "sth">;
+
+def : MnemonicAlias<"stuha", "stha">;
+def : MnemonicAlias<"stsha", "stha">;
 
 def : MnemonicAlias<"lduw", "ld">, Requires<[HasV9]>;
 def : MnemonicAlias<"lduwa", "lda">, Requires<[HasV9]>;
@@ -504,3 +521,6 @@ def : InstAlias<"signx $rd", (SRArr IntRegs:$rd, IntRegs:$rd, G0), 0>, Requires<
 
 // signx reg, rd -> sra reg, %g0, rd
 def : InstAlias<"signx $rs1, $rd", (SRArr IntRegs:$rd, IntRegs:$rs1, G0), 0>, Requires<[HasV9]>;
+
+// sir -> sir 0
+def : InstAlias<"sir", (SIR 0), 0>;

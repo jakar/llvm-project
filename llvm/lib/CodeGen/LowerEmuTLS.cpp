@@ -1,9 +1,8 @@
 //===- LowerEmuTLS.cpp - Add __emutls_[vt].* variables --------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -16,10 +15,13 @@
 
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/CodeGen/Passes.h"
+#include "llvm/CodeGen/TargetPassConfig.h"
+#include "llvm/IR/Constants.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
+#include "llvm/InitializePasses.h"
 #include "llvm/Pass.h"
-#include "llvm/Target/TargetLowering.h"
+#include "llvm/Target/TargetMachine.h"
 
 using namespace llvm;
 
@@ -28,14 +30,12 @@ using namespace llvm;
 namespace {
 
 class LowerEmuTLS : public ModulePass {
-  const TargetMachine *TM;
 public:
   static char ID; // Pass identification, replacement for typeid
-  explicit LowerEmuTLS() : ModulePass(ID), TM(nullptr) { }
-  explicit LowerEmuTLS(const TargetMachine *TM)
-      : ModulePass(ID), TM(TM) {
+  LowerEmuTLS() : ModulePass(ID) {
     initializeLowerEmuTLSPass(*PassRegistry::getPassRegistry());
   }
+
   bool runOnModule(Module &M) override;
 private:
   bool addEmuTlsVar(Module &M, const GlobalVariable *GV);
@@ -44,6 +44,7 @@ private:
                                     GlobalVariable *to) {
     to->setLinkage(from->getLinkage());
     to->setVisibility(from->getVisibility());
+    to->setDSOLocal(from->isDSOLocal());
     if (from->hasComdat()) {
       to->setComdat(M.getOrInsertComdat(to->getName()));
       to->getComdat()->setSelectionKind(from->getComdat()->getSelectionKind());
@@ -54,19 +55,22 @@ private:
 
 char LowerEmuTLS::ID = 0;
 
-INITIALIZE_PASS(LowerEmuTLS, "loweremutls",
-                "Add __emutls_[vt]. variables for emultated TLS model",
-                false, false)
+INITIALIZE_PASS(LowerEmuTLS, DEBUG_TYPE,
+                "Add __emutls_[vt]. variables for emultated TLS model", false,
+                false)
 
-ModulePass *llvm::createLowerEmuTLSPass(const TargetMachine *TM) {
-  return new LowerEmuTLS(TM);
-}
+ModulePass *llvm::createLowerEmuTLSPass() { return new LowerEmuTLS(); }
 
 bool LowerEmuTLS::runOnModule(Module &M) {
   if (skipModule(M))
     return false;
 
-  if (!TM || !TM->Options.EmulatedTLS)
+  auto *TPC = getAnalysisIfAvailable<TargetPassConfig>();
+  if (!TPC)
+    return false;
+
+  auto &TM = TPC->getTM<TargetMachine>();
+  if (!TM.useEmulatedTLS())
     return false;
 
   bool Changed = false;
@@ -125,12 +129,7 @@ bool LowerEmuTLS::addEmuTlsVar(Module &M, const GlobalVariable *GV) {
     return true;
 
   Type *GVType = GV->getValueType();
-  unsigned GVAlignment = GV->getAlignment();
-  if (!GVAlignment) {
-    // When LLVM IL declares a variable without alignment, use
-    // the ABI default alignment for the type.
-    GVAlignment = DL.getABITypeAlignment(GVType);
-  }
+  Align GVAlignment = DL.getValueOrABITypeAlignment(GV->getAlign(), GVType);
 
   // Define "__emutls_t.*" if there is InitValue
   GlobalVariable *EmuTlsTmplVar = nullptr;
@@ -148,15 +147,13 @@ bool LowerEmuTLS::addEmuTlsVar(Module &M, const GlobalVariable *GV) {
   // Define "__emutls_v.*" with initializer and alignment.
   Constant *ElementValues[4] = {
       ConstantInt::get(WordType, DL.getTypeStoreSize(GVType)),
-      ConstantInt::get(WordType, GVAlignment),
-      NullPtr, EmuTlsTmplVar ? EmuTlsTmplVar : NullPtr
-  };
+      ConstantInt::get(WordType, GVAlignment.value()), NullPtr,
+      EmuTlsTmplVar ? EmuTlsTmplVar : NullPtr};
   ArrayRef<Constant*> ElementValueArray(ElementValues, 4);
   EmuTlsVar->setInitializer(
       ConstantStruct::get(EmuTlsVarType, ElementValueArray));
-  unsigned MaxAlignment = std::max(
-      DL.getABITypeAlignment(WordType),
-      DL.getABITypeAlignment(VoidPtrType));
+  Align MaxAlignment =
+      std::max(DL.getABITypeAlign(WordType), DL.getABITypeAlign(VoidPtrType));
   EmuTlsVar->setAlignment(MaxAlignment);
   return true;
 }

@@ -1,12 +1,10 @@
 add_lldb_unittest(InterpreterTests
-  TestArgs.cpp
   TestCompletion.cpp
+  TestOptionArgParser.cpp
+  TestOptionValue.cpp
+  TestOptionValueFileColonLine.cpp
 
   LINK_LIBS
     lldbInterpreter
-    lldbUtilityMocks
-  )
-
-target_link_libraries(InterpreterTests
-  ${PYTHON_LIBRARY}
+    lldbUtilityHelpers
   )

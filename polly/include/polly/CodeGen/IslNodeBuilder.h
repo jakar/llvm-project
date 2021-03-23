@@ -1,37 +1,33 @@
-//===------ IslNodeBuilder.cpp - Translate an isl AST into a LLVM-IR AST---===//
+//=- IslNodeBuilder.cpp - Translate an isl AST into a LLVM-IR AST -*- C++ -*-=//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
+//
 // This file contains the IslNodeBuilder, a class to translate an isl AST into
 // a LLVM-IR AST.
+//
 //===----------------------------------------------------------------------===//
 
-#ifndef POLLY_ISL_NODE_BUILDER_H
-#define POLLY_ISL_NODE_BUILDER_H
+#ifndef POLLY_ISLNODEBUILDER_H
+#define POLLY_ISLNODEBUILDER_H
 
 #include "polly/CodeGen/BlockGenerators.h"
 #include "polly/CodeGen/IslExprBuilder.h"
-#include "polly/CodeGen/LoopGenerators.h"
-#include "polly/ScopInfo.h"
+#include "polly/ScopDetectionDiagnostic.h"
 #include "llvm/ADT/ArrayRef.h"
-#include "llvm/ADT/SetVector.h"
 #include "llvm/ADT/SmallSet.h"
-#include "llvm/ADT/SmallVector.h"
+#include "llvm/IR/InstrTypes.h"
 #include "isl/ctx.h"
-#include "isl/union_map.h"
-#include <utility>
-#include <vector>
+#include "isl/isl-noexceptions.h"
 
-using namespace polly;
-using namespace llvm;
+namespace polly {
+using llvm::LoopInfo;
+using llvm::SmallSet;
 
-struct isl_ast_node;
-struct isl_ast_build;
-struct isl_union_map;
+struct InvariantEquivClassTy;
 
 struct SubtreeReferences {
   LoopInfo &LI;
@@ -41,6 +37,9 @@ struct SubtreeReferences {
   SetVector<Value *> &Values;
   SetVector<const SCEV *> &SCEVs;
   BlockGenerator &BlockGen;
+  // In case an (optional) parameter space location is provided, parameter space
+  // information is collected as well.
+  isl::space *ParamSpace;
 };
 
 /// Extract the out-of-scop values and SCEVs referenced from a ScopStmt.
@@ -50,13 +49,17 @@ struct SubtreeReferences {
 /// statements we force the generation of alloca memory locations and list
 /// these locations in the set of out-of-scop values as well.
 ///
+/// We also collect an isl::space that includes all parameter dimensions
+/// used in the statement's memory accesses, in case the ParamSpace pointer
+/// is non-null.
+///
 /// @param Stmt             The statement for which to extract the information.
 /// @param UserPtr          A void pointer that can be casted to a
 ///                         SubtreeReferences structure.
 /// @param CreateScalarRefs Should the result include allocas of scalar
 ///                         references?
-isl_stat addReferencesFromStmt(const ScopStmt *Stmt, void *UserPtr,
-                               bool CreateScalarRefs = true);
+void addReferencesFromStmt(const ScopStmt *Stmt, void *UserPtr,
+                           bool CreateScalarRefs = true);
 
 class IslNodeBuilder {
 public:
@@ -75,6 +78,13 @@ public:
 
   void addParameters(__isl_take isl_set *Context);
 
+  /// Create Values which hold the sizes of the outermost dimension of all
+  /// Fortran arrays in the current scop.
+  ///
+  /// @returns False, if a problem occurred and a Fortran array was not
+  /// materialized. True otherwise.
+  bool materializeFortranArrayOutermostDimension();
+
   /// Generate code that evaluates @p Condition at run-time.
   ///
   /// This function is typically called to generate the LLVM-IR for the
@@ -91,7 +101,7 @@ public:
   void create(__isl_take isl_ast_node *Node);
 
   /// Allocate memory for all new arrays created by Polly.
-  void allocateNewArrays();
+  void allocateNewArrays(BBPair StartExitBlocks);
 
   /// Preload all memory loads that are invariant.
   bool preloadInvariantLoads();
@@ -105,7 +115,7 @@ public:
 
   /// Get the associated block generator.
   ///
-  /// @return A referecne to the associated block generator.
+  /// @return A reference to the associated block generator.
   BlockGenerator &getBlockGenerator() { return BlockGen; }
 
   /// Return the parallel subfunctions that have been created.
@@ -148,7 +158,7 @@ protected:
   ///
   /// This map provides for a given loop a llvm::Value that contains the current
   /// loop iteration.
-  LoopToScevMapT OutsideLoopIterations;
+  MapVector<const Loop *, const SCEV *> OutsideLoopIterations;
 
   // This maps an isl_id* to the Value* it has in the generated program. For now
   // on, the only isl_ids that are stored here are the newly calculated loop
@@ -165,7 +175,7 @@ protected:
   /// points to and the resulting value is returned.
   ///
   /// @param Expr The expression to code generate.
-  llvm::Value *generateSCEV(const SCEV *Expr);
+  Value *generateSCEV(const SCEV *Expr);
 
   /// A set of Value -> Value remappings to apply when generating new code.
   ///
@@ -175,7 +185,7 @@ protected:
 
   /// Materialize code for @p Id if it was not done before.
   ///
-  /// @returns False, iff a problem occured and the value was not materialized.
+  /// @returns False, iff a problem occurred and the value was not materialized.
   bool materializeValue(__isl_take isl_id *Id);
 
   /// Materialize parameters of @p Set.
@@ -207,8 +217,7 @@ protected:
   //    of loop iterations.
   //
   // 3. With the existing code, upper bounds have been easier to implement.
-  __isl_give isl_ast_expr *getUpperBound(__isl_keep isl_ast_node *For,
-                                         CmpInst::Predicate &Predicate);
+  isl::ast_expr getUpperBound(isl::ast_node For, CmpInst::Predicate &Predicate);
 
   /// Return non-negative number of iterations in case of the following form
   /// of a loop and -1 otherwise.
@@ -219,7 +228,7 @@ protected:
   ///
   /// NumIter is a non-negative integer value. Condition can have
   /// isl_ast_op_lt type.
-  int getNumberOfIterations(__isl_keep isl_ast_node *For);
+  int getNumberOfIterations(isl::ast_node For);
 
   /// Compute the values and loops referenced in this subtree.
   ///
@@ -255,6 +264,14 @@ protected:
   /// @param NewValues A map that maps certain llvm::Values to new llvm::Values.
   void updateValues(ValueMapT &NewValues);
 
+  /// Return the most up-to-date version of the llvm::Value for code generation.
+  /// @param Original The Value to check for an up to date version.
+  /// @returns A remapped `Value` from ValueMap, or `Original` if no mapping
+  ///          exists.
+  /// @see IslNodeBuilder::updateValues
+  /// @see IslNodeBuilder::ValueMap
+  Value *getLatestValue(Value *Original) const;
+
   /// Generate code for a marker now.
   ///
   /// For mark nodes with an unknown name, we just forward the code generation
@@ -263,6 +280,7 @@ protected:
   ///
   /// @param Mark The node we generate code for.
   virtual void createMark(__isl_take isl_ast_node *Marker);
+
   virtual void createFor(__isl_take isl_ast_node *For);
 
   /// Set to remember materialized invariant loads.
@@ -299,7 +317,7 @@ protected:
   bool preloadInvariantEquivClass(InvariantEquivClassTy &IAClass);
 
   void createForVector(__isl_take isl_ast_node *For, int VectorWidth);
-  void createForSequential(__isl_take isl_ast_node *For, bool KnownParallel);
+  void createForSequential(isl::ast_node For, bool MarkParallel);
 
   /// Create LLVM-IR that executes a for node thread parallel.
   ///
@@ -397,6 +415,18 @@ private:
   ///                    ids to new access expressions.
   void generateCopyStmt(ScopStmt *Stmt,
                         __isl_keep isl_id_to_ast_expr *NewAccesses);
+
+  /// Materialize a canonical loop induction variable for `L`, which is a loop
+  /// that is *not* present in the Scop.
+  ///
+  /// Note that this is materialized at the point where the `Builder` is
+  /// currently pointing.
+  /// We also populate the `OutsideLoopIterations` map with `L`s SCEV to keep
+  /// track of the induction variable.
+  /// See [Code generation of induction variables of loops outside Scops]
+  Value *materializeNonScopLoopInductionVariable(const Loop *L);
 };
 
-#endif // POLLY_ISL_NODE_BUILDER_H
+} // namespace polly
+
+#endif // POLLY_ISLNODEBUILDER_H

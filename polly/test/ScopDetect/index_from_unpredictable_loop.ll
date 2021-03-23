@@ -1,6 +1,12 @@
 ; RUN: opt %loadPolly -polly-scops -analyze < %s | FileCheck %s --check-prefix=AFFINE
 ; RUN: opt %loadPolly -polly-scops -polly-allow-nonaffine -analyze < %s | FileCheck %s --check-prefix=NONAFFINE
 
+; The SCoP contains a loop with multiple exit blocks (BBs after leaving
+; the loop). The current implementation of deriving their domain derives
+; only a common domain for all of the exit blocks. We disabled loops with
+; multiple exit blocks until this is fixed.
+; XFAIL: *
+
 ; The loop for.body => for.inc has an unpredictable iteration count could due to
 ; the undef start value that it is compared to. Therefore the array element
 ; %arrayidx101 that depends on that exit value cannot be affine.
@@ -42,8 +48,6 @@ for.end:
 ; AFFINE-NEXT:              [octets, p_1, p] -> { Stmt_if_then84[] : octets = 2 };
 ; AFFINE-NEXT:          Schedule :=
 ; AFFINE-NEXT:              [octets, p_1, p] -> { Stmt_if_then84[] -> [] };
-; AFFINE-NEXT:          ReadAccess :=	[Reduction Type: NONE] [Scalar: 1]
-; AFFINE-NEXT:              [octets, p_1, p] -> { Stmt_if_then84[] -> MemRef_indvars_iv[] };
 ; AFFINE-NEXT:          MustWriteAccess :=	[Reduction Type: NONE] [Scalar: 0]
 ; AFFINE-NEXT:              [octets, p_1, p] -> { Stmt_if_then84[] -> MemRef_input[1 + p] };
 ; AFFINE-NEXT:  }

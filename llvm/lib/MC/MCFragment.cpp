@@ -1,21 +1,21 @@
 //===- lib/MC/MCFragment.cpp - Assembler Fragment Implementation ----------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
+#include "llvm/MC/MCFragment.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/Twine.h"
-#include "llvm/MC/MCAssembler.h"
+#include "llvm/Config/llvm-config.h"
 #include "llvm/MC/MCAsmLayout.h"
+#include "llvm/MC/MCAssembler.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCFixup.h"
-#include "llvm/MC/MCFragment.h"
 #include "llvm/MC/MCSection.h"
 #include "llvm/MC/MCSymbol.h"
 #include "llvm/MC/MCValue.h"
@@ -46,6 +46,25 @@ bool MCAsmLayout::isFragmentValid(const MCFragment *F) const {
     return false;
   assert(LastValid->getParent() == Sec);
   return F->getLayoutOrder() <= LastValid->getLayoutOrder();
+}
+
+bool MCAsmLayout::canGetFragmentOffset(const MCFragment *F) const {
+  MCSection *Sec = F->getParent();
+  MCSection::iterator I;
+  if (MCFragment *LastValid = LastValidFragment[Sec]) {
+    // Fragment already valid, offset is available.
+    if (F->getLayoutOrder() <= LastValid->getLayoutOrder())
+      return true;
+    I = ++MCSection::iterator(LastValid);
+  } else
+    I = Sec->begin();
+
+  // A fragment ordered before F is currently being laid out.
+  const MCFragment *FirstInvalidFragment = &*I;
+  if (FirstInvalidFragment->IsBeingLaidOut)
+    return false;
+
+  return true;
 }
 
 void MCAsmLayout::invalidateFragmentsFrom(MCFragment *F) {
@@ -80,7 +99,7 @@ uint64_t MCAsmLayout::getFragmentOffset(const MCFragment *F) const {
   return F->Offset;
 }
 
-// Simple getSymbolOffset helper for the non-varibale case.
+// Simple getSymbolOffset helper for the non-variable case.
 static bool getLabelOffset(const MCAsmLayout &Layout, const MCSymbol &S,
                            bool ReportError, uint64_t &Val) {
   if (!S.getFragment()) {
@@ -188,7 +207,7 @@ uint64_t MCAsmLayout::getSectionFileSize(const MCSection *Sec) const {
 }
 
 uint64_t llvm::computeBundlePadding(const MCAssembler &Assembler,
-                                    const MCFragment *F,
+                                    const MCEncodedFragment *F,
                                     uint64_t FOffset, uint64_t FSize) {
   uint64_t BundleSize = Assembler.getBundleAlignSize();
   assert(BundleSize > 0 &&
@@ -232,14 +251,11 @@ uint64_t llvm::computeBundlePadding(const MCAssembler &Assembler,
 
 void ilist_alloc_traits<MCFragment>::deleteNode(MCFragment *V) { V->destroy(); }
 
-MCFragment::~MCFragment() = default;
-
 MCFragment::MCFragment(FragmentType Kind, bool HasInstructions,
-                       uint8_t BundlePadding, MCSection *Parent)
-    : Kind(Kind), HasInstructions(HasInstructions), AlignToBundleEnd(false),
-      BundlePadding(BundlePadding), Parent(Parent), Atom(nullptr),
-      Offset(~UINT64_C(0)) {
-  if (Parent && !isDummy())
+                       MCSection *Parent)
+    : Parent(Parent), Atom(nullptr), Offset(~UINT64_C(0)), LayoutOrder(0),
+      Kind(Kind), IsBeingLaidOut(false), HasInstructions(HasInstructions) {
+  if (Parent && !isa<MCDummyFragment>(*this))
     Parent->getFragmentList().push_back(this);
 }
 
@@ -263,6 +279,9 @@ void MCFragment::destroy() {
     case FT_Fill:
       delete cast<MCFillFragment>(this);
       return;
+    case FT_Nops:
+      delete cast<MCNopsFragment>(this);
+      return;
     case FT_Relaxable:
       delete cast<MCRelaxableFragment>(this);
       return;
@@ -278,14 +297,20 @@ void MCFragment::destroy() {
     case FT_LEB:
       delete cast<MCLEBFragment>(this);
       return;
-    case FT_SafeSEH:
-      delete cast<MCSafeSEHFragment>(this);
+    case FT_BoundaryAlign:
+      delete cast<MCBoundaryAlignFragment>(this);
+      return;
+    case FT_SymbolId:
+      delete cast<MCSymbolIdFragment>(this);
       return;
     case FT_CVInlineLines:
       delete cast<MCCVInlineLineTableFragment>(this);
       return;
     case FT_CVDefRange:
       delete cast<MCCVDefRangeFragment>(this);
+      return;
+    case FT_PseudoProbe:
+      delete cast<MCPseudoProbeAddrFragment>(this);
       return;
     case FT_Dummy:
       delete cast<MCDummyFragment>(this);
@@ -307,7 +332,7 @@ raw_ostream &operator<<(raw_ostream &OS, const MCFixup &AF) {
 } // end namespace llvm
 
 #if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
-LLVM_DUMP_METHOD void MCFragment::dump() {
+LLVM_DUMP_METHOD void MCFragment::dump() const {
   raw_ostream &OS = errs();
 
   OS << "<";
@@ -317,25 +342,33 @@ LLVM_DUMP_METHOD void MCFragment::dump() {
   case MCFragment::FT_CompactEncodedInst:
     OS << "MCCompactEncodedInstFragment"; break;
   case MCFragment::FT_Fill:  OS << "MCFillFragment"; break;
+  case MCFragment::FT_Nops:
+    OS << "MCFNopsFragment";
+    break;
   case MCFragment::FT_Relaxable:  OS << "MCRelaxableFragment"; break;
   case MCFragment::FT_Org:   OS << "MCOrgFragment"; break;
   case MCFragment::FT_Dwarf: OS << "MCDwarfFragment"; break;
   case MCFragment::FT_DwarfFrame: OS << "MCDwarfCallFrameFragment"; break;
   case MCFragment::FT_LEB:   OS << "MCLEBFragment"; break;
-  case MCFragment::FT_SafeSEH:    OS << "MCSafeSEHFragment"; break;
+  case MCFragment::FT_BoundaryAlign: OS<<"MCBoundaryAlignFragment"; break;
+  case MCFragment::FT_SymbolId:    OS << "MCSymbolIdFragment"; break;
   case MCFragment::FT_CVInlineLines: OS << "MCCVInlineLineTableFragment"; break;
   case MCFragment::FT_CVDefRange: OS << "MCCVDefRangeTableFragment"; break;
+  case MCFragment::FT_PseudoProbe:
+    OS << "MCPseudoProbe";
+    break;
   case MCFragment::FT_Dummy: OS << "MCDummyFragment"; break;
   }
 
-  OS << "<MCFragment " << (void*) this << " LayoutOrder:" << LayoutOrder
-     << " Offset:" << Offset
-     << " HasInstructions:" << hasInstructions() 
-     << " BundlePadding:" << static_cast<unsigned>(getBundlePadding()) << ">";
+  OS << "<MCFragment " << (const void *)this << " LayoutOrder:" << LayoutOrder
+     << " Offset:" << Offset << " HasInstructions:" << hasInstructions();
+  if (const auto *EF = dyn_cast<MCEncodedFragment>(this))
+    OS << " BundlePadding:" << static_cast<unsigned>(EF->getBundlePadding());
+  OS << ">";
 
   switch (getKind()) {
   case MCFragment::FT_Align: {
-    const MCAlignFragment *AF = cast<MCAlignFragment>(this);
+    const auto *AF = cast<MCAlignFragment>(this);
     if (AF->hasEmitNops())
       OS << " (emit nops)";
     OS << "\n       ";
@@ -345,7 +378,7 @@ LLVM_DUMP_METHOD void MCFragment::dump() {
     break;
   }
   case MCFragment::FT_Data:  {
-    const MCDataFragment *DF = cast<MCDataFragment>(this);
+    const auto *DF = cast<MCDataFragment>(this);
     OS << "\n       ";
     OS << " Contents:[";
     const SmallVectorImpl<char> &Contents = DF->getContents();
@@ -368,7 +401,7 @@ LLVM_DUMP_METHOD void MCFragment::dump() {
     break;
   }
   case MCFragment::FT_CompactEncodedInst: {
-    const MCCompactEncodedInstFragment *CEIF =
+    const auto *CEIF =
       cast<MCCompactEncodedInstFragment>(this);
     OS << "\n       ";
     OS << " Contents:[";
@@ -381,44 +414,62 @@ LLVM_DUMP_METHOD void MCFragment::dump() {
     break;
   }
   case MCFragment::FT_Fill:  {
-    const MCFillFragment *FF = cast<MCFillFragment>(this);
-    OS << " Value:" << FF->getValue() << " Size:" << FF->getSize();
+    const auto *FF = cast<MCFillFragment>(this);
+    OS << " Value:" << static_cast<unsigned>(FF->getValue())
+       << " ValueSize:" << static_cast<unsigned>(FF->getValueSize())
+       << " NumValues:" << FF->getNumValues();
+    break;
+  }
+  case MCFragment::FT_Nops: {
+    const auto *NF = cast<MCNopsFragment>(this);
+    OS << " NumBytes:" << NF->getNumBytes()
+       << " ControlledNopLength:" << NF->getControlledNopLength();
     break;
   }
   case MCFragment::FT_Relaxable:  {
-    const MCRelaxableFragment *F = cast<MCRelaxableFragment>(this);
+    const auto *F = cast<MCRelaxableFragment>(this);
     OS << "\n       ";
     OS << " Inst:";
     F->getInst().dump_pretty(OS);
+    OS << " (" << F->getContents().size() << " bytes)";
     break;
   }
   case MCFragment::FT_Org:  {
-    const MCOrgFragment *OF = cast<MCOrgFragment>(this);
+    const auto *OF = cast<MCOrgFragment>(this);
     OS << "\n       ";
-    OS << " Offset:" << OF->getOffset() << " Value:" << OF->getValue();
+    OS << " Offset:" << OF->getOffset()
+       << " Value:" << static_cast<unsigned>(OF->getValue());
     break;
   }
   case MCFragment::FT_Dwarf:  {
-    const MCDwarfLineAddrFragment *OF = cast<MCDwarfLineAddrFragment>(this);
+    const auto *OF = cast<MCDwarfLineAddrFragment>(this);
     OS << "\n       ";
     OS << " AddrDelta:" << OF->getAddrDelta()
        << " LineDelta:" << OF->getLineDelta();
     break;
   }
   case MCFragment::FT_DwarfFrame:  {
-    const MCDwarfCallFrameFragment *CF = cast<MCDwarfCallFrameFragment>(this);
+    const auto *CF = cast<MCDwarfCallFrameFragment>(this);
     OS << "\n       ";
     OS << " AddrDelta:" << CF->getAddrDelta();
     break;
   }
   case MCFragment::FT_LEB: {
-    const MCLEBFragment *LF = cast<MCLEBFragment>(this);
+    const auto *LF = cast<MCLEBFragment>(this);
     OS << "\n       ";
     OS << " Value:" << LF->getValue() << " Signed:" << LF->isSigned();
     break;
   }
-  case MCFragment::FT_SafeSEH: {
-    const MCSafeSEHFragment *F = cast<MCSafeSEHFragment>(this);
+  case MCFragment::FT_BoundaryAlign: {
+    const auto *BF = cast<MCBoundaryAlignFragment>(this);
+    OS << "\n       ";
+    OS << " BoundarySize:" << BF->getAlignment().value()
+       << " LastFragment:" << BF->getLastFragment()
+       << " Size:" << BF->getSize();
+    break;
+  }
+  case MCFragment::FT_SymbolId: {
+    const auto *F = cast<MCSymbolIdFragment>(this);
     OS << "\n       ";
     OS << " Sym:" << F->getSymbol();
     break;
@@ -439,31 +490,15 @@ LLVM_DUMP_METHOD void MCFragment::dump() {
     }
     break;
   }
+  case MCFragment::FT_PseudoProbe: {
+    const auto *OF = cast<MCPseudoProbeAddrFragment>(this);
+    OS << "\n       ";
+    OS << " AddrDelta:" << OF->getAddrDelta();
+    break;
+  }
   case MCFragment::FT_Dummy:
     break;
   }
   OS << ">";
-}
-
-LLVM_DUMP_METHOD void MCAssembler::dump() {
-  raw_ostream &OS = errs();
-
-  OS << "<MCAssembler\n";
-  OS << "  Sections:[\n    ";
-  for (iterator it = begin(), ie = end(); it != ie; ++it) {
-    if (it != begin()) OS << ",\n    ";
-    it->dump();
-  }
-  OS << "],\n";
-  OS << "  Symbols:[";
-
-  for (symbol_iterator it = symbol_begin(), ie = symbol_end(); it != ie; ++it) {
-    if (it != symbol_begin()) OS << ",\n           ";
-    OS << "(";
-    it->dump();
-    OS << ", Index:" << it->getIndex() << ", ";
-    OS << ")";
-  }
-  OS << "]>\n";
 }
 #endif

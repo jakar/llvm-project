@@ -1,4 +1,9 @@
-// RUN: %clang_cc1 -std=c++1z -verify %s
+// RUN: %clang_cc1 -std=c++1z -verify %s -DERRORS -Wundefined-func-template
+// RUN: %clang_cc1 -std=c++1z -verify %s -UERRORS -Wundefined-func-template
+
+// This test is split into two because we only produce "undefined internal"
+// warnings if we didn't produce any errors.
+#if ERRORS
 
 namespace std {
   using size_t = decltype(sizeof(0));
@@ -12,7 +17,7 @@ namespace std {
 }
 
 template<typename T> constexpr bool has_type(...) { return false; }
-template<typename T> constexpr bool has_type(T) { return true; }
+template<typename T> constexpr bool has_type(T&) { return true; }
 
 std::initializer_list il = {1, 2, 3, 4, 5};
 
@@ -167,6 +172,10 @@ namespace nondeducible {
   template<typename A = int,
            typename ...B>
   X(float) -> X<A, B...>; // ok
+
+  template <typename> struct UnnamedTemplateParam {};
+  template <typename>                                  // expected-note {{non-deducible template parameter (anonymous)}}
+  UnnamedTemplateParam() -> UnnamedTemplateParam<int>; // expected-error {{deduction guide template contains a template parameter that cannot be deduced}}
 }
 
 namespace default_args_from_ctor {
@@ -248,3 +257,306 @@ namespace variadic {
   };
   Z z(1, a, b);
 }
+
+namespace tuple_tests {
+  // The converting n-ary constructor appears viable, deducing T as an empty
+  // pack (until we check its SFINAE constraints).
+  namespace libcxx_1 {
+    template<class ...T> struct tuple {
+      template<class ...Args> struct X { static const bool value = false; };
+      template<class ...U, bool Y = X<U...>::value> tuple(U &&...u);
+    };
+    tuple a = {1, 2, 3};
+  }
+
+  // Don't get caught by surprise when X<...> doesn't even exist in the
+  // selected specialization!
+  namespace libcxx_2 {
+    template<class ...T> struct tuple {
+      template<class ...Args> struct X { static const bool value = false; };
+      // Substitution into X<U...>::value succeeds but produces the
+      // value-dependent expression
+      //   tuple<T...>::X<>::value
+      // FIXME: Is that the right behavior?
+      template<class ...U, bool Y = X<U...>::value> tuple(U &&...u);
+    };
+    template <> class tuple<> {};
+    tuple a = {1, 2, 3}; // expected-error {{excess elements in struct initializer}}
+  }
+
+  namespace libcxx_3 {
+    template<typename ...T> struct scoped_lock {
+      scoped_lock(T...);
+    };
+    template<> struct scoped_lock<> {};
+    scoped_lock l = {};
+  }
+}
+
+namespace dependent {
+  template<typename T> struct X {
+    X(T);
+  };
+  template<typename T> int Var(T t) {
+    X x(t);
+    return X(x) + 1; // expected-error {{invalid operands}}
+  }
+  template<typename T> int Cast(T t) {
+    return X(X(t)) + 1; // expected-error {{invalid operands}}
+  }
+  template<typename T> int New(T t) {
+    return X(new X(t)) + 1; // expected-error {{invalid operands}}
+  };
+  template int Var(float); // expected-note {{instantiation of}}
+  template int Cast(float); // expected-note {{instantiation of}}
+  template int New(float); // expected-note {{instantiation of}}
+  template<typename T> int operator+(X<T>, int);
+  template int Var(int);
+  template int Cast(int);
+  template int New(int);
+
+  template<template<typename> typename Y> void test() {
+    Y(0);
+    new Y(0);
+    Y y(0);
+  }
+  template void test<X>();
+}
+
+namespace injected_class_name {
+  template<typename T = void> struct A {
+    A();
+    template<typename U> A(A<U>);
+  };
+  A<int> a;
+  A b = a;
+  using T = decltype(a);
+  using T = decltype(b);
+}
+
+namespace member_guides {
+  // PR34520
+  template<class>
+  struct Foo {
+    template <class T> struct Bar {
+      Bar(...) {}
+    };
+    Bar(int) -> Bar<int>;
+  };
+  Foo<int>::Bar b = 0;
+
+  struct A {
+    template<typename T> struct Public; // expected-note {{declared public}}
+    Public(float) -> Public<float>;
+  protected: // expected-note {{declared protected by intervening access specifier}}
+    template<typename T> struct Protected; // expected-note 2{{declared protected}}
+    Protected(float) -> Protected<float>;
+    Public(int) -> Public<int>; // expected-error {{different access}}
+  private: // expected-note {{declared private by intervening access specifier}}
+    template<typename T> struct Private; // expected-note {{declared private}}
+    Protected(int) -> Protected<int>; // expected-error {{different access}}
+  public: // expected-note 2{{declared public by intervening access specifier}}
+    template<typename T> Public(T) -> Public<T>;
+    template<typename T> Protected(T) -> Protected<T>; // expected-error {{different access}}
+    template<typename T> Private(T) -> Private<T>; // expected-error {{different access}}
+  };
+}
+
+namespace rdar41903969 {
+template <class T> struct A {};
+template <class T> struct B;
+template <class T> struct C {
+  C(A<T>&);
+  C(B<T>&);
+};
+
+void foo(A<int> &a, B<int> &b) {
+  (void)C{b};
+  (void)C{a};
+}
+
+template<typename T> struct X {
+  X(std::initializer_list<T>) = delete;
+  X(const X&);
+};
+
+template <class T> struct D : X<T> {};
+
+void bar(D<int>& d) {
+  (void)X{d};
+}
+}
+
+namespace rdar41330135 {
+template <int> struct A {};
+template <class T>
+struct S {
+  template <class U>
+  S(T a, U t, A<sizeof(t)>);
+};
+template <class T> struct D {
+  D(T t, A<sizeof(t)>);
+};
+int f() {
+  S s(0, 0, A<sizeof(int)>());
+  D d(0, A<sizeof(int)>());
+}
+
+namespace test_dupls {
+template<unsigned long> struct X {};
+template<typename T> struct A {
+  A(T t, X<sizeof(t)>);
+};
+A a(0, {});
+template<typename U> struct B {
+  B(U u, X<sizeof(u)>);
+};
+B b(0, {});
+}
+
+}
+
+namespace no_crash_on_default_arg {
+class A {
+  template <typename T> class B {
+    B(int c = 1);
+  };
+  // This used to crash due to unparsed default arg above. The diagnostic could
+  // be improved, but the point of this test is to simply check we do not crash.
+  B(); // expected-error {{deduction guide declaration without trailing return type}}
+};
+} // namespace no_crash_on_default_arg
+
+#pragma clang diagnostic push
+#pragma clang diagnostic warning "-Wctad-maybe-unsupported"
+namespace test_implicit_ctad_warning {
+
+template <class T>
+struct Tag {};
+
+template <class T>
+struct NoExplicit { // expected-note {{add a deduction guide to suppress this warning}}
+  NoExplicit(T) {}
+  NoExplicit(T, int) {}
+};
+
+// expected-warning@+1 {{'NoExplicit' may not intend to support class template argument deduction}}
+NoExplicit ne(42);
+
+template <class U>
+struct HasExplicit {
+  HasExplicit(U) {}
+  HasExplicit(U, int) {}
+};
+template <class U> HasExplicit(U, int) -> HasExplicit<Tag<U>>;
+
+HasExplicit he(42);
+
+// Motivating examples from (taken from Stephan Lavavej's 2018 Cppcon talk)
+template <class T, class U>
+struct AmateurPair { // expected-note {{add a deduction guide to suppress this warning}}
+  T first;
+  U second;
+  explicit AmateurPair(const T &t, const U &u) {}
+};
+// expected-warning@+1 {{'AmateurPair' may not intend to support class template argument deduction}}
+AmateurPair p1(42, "hello world"); // deduces to Pair<int, char[12]>
+
+template <class T, class U>
+struct AmateurPair2 { // expected-note {{add a deduction guide to suppress this warning}}
+  T first;
+  U second;
+  explicit AmateurPair2(T t, U u) {}
+};
+// expected-warning@+1 {{'AmateurPair2' may not intend to support class template argument deduction}}
+AmateurPair2 p2(42, "hello world"); // deduces to Pair2<int, const char*>
+
+template <class T, class U>
+struct ProPair {
+  T first; U second;
+    explicit ProPair(T const& t, U  const& u)  {}
+};
+template<class T1, class T2>
+ProPair(T1, T2) -> ProPair<T1, T2>;
+ProPair p3(42, "hello world"); // deduces to ProPair<int, const char*>
+static_assert(__is_same(decltype(p3), ProPair<int, const char*>));
+
+// Test that user-defined explicit guides suppress the warning even if they
+// aren't used as candidates.
+template <class T>
+struct TestExplicitCtor {
+  TestExplicitCtor(T) {}
+};
+template <class T>
+explicit TestExplicitCtor(TestExplicitCtor<T> const&) -> TestExplicitCtor<void>;
+TestExplicitCtor<int> ce1{42};
+TestExplicitCtor ce2 = ce1;
+static_assert(__is_same(decltype(ce2), TestExplicitCtor<int>), "");
+
+struct allow_ctad_t {
+  allow_ctad_t() = delete;
+};
+
+template <class T>
+struct TestSuppression {
+  TestSuppression(T) {}
+};
+TestSuppression(allow_ctad_t)->TestSuppression<void>;
+TestSuppression ta("abc");
+static_assert(__is_same(decltype(ta), TestSuppression<const char *>), "");
+}
+#pragma clang diagnostic pop
+
+namespace PR41549 {
+
+template <class H, class P> struct umm;
+
+template <class H = int, class P = int>
+struct umm {
+  umm(H h = 0, P p = 0);
+};
+
+template <class H, class P> struct umm;
+
+umm m(1);
+
+}
+
+namespace PR45124 {
+  class a { int d; };
+  class b : a {};
+
+  struct x { ~x(); };
+  template<typename> class y { y(x = x()); };
+  template<typename z> y(z)->y<z>;
+
+  // Not a constant initializer, but trivial default initialization. We won't
+  // detect this as trivial default initialization if synthesizing the implicit
+  // deduction guide 'template<typename T> y(x = x()) -> Y<T>;' leaves behind a
+  // pending cleanup.
+  __thread b g;
+}
+
+namespace PR47175 {
+  template<typename T> struct A { A(T); T x; };
+  template<typename T> int &&n = A(T()).x;
+  int m = n<int>;
+}
+
+#else
+
+// expected-no-diagnostics
+namespace undefined_warnings {
+  // Make sure we don't get an "undefined but used internal symbol" warning for the deduction guide here.
+  namespace {
+    template <typename T>
+    struct TemplDObj {
+      explicit TemplDObj(T func) noexcept {}
+    };
+    auto test1 = TemplDObj(0);
+
+    TemplDObj(float) -> TemplDObj<double>;
+    auto test2 = TemplDObj(.0f);
+  }
+}
+#endif

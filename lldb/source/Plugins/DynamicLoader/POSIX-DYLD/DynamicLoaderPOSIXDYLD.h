@@ -1,26 +1,22 @@
 //===-- DynamicLoaderPOSIXDYLD.h --------------------------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef liblldb_DynamicLoaderPOSIXDYLD_h_
-#define liblldb_DynamicLoaderPOSIXDYLD_h_
+#ifndef LLDB_SOURCE_PLUGINS_DYNAMICLOADER_POSIX_DYLD_DYNAMICLOADERPOSIXDYLD_H
+#define LLDB_SOURCE_PLUGINS_DYNAMICLOADER_POSIX_DYLD_DYNAMICLOADERPOSIXDYLD_H
 
-// C Includes
-// C++ Includes
 #include <map>
 #include <memory>
 
-// Other libraries and framework includes
-// Project includes
-#include "lldb/Breakpoint/StoppointCallbackContext.h"
-#include "lldb/Target/DynamicLoader.h"
-
 #include "DYLDRendezvous.h"
+#include "Plugins/Process/Utility/AuxVector.h"
+#include "lldb/Breakpoint/StoppointCallbackContext.h"
+#include "lldb/Core/ModuleList.h"
+#include "lldb/Target/DynamicLoader.h"
 
 class AuxVector;
 
@@ -41,9 +37,7 @@ public:
   static lldb_private::DynamicLoader *
   CreateInstance(lldb_private::Process *process, bool force);
 
-  //------------------------------------------------------------------
   // DynamicLoader protocol
-  //------------------------------------------------------------------
 
   void DidAttach() override;
 
@@ -52,15 +46,13 @@ public:
   lldb::ThreadPlanSP GetStepThroughTrampolinePlan(lldb_private::Thread &thread,
                                                   bool stop_others) override;
 
-  lldb_private::Error CanLoadImage() override;
+  lldb_private::Status CanLoadImage() override;
 
   lldb::addr_t GetThreadLocalData(const lldb::ModuleSP module,
                                   const lldb::ThreadSP thread,
                                   lldb::addr_t tls_file_addr) override;
 
-  //------------------------------------------------------------------
   // PluginInterface protocol
-  //------------------------------------------------------------------
   lldb_private::ConstString GetPluginName() override;
 
   uint32_t GetPluginVersion() override;
@@ -85,13 +77,20 @@ protected:
   /// mapped to the address space
   lldb::addr_t m_vdso_base;
 
+  /// Contains AT_BASE, which means a dynamic loader has been
+  /// mapped to the address space
+  lldb::addr_t m_interpreter_base;
+
+  /// Contains the pointer to the interpret module, if loaded.
+  std::weak_ptr<lldb_private::Module> m_interpreter_module;
+
   /// Loaded module list. (link map for each module)
   std::map<lldb::ModuleWP, lldb::addr_t, std::owner_less<lldb::ModuleWP>>
       m_loaded_modules;
 
-  /// Enables a breakpoint on a function called by the runtime
+  /// If possible sets a breakpoint on a function called by the runtime
   /// linker each time a module is loaded or unloaded.
-  virtual void SetRendezvousBreakpoint();
+  bool SetRendezvousBreakpoint();
 
   /// Callback routine which updates the current list of loaded modules based
   /// on the information supplied by the runtime linker.
@@ -99,25 +98,28 @@ protected:
       void *baton, lldb_private::StoppointCallbackContext *context,
       lldb::user_id_t break_id, lldb::user_id_t break_loc_id);
 
+  /// Indicates whether the initial set of modules was reported added.
+  bool m_initial_modules_added;
+
   /// Helper method for RendezvousBreakpointHit.  Updates LLDB's current set
   /// of loaded modules.
   void RefreshModules();
 
-  /// Updates the load address of every allocatable section in @p module.
+  /// Updates the load address of every allocatable section in \p module.
   ///
-  /// @param module The module to traverse.
+  /// \param module The module to traverse.
   ///
-  /// @param link_map_addr The virtual address of the link map for the @p
+  /// \param link_map_addr The virtual address of the link map for the @p
   /// module.
   ///
-  /// @param base_addr The virtual base address @p module is loaded at.
+  /// \param base_addr The virtual base address \p module is loaded at.
   void UpdateLoadedSections(lldb::ModuleSP module, lldb::addr_t link_map_addr,
                             lldb::addr_t base_addr,
                             bool base_addr_is_offset) override;
 
-  /// Removes the loaded sections from the target in @p module.
+  /// Removes the loaded sections from the target in \p module.
   ///
-  /// @param module The module to traverse.
+  /// \param module The module to traverse.
   void UnloadSections(const lldb::ModuleSP module) override;
 
   /// Resolves the entry point for the current inferior process and sets a
@@ -138,6 +140,12 @@ protected:
   /// of all dependent modules.
   virtual void LoadAllCurrentModules();
 
+  void LoadVDSO();
+
+  // Loading an interpreter module (if present) assuming m_interpreter_base
+  // already points to its base address.
+  lldb::ModuleSP LoadInterpreterModule();
+
   /// Computes a value for m_load_offset returning the computed address on
   /// success and LLDB_INVALID_ADDRESS on failure.
   lldb::addr_t ComputeLoadOffset();
@@ -146,9 +154,10 @@ protected:
   /// success and LLDB_INVALID_ADDRESS on failure.
   lldb::addr_t GetEntryPoint();
 
-  /// Evaluate if Aux vectors contain vDSO information
+  /// Evaluate if Aux vectors contain vDSO and LD information
   /// in case they do, read and assign the address to m_vdso_base
-  void EvalVdsoStatus();
+  /// and m_interpreter_base.
+  void EvalSpecialModulesStatus();
 
   /// Loads Module from inferior process.
   void ResolveExecutableModule(lldb::ModuleSP &module_sp);
@@ -156,7 +165,9 @@ protected:
   bool AlwaysRelyOnEHUnwindInfo(lldb_private::SymbolContext &sym_ctx) override;
 
 private:
-  DISALLOW_COPY_AND_ASSIGN(DynamicLoaderPOSIXDYLD);
+  DynamicLoaderPOSIXDYLD(const DynamicLoaderPOSIXDYLD &) = delete;
+  const DynamicLoaderPOSIXDYLD &
+  operator=(const DynamicLoaderPOSIXDYLD &) = delete;
 };
 
-#endif // liblldb_DynamicLoaderPOSIXDYLD_h_
+#endif // LLDB_SOURCE_PLUGINS_DYNAMICLOADER_POSIX_DYLD_DYNAMICLOADERPOSIXDYLD_H

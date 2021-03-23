@@ -3,8 +3,8 @@
 ; CHECK:         Assumed Context:
 ; CHECK-NEXT:    [N] -> {  :  }
 ; CHECK-NEXT:    Invalid Context:
-; CHECK-NEXT:    [N] -> {  : 1 = 0 }
-; CHECK-NEXT:    p0: %N
+; CHECK-NEXT:    [N] -> {  : false }
+; CHECK:         p0: %N
 ; CHECK:         Statements {
 ; CHECK-NEXT:    	Stmt_for_body
 ; CHECK-NEXT:            Domain :=
@@ -12,9 +12,9 @@
 ; CHECK-NEXT:            Schedule :=
 ; CHECK-NEXT:                [N] -> { Stmt_for_body[i0] -> [i0] };
 ; CHECK-NEXT:            ReadAccess :=	[Reduction Type: +] [Scalar: 0]
-; CHECK-NEXT:                [N] -> { Stmt_for_body[i0] -> MemRef_A[1] : 2*floor((1 + i0)/2) = 1 + i0; Stmt_for_body[i0] -> MemRef_A[0] : 2*floor((i0)/2) = i0 };
+; CHECK-NEXT:                [N] -> { Stmt_for_body[i0] -> MemRef_A[1] : (1 + i0) mod 2 = 0; Stmt_for_body[i0] -> MemRef_A[0] : (i0) mod 2 = 0 }
 ; CHECK-NEXT:            MustWriteAccess :=	[Reduction Type: +] [Scalar: 0]
-; CHECK-NEXT:                [N] -> { Stmt_for_body[i0] -> MemRef_A[1] : 2*floor((1 + i0)/2) = 1 + i0; Stmt_for_body[i0] -> MemRef_A[0] : 2*floor((i0)/2) = i0 };
+; CHECK-NEXT:               [N] -> { Stmt_for_body[i0] -> MemRef_A[1] : (1 + i0) mod 2 = 0; Stmt_for_body[i0] -> MemRef_A[0] : (i0) mod 2 = 0 }; 
 ; CHECK-NEXT:    }
 ;
 ;    void f(int *A, int N) {

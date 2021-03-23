@@ -1,8 +1,8 @@
 // RUN: llvm-mc -filetype=obj -triple=mips64el-pc-linux -mcpu=mips64 %s -o - \
-// RUN: | llvm-readobj -r \
+// RUN: | llvm-readobj -r - \
 // RUN: | FileCheck %s
 // RUN: llvm-mc -filetype=obj -triple=mips64-pc-linux -mcpu=mips64 %s -o - \
-// RUN: | llvm-readobj -r \
+// RUN: | llvm-readobj -r - \
 // RUN: | FileCheck %s
 
 // Check that the appropriate relocations were created.
@@ -34,7 +34,7 @@ test:                                   # @test
 	.set	noreorder
 	.set	nomacro
 	.set	noat
-# BB#0:                                 # %entry
+# %bb.0:                                # %entry
 	lui	$1, %hi(%neg(%gp_rel(test)))
 	daddu	$2, $1, $25
 	sltiu	$1, $4, 4

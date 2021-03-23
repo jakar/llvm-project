@@ -4,6 +4,8 @@
 ; RUN: llc < %s -mcpu=core2 -mtriple=x86_64-linux | FileCheck -check-prefix=ATOM-NOT64 %s
 ; RUN: llc < %s -mcpu=slm -mtriple=i686-linux  | FileCheck -check-prefix=SLM32 %s
 ; RUN: llc < %s -mcpu=slm -mtriple=x86_64-linux  | FileCheck -check-prefix=SLM64 %s
+; RUN: llc < %s -mcpu=goldmont -mtriple=i686-linux  | FileCheck -check-prefix=SLM32 %s
+; RUN: llc < %s -mcpu=goldmont -mtriple=x86_64-linux  | FileCheck -check-prefix=SLM64 %s
 
 
 ; fn_ptr.ll
@@ -33,7 +35,7 @@ entry:
 declare %class.A* @_Z3facv() #1
 
 ; virt_fn.ll
-@p = external global void (i32)**
+@p = external dso_local global void (i32)**
 
 define i32 @test2() #0 {
   ;ATOM-LABEL: test2:

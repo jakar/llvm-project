@@ -1,4 +1,4 @@
-// RUN: llvm-mc < %s -triple=aarch64-none-linux-gnu -filetype=obj | llvm-readobj -r | FileCheck %s
+// RUN: llvm-mc < %s -triple=aarch64-none-linux-gnu -filetype=obj | llvm-readobj -r - | FileCheck %s
 
 // External symbols are a different concept to global variables but should still
 // get relocations and so on when used.
@@ -9,7 +9,7 @@
 	.type	check_extern,@function
 check_extern:                           // @check_extern
 	.cfi_startproc
-// BB#0:
+// %bb.0:
 	sub	sp, sp, #16
 .Ltmp2:
 	.cfi_def_cfa sp, 16

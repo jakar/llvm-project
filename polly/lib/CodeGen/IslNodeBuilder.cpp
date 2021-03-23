@@ -1,9 +1,8 @@
-//===------ IslNodeBuilder.cpp - Translate an isl AST into a LLVM-IR AST---===//
+//===- IslNodeBuilder.cpp - Translate an isl AST into a LLVM-IR AST -------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -17,47 +16,71 @@
 #include "polly/CodeGen/CodeGeneration.h"
 #include "polly/CodeGen/IslAst.h"
 #include "polly/CodeGen/IslExprBuilder.h"
-#include "polly/CodeGen/LoopGenerators.h"
+#include "polly/CodeGen/LoopGeneratorsGOMP.h"
+#include "polly/CodeGen/LoopGeneratorsKMP.h"
 #include "polly/CodeGen/RuntimeDebugBuilder.h"
-#include "polly/CodeGen/Utils.h"
-#include "polly/Config/config.h"
-#include "polly/DependenceInfo.h"
-#include "polly/LinkAllPasses.h"
 #include "polly/Options.h"
 #include "polly/ScopInfo.h"
-#include "polly/Support/GICHelper.h"
+#include "polly/Support/ISLTools.h"
 #include "polly/Support/SCEVValidator.h"
 #include "polly/Support/ScopHelper.h"
+#include "llvm/ADT/APInt.h"
 #include "llvm/ADT/PostOrderIterator.h"
+#include "llvm/ADT/SetVector.h"
 #include "llvm/ADT/SmallPtrSet.h"
+#include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/LoopInfo.h"
+#include "llvm/Analysis/RegionInfo.h"
+#include "llvm/Analysis/ScalarEvolution.h"
+#include "llvm/Analysis/ScalarEvolutionExpressions.h"
+#include "llvm/IR/BasicBlock.h"
+#include "llvm/IR/Constant.h"
+#include "llvm/IR/Constants.h"
 #include "llvm/IR/DataLayout.h"
-#include "llvm/IR/Module.h"
-#include "llvm/IR/Verifier.h"
+#include "llvm/IR/DerivedTypes.h"
+#include "llvm/IR/Dominators.h"
+#include "llvm/IR/Function.h"
+#include "llvm/IR/InstrTypes.h"
+#include "llvm/IR/Instruction.h"
+#include "llvm/IR/Instructions.h"
+#include "llvm/IR/Type.h"
+#include "llvm/IR/Value.h"
+#include "llvm/Support/Casting.h"
 #include "llvm/Support/CommandLine.h"
-#include "llvm/Support/Debug.h"
+#include "llvm/Support/ErrorHandling.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "isl/aff.h"
+#include "isl/aff_type.h"
 #include "isl/ast.h"
 #include "isl/ast_build.h"
-#include "isl/list.h"
+#include "isl/isl-noexceptions.h"
 #include "isl/map.h"
 #include "isl/set.h"
 #include "isl/union_map.h"
 #include "isl/union_set.h"
+#include "isl/val.h"
+#include <algorithm>
+#include <cassert>
+#include <cstdint>
+#include <cstring>
+#include <string>
+#include <utility>
+#include <vector>
 
-using namespace polly;
 using namespace llvm;
+using namespace polly;
 
 #define DEBUG_TYPE "polly-codegen"
 
 STATISTIC(VersionedScops, "Number of SCoPs that required versioning.");
 
-// The maximal number of dimensions we allow during invariant load construction.
-// More complex access ranges will result in very high compile time and are also
-// unlikely to result in good code. This value is very high and should only
-// trigger for corner cases (e.g., the "dct_luma" function in h264, SPEC2006).
-static int const MaxDimensionsInAccessRange = 9;
+STATISTIC(SequentialLoops, "Number of generated sequential for-loops");
+STATISTIC(ParallelLoops, "Number of generated parallel for-loops");
+STATISTIC(VectorLoops, "Number of generated vector for-loops");
+STATISTIC(IfConditions, "Number of generated if-conditions");
+
+/// OpenMP backend options
+enum class OpenMPBackend { GNU, LLVM };
 
 static cl::opt<bool> PollyGenerateRTCPrint(
     "polly-codegen-emit-rtc-print",
@@ -78,22 +101,22 @@ static cl::opt<int> PollyTargetFirstLevelCacheLineSize(
     cl::desc("The size of the first level cache line size specified in bytes."),
     cl::Hidden, cl::init(64), cl::ZeroOrMore, cl::cat(PollyCategory));
 
-__isl_give isl_ast_expr *
-IslNodeBuilder::getUpperBound(__isl_keep isl_ast_node *For,
-                              ICmpInst::Predicate &Predicate) {
-  isl_id *UBID, *IteratorID;
-  isl_ast_expr *Cond, *Iterator, *UB, *Arg0;
-  isl_ast_op_type Type;
+static cl::opt<OpenMPBackend> PollyOmpBackend(
+    "polly-omp-backend", cl::desc("Choose the OpenMP library to use:"),
+    cl::values(clEnumValN(OpenMPBackend::GNU, "GNU", "GNU OpenMP"),
+               clEnumValN(OpenMPBackend::LLVM, "LLVM", "LLVM OpenMP")),
+    cl::Hidden, cl::init(OpenMPBackend::GNU), cl::cat(PollyCategory));
 
-  Cond = isl_ast_node_for_get_cond(For);
-  Iterator = isl_ast_node_for_get_iterator(For);
-  isl_ast_expr_get_type(Cond);
-  assert(isl_ast_expr_get_type(Cond) == isl_ast_expr_op &&
+isl::ast_expr IslNodeBuilder::getUpperBound(isl::ast_node For,
+                                            ICmpInst::Predicate &Predicate) {
+  isl::ast_expr Cond = For.for_get_cond();
+  isl::ast_expr Iterator = For.for_get_iterator();
+  assert(isl_ast_expr_get_type(Cond.get()) == isl_ast_expr_op &&
          "conditional expression is not an atomic upper bound");
 
-  Type = isl_ast_expr_get_op_type(Cond);
+  isl_ast_op_type OpType = isl_ast_expr_get_op_type(Cond.get());
 
-  switch (Type) {
+  switch (OpType) {
   case isl_ast_op_le:
     Predicate = ICmpInst::ICMP_SLE;
     break;
@@ -101,33 +124,25 @@ IslNodeBuilder::getUpperBound(__isl_keep isl_ast_node *For,
     Predicate = ICmpInst::ICMP_SLT;
     break;
   default:
-    llvm_unreachable("Unexpected comparision type in loop conditon");
+    llvm_unreachable("Unexpected comparison type in loop condition");
   }
 
-  Arg0 = isl_ast_expr_get_op_arg(Cond, 0);
+  isl::ast_expr Arg0 = Cond.get_op_arg(0);
 
-  assert(isl_ast_expr_get_type(Arg0) == isl_ast_expr_id &&
+  assert(isl_ast_expr_get_type(Arg0.get()) == isl_ast_expr_id &&
          "conditional expression is not an atomic upper bound");
 
-  UBID = isl_ast_expr_get_id(Arg0);
+  isl::id UBID = Arg0.get_id();
 
-  assert(isl_ast_expr_get_type(Iterator) == isl_ast_expr_id &&
+  assert(isl_ast_expr_get_type(Iterator.get()) == isl_ast_expr_id &&
          "Could not get the iterator");
 
-  IteratorID = isl_ast_expr_get_id(Iterator);
+  isl::id IteratorID = Iterator.get_id();
 
-  assert(UBID == IteratorID &&
+  assert(UBID.get() == IteratorID.get() &&
          "conditional expression is not an atomic upper bound");
 
-  UB = isl_ast_expr_get_op_arg(Cond, 1);
-
-  isl_ast_expr_free(Cond);
-  isl_ast_expr_free(Iterator);
-  isl_ast_expr_free(Arg0);
-  isl_id_free(IteratorID);
-  isl_id_free(UBID);
-
-  return UB;
+  return Cond.get_op_arg(1);
 }
 
 /// Return true if a return value of Predicate is true for the value represented
@@ -140,7 +155,7 @@ static bool checkIslAstExprInt(__isl_take isl_ast_expr *Expr,
   }
   auto ExprVal = isl_ast_expr_get_val(Expr);
   isl_ast_expr_free(Expr);
-  if (Predicate(ExprVal) != true) {
+  if (Predicate(ExprVal) != isl_bool_true) {
     isl_val_free(ExprVal);
     return false;
   }
@@ -148,51 +163,39 @@ static bool checkIslAstExprInt(__isl_take isl_ast_expr *Expr,
   return true;
 }
 
-int IslNodeBuilder::getNumberOfIterations(__isl_keep isl_ast_node *For) {
-  assert(isl_ast_node_get_type(For) == isl_ast_node_for);
-  auto Body = isl_ast_node_for_get_body(For);
+int IslNodeBuilder::getNumberOfIterations(isl::ast_node For) {
+  assert(isl_ast_node_get_type(For.get()) == isl_ast_node_for);
+  isl::ast_node Body = For.for_get_body();
 
   // First, check if we can actually handle this code.
-  switch (isl_ast_node_get_type(Body)) {
+  switch (isl_ast_node_get_type(Body.get())) {
   case isl_ast_node_user:
     break;
   case isl_ast_node_block: {
-    isl_ast_node_list *List = isl_ast_node_block_get_children(Body);
-    for (int i = 0; i < isl_ast_node_list_n_ast_node(List); ++i) {
-      isl_ast_node *Node = isl_ast_node_list_get_ast_node(List, i);
-      int Type = isl_ast_node_get_type(Node);
-      isl_ast_node_free(Node);
-      if (Type != isl_ast_node_user) {
-        isl_ast_node_list_free(List);
-        isl_ast_node_free(Body);
+    isl::ast_node_list List = Body.block_get_children();
+    for (isl::ast_node Node : List) {
+      isl_ast_node_type NodeType = isl_ast_node_get_type(Node.get());
+      if (NodeType != isl_ast_node_user)
         return -1;
-      }
     }
-    isl_ast_node_list_free(List);
     break;
   }
   default:
-    isl_ast_node_free(Body);
     return -1;
   }
-  isl_ast_node_free(Body);
 
-  auto Init = isl_ast_node_for_get_init(For);
-  if (!checkIslAstExprInt(Init, isl_val_is_zero))
+  isl::ast_expr Init = For.for_get_init();
+  if (!checkIslAstExprInt(Init.release(), isl_val_is_zero))
     return -1;
-  auto Inc = isl_ast_node_for_get_inc(For);
-  if (!checkIslAstExprInt(Inc, isl_val_is_one))
+  isl::ast_expr Inc = For.for_get_inc();
+  if (!checkIslAstExprInt(Inc.release(), isl_val_is_one))
     return -1;
   CmpInst::Predicate Predicate;
-  auto UB = getUpperBound(For, Predicate);
-  if (isl_ast_expr_get_type(UB) != isl_ast_expr_int) {
-    isl_ast_expr_free(UB);
+  isl::ast_expr UB = getUpperBound(For, Predicate);
+  if (isl_ast_expr_get_type(UB.get()) != isl_ast_expr_int)
     return -1;
-  }
-  auto UpVal = isl_ast_expr_get_val(UB);
-  isl_ast_expr_free(UB);
-  int NumberIterations = isl_val_get_num_si(UpVal);
-  isl_val_free(UpVal);
+  isl::val UpVal = UB.get_val();
+  int NumberIterations = UpVal.get_num_si();
   if (NumberIterations < 0)
     return -1;
   if (Predicate == CmpInst::ICMP_SLT)
@@ -203,8 +206,13 @@ int IslNodeBuilder::getNumberOfIterations(__isl_keep isl_ast_node *For) {
 
 /// Extract the values and SCEVs needed to generate code for a block.
 static int findReferencesInBlock(struct SubtreeReferences &References,
-                                 const ScopStmt *Stmt, const BasicBlock *BB) {
-  for (const Instruction &Inst : *BB)
+                                 const ScopStmt *Stmt, BasicBlock *BB) {
+  for (Instruction &Inst : *BB) {
+    // Include invariant loads
+    if (isa<LoadInst>(Inst))
+      if (Value *InvariantLoad = References.GlobalMap.lookup(&Inst))
+        References.Values.insert(InvariantLoad);
+
     for (Value *SrcVal : Inst.operands()) {
       auto *Scope = References.LI.getLoopFor(BB);
       if (canSynthesize(SrcVal, References.S, &References.SE, Scope)) {
@@ -213,25 +221,33 @@ static int findReferencesInBlock(struct SubtreeReferences &References,
       } else if (Value *NewVal = References.GlobalMap.lookup(SrcVal))
         References.Values.insert(NewVal);
     }
+  }
   return 0;
 }
 
-isl_stat addReferencesFromStmt(const ScopStmt *Stmt, void *UserPtr,
-                               bool CreateScalarRefs) {
+void polly::addReferencesFromStmt(const ScopStmt *Stmt, void *UserPtr,
+                                  bool CreateScalarRefs) {
   auto &References = *static_cast<struct SubtreeReferences *>(UserPtr);
 
   if (Stmt->isBlockStmt())
     findReferencesInBlock(References, Stmt, Stmt->getBasicBlock());
-  else {
-    assert(Stmt->isRegionStmt() &&
-           "Stmt was neither block nor region statement");
-    for (const BasicBlock *BB : Stmt->getRegion()->blocks())
+  else if (Stmt->isRegionStmt()) {
+    for (BasicBlock *BB : Stmt->getRegion()->blocks())
       findReferencesInBlock(References, Stmt, BB);
+  } else {
+    assert(Stmt->isCopyStmt());
+    // Copy Stmts have no instructions that we need to consider.
   }
 
   for (auto &Access : *Stmt) {
-    if (Access->isArrayKind()) {
-      auto *BasePtr = Access->getScopArrayInfo()->getBasePtr();
+    if (References.ParamSpace) {
+      isl::space ParamSpace = Access->getLatestAccessRelation().get_space();
+      (*References.ParamSpace) =
+          References.ParamSpace->align_params(ParamSpace);
+    }
+
+    if (Access->isLatestArrayKind()) {
+      auto *BasePtr = Access->getLatestScopArrayInfo()->getBasePtr();
       if (Instruction *OpInst = dyn_cast<Instruction>(BasePtr))
         if (Stmt->getParent()->contains(OpInst))
           continue;
@@ -243,8 +259,6 @@ isl_stat addReferencesFromStmt(const ScopStmt *Stmt, void *UserPtr,
     if (CreateScalarRefs)
       References.Values.insert(References.BlockGen.getOrCreateAlloca(*Access));
   }
-
-  return isl_stat_ok;
 }
 
 /// Extract the out-of-scop values and SCEVs referenced from a set describing
@@ -258,12 +272,10 @@ isl_stat addReferencesFromStmt(const ScopStmt *Stmt, void *UserPtr,
 /// @param Set     A set which references the ScopStmt we are interested in.
 /// @param UserPtr A void pointer that can be casted to a SubtreeReferences
 ///                structure.
-static isl_stat addReferencesFromStmtSet(__isl_take isl_set *Set,
-                                         void *UserPtr) {
-  isl_id *Id = isl_set_get_tuple_id(Set);
-  auto *Stmt = static_cast<const ScopStmt *>(isl_id_get_user(Id));
-  isl_id_free(Id);
-  isl_set_free(Set);
+static void addReferencesFromStmtSet(isl::set Set,
+                                     struct SubtreeReferences *UserPtr) {
+  isl::id Id = Set.get_tuple_id();
+  auto *Stmt = static_cast<const ScopStmt *>(Id.get_user());
   return addReferencesFromStmt(Stmt, UserPtr);
 }
 
@@ -281,10 +293,11 @@ static isl_stat addReferencesFromStmtSet(__isl_take isl_set *Set,
 ///                   results are returned and further information is
 ///                   provided.
 static void
-addReferencesFromStmtUnionSet(isl_union_set *USet,
+addReferencesFromStmtUnionSet(isl::union_set USet,
                               struct SubtreeReferences &References) {
-  isl_union_set_foreach_set(USet, addReferencesFromStmtSet, &References);
-  isl_union_set_free(USet);
+
+  for (isl::set Set : USet.get_set_list())
+    addReferencesFromStmtSet(Set, &References);
 }
 
 __isl_give isl_union_map *
@@ -295,18 +308,19 @@ IslNodeBuilder::getScheduleForAstNode(__isl_keep isl_ast_node *For) {
 void IslNodeBuilder::getReferencesInSubtree(__isl_keep isl_ast_node *For,
                                             SetVector<Value *> &Values,
                                             SetVector<const Loop *> &Loops) {
-
   SetVector<const SCEV *> SCEVs;
   struct SubtreeReferences References = {
-      LI, SE, S, ValueMap, Values, SCEVs, getBlockGenerator()};
+      LI, SE, S, ValueMap, Values, SCEVs, getBlockGenerator(), nullptr};
 
   for (const auto &I : IDToValue)
     Values.insert(I.second);
 
+  // NOTE: this is populated in IslNodeBuilder::addParameters
   for (const auto &I : OutsideLoopIterations)
     Values.insert(cast<SCEVUnknown>(I.second)->getValue());
 
-  isl_union_set *Schedule = isl_union_map_domain(getScheduleForAstNode(For));
+  isl::union_set Schedule =
+      isl::manage(isl_union_map_domain(getScheduleForAstNode(For)));
   addReferencesFromStmtUnionSet(Schedule, References);
 
   for (const SCEV *Expr : SCEVs) {
@@ -316,12 +330,32 @@ void IslNodeBuilder::getReferencesInSubtree(__isl_keep isl_ast_node *For,
 
   Values.remove_if([](const Value *V) { return isa<GlobalValue>(V); });
 
+  /// Note: Code generation of induction variables of loops outside Scops
+  ///
   /// Remove loops that contain the scop or that are part of the scop, as they
   /// are considered local. This leaves only loops that are before the scop, but
   /// do not contain the scop itself.
+  /// We ignore loops perfectly contained in the Scop because these are already
+  /// generated at `IslNodeBuilder::addParameters`. These `Loops` are loops
+  /// whose induction variables are referred to by the Scop, but the Scop is not
+  /// fully contained in these Loops. Since there can be many of these,
+  /// we choose to codegen these on-demand.
+  /// @see IslNodeBuilder::materializeNonScopLoopInductionVariable.
   Loops.remove_if([this](const Loop *L) {
     return S.contains(L) || L->contains(S.getEntry());
   });
+
+  // Contains Values that may need to be replaced with other values
+  // due to replacements from the ValueMap. We should make sure
+  // that we return correctly remapped values.
+  // NOTE: this code path is tested by:
+  //     1.  test/Isl/CodeGen/OpenMP/single_loop_with_loop_invariant_baseptr.ll
+  //     2.  test/Isl/CodeGen/OpenMP/loop-body-references-outer-values-3.ll
+  SetVector<Value *> ReplacedValues;
+  for (Value *V : Values) {
+    ReplacedValues.insert(getLatestValue(V));
+  }
+  Values = ReplacedValues;
 }
 
 void IslNodeBuilder::updateValues(ValueMapT &NewValues) {
@@ -340,6 +374,13 @@ void IslNodeBuilder::updateValues(ValueMapT &NewValues) {
   }
 }
 
+Value *IslNodeBuilder::getLatestValue(Value *Original) const {
+  auto It = ValueMap.find(Original);
+  if (It == ValueMap.end())
+    return Original;
+  return It->second;
+}
+
 void IslNodeBuilder::createUserVector(__isl_take isl_ast_node *User,
                                       std::vector<Value *> &IVS,
                                       __isl_take isl_id *IteratorID,
@@ -351,7 +392,7 @@ void IslNodeBuilder::createUserVector(__isl_take isl_ast_node *User,
   ScopStmt *Stmt = (ScopStmt *)isl_id_get_user(Id);
   std::vector<LoopToScevMapT> VLTS(IVS.size());
 
-  isl_union_set *Domain = isl_union_set_from_set(Stmt->getDomain());
+  isl_union_set *Domain = isl_union_set_from_set(Stmt->getDomain().release());
   Schedule = isl_union_map_intersect_domain(Schedule, Domain);
   isl_map *S = isl_map_from_union_map(Schedule);
 
@@ -370,22 +411,42 @@ void IslNodeBuilder::createMark(__isl_take isl_ast_node *Node) {
   isl_ast_node_free(Node);
   // If a child node of a 'SIMD mark' is a loop that has a single iteration,
   // it will be optimized away and we should skip it.
-  if (!strcmp(isl_id_get_name(Id), "SIMD") &&
+  if (strcmp(isl_id_get_name(Id), "SIMD") == 0 &&
       isl_ast_node_get_type(Child) == isl_ast_node_for) {
     bool Vector = PollyVectorizerChoice == VECTORIZER_POLLY;
-    int VectorWidth = getNumberOfIterations(Child);
+    int VectorWidth = getNumberOfIterations(isl::manage_copy(Child));
     if (Vector && 1 < VectorWidth && VectorWidth <= 16)
       createForVector(Child, VectorWidth);
     else
-      createForSequential(Child, true);
+      createForSequential(isl::manage(Child), true);
     isl_id_free(Id);
     return;
   }
-  if (!strcmp(isl_id_get_name(Id), "Inter iteration alias-free")) {
+  if (strcmp(isl_id_get_name(Id), "Inter iteration alias-free") == 0) {
     auto *BasePtr = static_cast<Value *>(isl_id_get_user(Id));
     Annotator.addInterIterationAliasFreeBasePtr(BasePtr);
   }
+
+  BandAttr *ChildLoopAttr = getLoopAttr(isl::manage_copy(Id));
+  BandAttr *AncestorLoopAttr;
+  if (ChildLoopAttr) {
+    // Save current LoopAttr environment to restore again when leaving this
+    // subtree. This means there was no loop between the ancestor LoopAttr and
+    // this mark, i.e. the ancestor LoopAttr did not directly mark a loop. This
+    // can happen e.g. if the AST build peeled or unrolled the loop.
+    AncestorLoopAttr = Annotator.getStagingAttrEnv();
+
+    Annotator.getStagingAttrEnv() = ChildLoopAttr;
+  }
+
   create(Child);
+
+  if (ChildLoopAttr) {
+    assert(Annotator.getStagingAttrEnv() == ChildLoopAttr &&
+           "Nest must not overwrite loop attr environment");
+    Annotator.getStagingAttrEnv() = AncestorLoopAttr;
+  }
+
   isl_id_free(Id);
 }
 
@@ -447,24 +508,39 @@ void IslNodeBuilder::createForVector(__isl_take isl_ast_node *For,
 
   isl_ast_node_free(For);
   isl_ast_expr_free(Iterator);
+
+  VectorLoops++;
 }
 
-void IslNodeBuilder::createForSequential(__isl_take isl_ast_node *For,
-                                         bool KnownParallel) {
-  isl_ast_node *Body;
-  isl_ast_expr *Init, *Inc, *Iterator, *UB;
-  isl_id *IteratorID;
+/// Restore the initial ordering of dimensions of the band node
+///
+/// In case the band node represents all the dimensions of the iteration
+/// domain, recreate the band node to restore the initial ordering of the
+/// dimensions.
+///
+/// @param Node The band node to be modified.
+/// @return The modified schedule node.
+static bool IsLoopVectorizerDisabled(isl::ast_node Node) {
+  assert(isl_ast_node_get_type(Node.get()) == isl_ast_node_for);
+  auto Body = Node.for_get_body();
+  if (isl_ast_node_get_type(Body.get()) != isl_ast_node_mark)
+    return false;
+  auto Id = Body.mark_get_id();
+  if (strcmp(Id.get_name().c_str(), "Loop Vectorizer Disabled") == 0)
+    return true;
+  return false;
+}
+
+void IslNodeBuilder::createForSequential(isl::ast_node For, bool MarkParallel) {
   Value *ValueLB, *ValueUB, *ValueInc;
   Type *MaxType;
   BasicBlock *ExitBlock;
   Value *IV;
   CmpInst::Predicate Predicate;
-  bool Parallel;
 
-  Parallel = KnownParallel || (IslAstInfo::isParallel(For) &&
-                               !IslAstInfo::isReductionParallel(For));
+  bool LoopVectorizerDisabled = IsLoopVectorizerDisabled(For);
 
-  Body = isl_ast_node_for_get_body(For);
+  isl::ast_node Body = For.for_get_body();
 
   // isl_ast_node_for_is_degenerate(For)
   //
@@ -472,17 +548,17 @@ void IslNodeBuilder::createForSequential(__isl_take isl_ast_node *For,
   //       However, for now we just reuse the logic for normal loops, which will
   //       create a loop with a single iteration.
 
-  Init = isl_ast_node_for_get_init(For);
-  Inc = isl_ast_node_for_get_inc(For);
-  Iterator = isl_ast_node_for_get_iterator(For);
-  IteratorID = isl_ast_expr_get_id(Iterator);
-  UB = getUpperBound(For, Predicate);
+  isl::ast_expr Init = For.for_get_init();
+  isl::ast_expr Inc = For.for_get_inc();
+  isl::ast_expr Iterator = For.for_get_iterator();
+  isl::id IteratorID = Iterator.get_id();
+  isl::ast_expr UB = getUpperBound(For, Predicate);
 
-  ValueLB = ExprBuilder.create(Init);
-  ValueUB = ExprBuilder.create(UB);
-  ValueInc = ExprBuilder.create(Inc);
+  ValueLB = ExprBuilder.create(Init.release());
+  ValueUB = ExprBuilder.create(UB.release());
+  ValueInc = ExprBuilder.create(Inc.release());
 
-  MaxType = ExprBuilder.getType(Iterator);
+  MaxType = ExprBuilder.getType(Iterator.get());
   MaxType = ExprBuilder.getWidestType(MaxType, ValueLB->getType());
   MaxType = ExprBuilder.getWidestType(MaxType, ValueUB->getType());
   MaxType = ExprBuilder.getWidestType(MaxType, ValueInc->getType());
@@ -499,20 +575,19 @@ void IslNodeBuilder::createForSequential(__isl_take isl_ast_node *For,
   bool UseGuardBB =
       !SE.isKnownPredicate(Predicate, SE.getSCEV(ValueLB), SE.getSCEV(ValueUB));
   IV = createLoop(ValueLB, ValueUB, ValueInc, Builder, LI, DT, ExitBlock,
-                  Predicate, &Annotator, Parallel, UseGuardBB);
-  IDToValue[IteratorID] = IV;
+                  Predicate, &Annotator, MarkParallel, UseGuardBB,
+                  LoopVectorizerDisabled);
+  IDToValue[IteratorID.get()] = IV;
 
-  create(Body);
+  create(Body.release());
 
-  Annotator.popLoop(Parallel);
+  Annotator.popLoop(MarkParallel);
 
-  IDToValue.erase(IDToValue.find(IteratorID));
+  IDToValue.erase(IDToValue.find(IteratorID.get()));
 
   Builder.SetInsertPoint(&ExitBlock->front());
 
-  isl_ast_node_free(For);
-  isl_ast_expr_free(Iterator);
-  isl_id_free(IteratorID);
+  SequentialLoops++;
 }
 
 /// Remove the BBs contained in a (sub)function from the dominator tree.
@@ -581,14 +656,14 @@ void IslNodeBuilder::createForParallel(__isl_take isl_ast_node *For) {
   Inc = isl_ast_node_for_get_inc(For);
   Iterator = isl_ast_node_for_get_iterator(For);
   IteratorID = isl_ast_expr_get_id(Iterator);
-  UB = getUpperBound(For, Predicate);
+  UB = getUpperBound(isl::manage_copy(For), Predicate).release();
 
   ValueLB = ExprBuilder.create(Init);
   ValueUB = ExprBuilder.create(UB);
   ValueInc = ExprBuilder.create(Inc);
 
   // OpenMP always uses SLE. In case the isl generated AST uses a SLT
-  // expression, we need to adjust the loop blound by one.
+  // expression, we need to adjust the loop bound by one.
   if (Predicate == CmpInst::ICMP_SLT)
     ValueUB = Builder.CreateAdd(
         ValueUB, Builder.CreateSExt(Builder.getTrue(), ValueUB->getType()));
@@ -615,20 +690,28 @@ void IslNodeBuilder::createForParallel(__isl_take isl_ast_node *For) {
   // Create for all loops we depend on values that contain the current loop
   // iteration. These values are necessary to generate code for SCEVs that
   // depend on such loops. As a result we need to pass them to the subfunction.
+  // See [Code generation of induction variables of loops outside Scops]
   for (const Loop *L : Loops) {
-    const SCEV *OuterLIV = SE.getAddRecExpr(SE.getUnknown(Builder.getInt64(0)),
-                                            SE.getUnknown(Builder.getInt64(1)),
-                                            L, SCEV::FlagAnyWrap);
-    Value *V = generateSCEV(OuterLIV);
-    OutsideLoopIterations[L] = SE.getUnknown(V);
-    SubtreeValues.insert(V);
+    Value *LoopInductionVar = materializeNonScopLoopInductionVariable(L);
+    SubtreeValues.insert(LoopInductionVar);
   }
 
   ValueMapT NewValues;
-  ParallelLoopGenerator ParallelLoopGen(Builder, LI, DT, DL);
 
-  IV = ParallelLoopGen.createParallelLoop(ValueLB, ValueUB, ValueInc,
-                                          SubtreeValues, NewValues, &LoopBody);
+  std::unique_ptr<ParallelLoopGenerator> ParallelLoopGenPtr;
+
+  switch (PollyOmpBackend) {
+  case OpenMPBackend::GNU:
+    ParallelLoopGenPtr.reset(
+        new ParallelLoopGeneratorGOMP(Builder, LI, DT, DL));
+    break;
+  case OpenMPBackend::LLVM:
+    ParallelLoopGenPtr.reset(new ParallelLoopGeneratorKMP(Builder, LI, DT, DL));
+    break;
+  }
+
+  IV = ParallelLoopGenPtr->createParallelLoop(
+      ValueLB, ValueUB, ValueInc, SubtreeValues, NewValues, &LoopBody);
   BasicBlock::iterator AfterLoop = Builder.GetInsertPoint();
   Builder.SetInsertPoint(&*LoopBody);
 
@@ -665,15 +748,44 @@ void IslNodeBuilder::createForParallel(__isl_take isl_ast_node *For) {
   isl_ast_node_free(For);
   isl_ast_expr_free(Iterator);
   isl_id_free(IteratorID);
+
+  ParallelLoops++;
+}
+
+/// Return whether any of @p Node's statements contain partial accesses.
+///
+/// Partial accesses are not supported by Polly's vector code generator.
+static bool hasPartialAccesses(__isl_take isl_ast_node *Node) {
+  return isl_ast_node_foreach_descendant_top_down(
+             Node,
+             [](isl_ast_node *Node, void *User) -> isl_bool {
+               if (isl_ast_node_get_type(Node) != isl_ast_node_user)
+                 return isl_bool_true;
+
+               isl::ast_expr Expr =
+                   isl::manage(isl_ast_node_user_get_expr(Node));
+               isl::ast_expr StmtExpr = Expr.get_op_arg(0);
+               isl::id Id = StmtExpr.get_id();
+
+               ScopStmt *Stmt =
+                   static_cast<ScopStmt *>(isl_id_get_user(Id.get()));
+               isl::set StmtDom = Stmt->getDomain();
+               for (auto *MA : *Stmt) {
+                 if (MA->isLatestPartialAccess())
+                   return isl_bool_error;
+               }
+               return isl_bool_true;
+             },
+             nullptr) == isl_stat_error;
 }
 
 void IslNodeBuilder::createFor(__isl_take isl_ast_node *For) {
   bool Vector = PollyVectorizerChoice == VECTORIZER_POLLY;
 
-  if (Vector && IslAstInfo::isInnermostParallel(For) &&
+  if (Vector && IslAstInfo::isInnermostParallel(isl::manage_copy(For)) &&
       !IslAstInfo::isReductionParallel(For)) {
-    int VectorWidth = getNumberOfIterations(For);
-    if (1 < VectorWidth && VectorWidth <= 16) {
+    int VectorWidth = getNumberOfIterations(isl::manage_copy(For));
+    if (1 < VectorWidth && VectorWidth <= 16 && !hasPartialAccesses(For)) {
       createForVector(For, VectorWidth);
       return;
     }
@@ -683,7 +795,9 @@ void IslNodeBuilder::createFor(__isl_take isl_ast_node *For) {
     createForParallel(For);
     return;
   }
-  createForSequential(For, false);
+  bool Parallel =
+      (IslAstInfo::isParallel(For) && !IslAstInfo::isReductionParallel(For));
+  createForSequential(isl::manage(For), Parallel);
 }
 
 void IslNodeBuilder::createIf(__isl_take isl_ast_node *If) {
@@ -731,17 +845,19 @@ void IslNodeBuilder::createIf(__isl_take isl_ast_node *If) {
   Builder.SetInsertPoint(&MergeBB->front());
 
   isl_ast_node_free(If);
+
+  IfConditions++;
 }
 
 __isl_give isl_id_to_ast_expr *
 IslNodeBuilder::createNewAccesses(ScopStmt *Stmt,
                                   __isl_keep isl_ast_node *Node) {
   isl_id_to_ast_expr *NewAccesses =
-      isl_id_to_ast_expr_alloc(Stmt->getParent()->getIslCtx(), 0);
+      isl_id_to_ast_expr_alloc(Stmt->getParent()->getIslCtx().get(), 0);
 
   auto *Build = IslAstInfo::getBuild(Node);
   assert(Build && "Could not obtain isl_ast_build from user node");
-  Stmt->setAstBuild(Build);
+  Stmt->setAstBuild(isl::manage_copy(Build));
 
   for (auto *MA : *Stmt) {
     if (!MA->hasNewAccessRelation()) {
@@ -765,26 +881,41 @@ IslNodeBuilder::createNewAccesses(ScopStmt *Stmt,
     auto Schedule = isl_ast_build_get_schedule(Build);
 
 #ifndef NDEBUG
-    auto Dom = Stmt->getDomain();
-    auto SchedDom = isl_set_from_union_set(
-        isl_union_map_domain(isl_union_map_copy(Schedule)));
-    auto AccDom = isl_map_domain(MA->getAccessRelation());
-    Dom = isl_set_intersect_params(Dom, Stmt->getParent()->getContext());
-    SchedDom =
-        isl_set_intersect_params(SchedDom, Stmt->getParent()->getContext());
-    assert(isl_set_is_subset(SchedDom, AccDom) &&
-           "Access relation not defined on full schedule domain");
-    assert(isl_set_is_subset(Dom, AccDom) &&
-           "Access relation not defined on full domain");
-    isl_set_free(AccDom);
-    isl_set_free(SchedDom);
-    isl_set_free(Dom);
+    if (MA->isRead()) {
+      auto Dom = Stmt->getDomain().release();
+      auto SchedDom = isl_set_from_union_set(
+          isl_union_map_domain(isl_union_map_copy(Schedule)));
+      auto AccDom = isl_map_domain(MA->getAccessRelation().release());
+      Dom = isl_set_intersect_params(Dom,
+                                     Stmt->getParent()->getContext().release());
+      SchedDom = isl_set_intersect_params(
+          SchedDom, Stmt->getParent()->getContext().release());
+      assert(isl_set_is_subset(SchedDom, AccDom) &&
+             "Access relation not defined on full schedule domain");
+      assert(isl_set_is_subset(Dom, AccDom) &&
+             "Access relation not defined on full domain");
+      isl_set_free(AccDom);
+      isl_set_free(SchedDom);
+      isl_set_free(Dom);
+    }
 #endif
 
-    auto PWAccRel = MA->applyScheduleToAccessRelation(Schedule);
+    auto PWAccRel =
+        MA->applyScheduleToAccessRelation(isl::manage(Schedule)).release();
+
+    // isl cannot generate an index expression for access-nothing accesses.
+    isl::set AccDomain =
+        isl::manage(isl_pw_multi_aff_domain(isl_pw_multi_aff_copy(PWAccRel)));
+    isl::set Context = S.getContext();
+    AccDomain = AccDomain.intersect_params(Context);
+    if (AccDomain.is_empty()) {
+      isl_pw_multi_aff_free(PWAccRel);
+      continue;
+    }
 
     auto AccessExpr = isl_ast_build_access_from_pw_multi_aff(Build, PWAccRel);
-    NewAccesses = isl_id_to_ast_expr_set(NewAccesses, MA->getId(), AccessExpr);
+    NewAccesses =
+        isl_id_to_ast_expr_set(NewAccesses, MA->getId().release(), AccessExpr);
   }
 
   return NewAccesses;
@@ -795,7 +926,7 @@ void IslNodeBuilder::createSubstitutions(__isl_take isl_ast_expr *Expr,
   assert(isl_ast_expr_get_type(Expr) == isl_ast_expr_op &&
          "Expression of type 'op' expected");
   assert(isl_ast_expr_get_op_type(Expr) == isl_ast_op_call &&
-         "Opertation of type 'call' expected");
+         "Operation of type 'call' expected");
   for (int i = 0; i < isl_ast_expr_get_op_n_arg(Expr) - 1; ++i) {
     isl_ast_expr *SubExpr;
     Value *V;
@@ -837,11 +968,23 @@ void IslNodeBuilder::generateCopyStmt(
          "Accesses use the same data type");
   assert((*ReadAccess)->isArrayKind() && (*WriteAccess)->isArrayKind());
   auto *AccessExpr =
-      isl_id_to_ast_expr_get(NewAccesses, (*ReadAccess)->getId());
+      isl_id_to_ast_expr_get(NewAccesses, (*ReadAccess)->getId().release());
   auto *LoadValue = ExprBuilder.create(AccessExpr);
-  AccessExpr = isl_id_to_ast_expr_get(NewAccesses, (*WriteAccess)->getId());
-  auto *StoreAddr = ExprBuilder.createAccessAddress(AccessExpr);
+  AccessExpr =
+      isl_id_to_ast_expr_get(NewAccesses, (*WriteAccess)->getId().release());
+  auto *StoreAddr = ExprBuilder.createAccessAddress(AccessExpr).first;
   Builder.CreateStore(LoadValue, StoreAddr);
+}
+
+Value *IslNodeBuilder::materializeNonScopLoopInductionVariable(const Loop *L) {
+  assert(OutsideLoopIterations.find(L) == OutsideLoopIterations.end() &&
+         "trying to materialize loop induction variable twice");
+  const SCEV *OuterLIV = SE.getAddRecExpr(SE.getUnknown(Builder.getInt64(0)),
+                                          SE.getUnknown(Builder.getInt64(1)), L,
+                                          SCEV::FlagAnyWrap);
+  Value *V = generateSCEV(OuterLIV);
+  OutsideLoopIterations[L] = SE.getUnknown(V);
+  return V;
 }
 
 void IslNodeBuilder::createUser(__isl_take isl_ast_node *User) {
@@ -915,14 +1058,13 @@ bool IslNodeBuilder::materializeValue(isl_id *Id) {
     auto *ParamSCEV = (const SCEV *)isl_id_get_user(Id);
     Value *V = nullptr;
 
-    // Parameters could refere to invariant loads that need to be
+    // Parameters could refer to invariant loads that need to be
     // preloaded before we can generate code for the parameter. Thus,
-    // check if any value refered to in ParamSCEV is an invariant load
+    // check if any value referred to in ParamSCEV is an invariant load
     // and if so make sure its equivalence class is preloaded.
     SetVector<Value *> Values;
     findValues(ParamSCEV, SE, Values);
     for (auto *Val : Values) {
-
       // Check if the value is an instruction in a dead block within the SCoP
       // and if so do not code generate it.
       if (auto *Inst = dyn_cast<Instruction>(Val)) {
@@ -940,7 +1082,7 @@ bool IslNodeBuilder::materializeValue(isl_id *Id) {
           } else if (S.getStmtFor(Inst)) {
             IsDead = false;
           } else {
-            auto *Domain = S.getDomainConditions(Inst->getParent());
+            auto *Domain = S.getDomainConditions(Inst->getParent()).release();
             IsDead = isl_set_is_empty(Domain);
             isl_set_free(Domain);
           }
@@ -953,7 +1095,6 @@ bool IslNodeBuilder::materializeValue(isl_id *Id) {
       }
 
       if (auto *IAClass = S.lookupInvariantEquivClass(Val)) {
-
         // Check if this invariant access class is empty, hence if we never
         // actually added a loads instruction to it. In that case it has no
         // (meaningful) users and we should not try to code generate it.
@@ -988,33 +1129,93 @@ bool IslNodeBuilder::materializeParameters(isl_set *Set) {
 
 bool IslNodeBuilder::materializeParameters() {
   for (const SCEV *Param : S.parameters()) {
-    isl_id *Id = S.getIdForParam(Param);
+    isl_id *Id = S.getIdForParam(Param).release();
     if (!materializeValue(Id))
       return false;
   }
   return true;
 }
 
-/// Add the number of dimensions in @p BS to @p U.
-static isl_stat countTotalDims(__isl_take isl_basic_set *BS, void *U) {
-  unsigned *NumTotalDim = static_cast<unsigned *>(U);
-  *NumTotalDim += isl_basic_set_total_dim(BS);
-  isl_basic_set_free(BS);
-  return isl_stat_ok;
+/// Generate the computation of the size of the outermost dimension from the
+/// Fortran array descriptor (in this case, `@g_arr`). The final `%size`
+/// contains the size of the array.
+///
+/// %arrty = type { i8*, i64, i64, [3 x %desc.dimensionty] }
+/// %desc.dimensionty = type { i64, i64, i64 }
+/// @g_arr = global %arrty zeroinitializer, align 32
+/// ...
+/// %0 = load i64, i64* getelementptr inbounds
+///                       (%arrty, %arrty* @g_arr, i64 0, i32 3, i64 0, i32 2)
+/// %1 = load i64, i64* getelementptr inbounds
+///                      (%arrty, %arrty* @g_arr, i64 0, i32 3, i64 0, i32 1)
+/// %2 = sub nsw i64 %0, %1
+/// %size = add nsw i64 %2, 1
+static Value *buildFADOutermostDimensionLoad(Value *GlobalDescriptor,
+                                             PollyIRBuilder &Builder,
+                                             std::string ArrayName) {
+  assert(GlobalDescriptor && "invalid global descriptor given");
+
+  Value *endIdx[4] = {Builder.getInt64(0), Builder.getInt32(3),
+                      Builder.getInt64(0), Builder.getInt32(2)};
+  Value *endPtr = Builder.CreateInBoundsGEP(GlobalDescriptor, endIdx,
+                                            ArrayName + "_end_ptr");
+  Type *type = cast<GEPOperator>(endPtr)->getResultElementType();
+  assert(isa<IntegerType>(type) && "expected type of end to be integral");
+
+  Value *end = Builder.CreateLoad(type, endPtr, ArrayName + "_end");
+
+  Value *beginIdx[4] = {Builder.getInt64(0), Builder.getInt32(3),
+                        Builder.getInt64(0), Builder.getInt32(1)};
+  Value *beginPtr = Builder.CreateInBoundsGEP(GlobalDescriptor, beginIdx,
+                                              ArrayName + "_begin_ptr");
+  Value *begin = Builder.CreateLoad(type, beginPtr, ArrayName + "_begin");
+
+  Value *size =
+      Builder.CreateNSWSub(end, begin, ArrayName + "_end_begin_delta");
+
+  size = Builder.CreateNSWAdd(
+      end, ConstantInt::get(type, 1, /* signed = */ true), ArrayName + "_size");
+
+  return size;
+}
+
+bool IslNodeBuilder::materializeFortranArrayOutermostDimension() {
+  for (ScopArrayInfo *Array : S.arrays()) {
+    if (Array->getNumberOfDimensions() == 0)
+      continue;
+
+    Value *FAD = Array->getFortranArrayDescriptor();
+    if (!FAD)
+      continue;
+
+    isl_pw_aff *ParametricPwAff = Array->getDimensionSizePw(0).release();
+    assert(ParametricPwAff && "parametric pw_aff corresponding "
+                              "to outermost dimension does not "
+                              "exist");
+
+    isl_id *Id = isl_pw_aff_get_dim_id(ParametricPwAff, isl_dim_param, 0);
+    isl_pw_aff_free(ParametricPwAff);
+
+    assert(Id && "pw_aff is not parametric");
+
+    if (IDToValue.count(Id)) {
+      isl_id_free(Id);
+      continue;
+    }
+
+    Value *FinalValue =
+        buildFADOutermostDimensionLoad(FAD, Builder, Array->getName());
+    assert(FinalValue && "unable to build Fortran array "
+                         "descriptor load of outermost dimension");
+    IDToValue[Id] = FinalValue;
+    isl_id_free(Id);
+  }
+  return true;
 }
 
 Value *IslNodeBuilder::preloadUnconditionally(isl_set *AccessRange,
                                               isl_ast_build *Build,
                                               Instruction *AccInst) {
-
-  // TODO: This check could be performed in the ScopInfo already.
-  unsigned NumTotalDim = 0;
-  isl_set_foreach_basic_set(AccessRange, countTotalDims, &NumTotalDim);
-  if (NumTotalDim > MaxDimensionsInAccessRange) {
-    isl_set_free(AccessRange);
-    return nullptr;
-  }
-
   isl_pw_multi_aff *PWAccRel = isl_pw_multi_aff_from_set(AccessRange);
   isl_ast_expr *Access =
       isl_ast_build_access_from_pw_multi_aff(Build, PWAccRel);
@@ -1030,9 +1231,9 @@ Value *IslNodeBuilder::preloadUnconditionally(isl_set *AccessRange,
   auto Name = Ptr->getName();
   auto AS = Ptr->getType()->getPointerAddressSpace();
   Ptr = Builder.CreatePointerCast(Ptr, Ty->getPointerTo(AS), Name + ".cast");
-  PreloadVal = Builder.CreateLoad(Ptr, Name + ".load");
+  PreloadVal = Builder.CreateLoad(Ty, Ptr, Name + ".load");
   if (LoadInst *PreloadInst = dyn_cast<LoadInst>(PreloadVal))
-    PreloadInst->setAlignment(dyn_cast<LoadInst>(AccInst)->getAlignment());
+    PreloadInst->setAlignment(cast<LoadInst>(AccInst)->getAlign());
 
   // TODO: This is only a hot fix for SCoP sequences that use the same load
   //       instruction contained and hoisted by one of the SCoPs.
@@ -1044,9 +1245,8 @@ Value *IslNodeBuilder::preloadUnconditionally(isl_set *AccessRange,
 
 Value *IslNodeBuilder::preloadInvariantLoad(const MemoryAccess &MA,
                                             isl_set *Domain) {
-
-  isl_set *AccessRange = isl_map_range(MA.getAddressFunction());
-  AccessRange = isl_set_gist_params(AccessRange, S.getContext());
+  isl_set *AccessRange = isl_map_range(MA.getAddressFunction().release());
+  AccessRange = isl_set_gist_params(AccessRange, S.getContext().release());
 
   if (!materializeParameters(AccessRange)) {
     isl_set_free(AccessRange);
@@ -1054,7 +1254,8 @@ Value *IslNodeBuilder::preloadInvariantLoad(const MemoryAccess &MA,
     return nullptr;
   }
 
-  auto *Build = isl_ast_build_from_context(isl_set_universe(S.getParamSpace()));
+  auto *Build =
+      isl_ast_build_from_context(isl_set_universe(S.getParamSpace().release()));
   isl_set *Universe = isl_set_universe(isl_set_get_space(Domain));
   bool AlwaysExecuted = isl_set_is_equal(Domain, Universe);
   isl_set_free(Universe);
@@ -1158,7 +1359,7 @@ bool IslNodeBuilder::preloadInvariantEquivClass(
     return false;
 
   // The execution context of the IAClass.
-  isl_set *&ExecutionCtx = IAClass.ExecutionContext;
+  isl::set &ExecutionCtx = IAClass.ExecutionContext;
 
   // If the base pointer of this class is dependent on another one we have to
   // make sure it was preloaded already.
@@ -1169,8 +1370,8 @@ bool IslNodeBuilder::preloadInvariantEquivClass(
 
     // After we preloaded the BaseIAClass we adjusted the BaseExecutionCtx and
     // we need to refine the ExecutionCtx.
-    isl_set *BaseExecutionCtx = isl_set_copy(BaseIAClass->ExecutionContext);
-    ExecutionCtx = isl_set_intersect(ExecutionCtx, BaseExecutionCtx);
+    isl::set BaseExecutionCtx = BaseIAClass->ExecutionContext;
+    ExecutionCtx = ExecutionCtx.intersect(BaseExecutionCtx);
   }
 
   // If the size of a dimension is dependent on another class, make sure it is
@@ -1186,8 +1387,8 @@ bool IslNodeBuilder::preloadInvariantEquivClass(
 
         // After we preloaded the BaseIAClass we adjusted the BaseExecutionCtx
         // and we need to refine the ExecutionCtx.
-        isl_set *BaseExecutionCtx = isl_set_copy(BaseIAClass->ExecutionContext);
-        ExecutionCtx = isl_set_intersect(ExecutionCtx, BaseExecutionCtx);
+        isl::set BaseExecutionCtx = BaseIAClass->ExecutionContext;
+        ExecutionCtx = ExecutionCtx.intersect(BaseExecutionCtx);
       }
     }
   }
@@ -1195,7 +1396,7 @@ bool IslNodeBuilder::preloadInvariantEquivClass(
   Instruction *AccInst = MA->getAccessInstruction();
   Type *AccInstTy = AccInst->getType();
 
-  Value *PreloadVal = preloadInvariantLoad(*MA, isl_set_copy(ExecutionCtx));
+  Value *PreloadVal = preloadInvariantLoad(*MA, ExecutionCtx.copy());
   if (!PreloadVal)
     return false;
 
@@ -1206,7 +1407,7 @@ bool IslNodeBuilder::preloadInvariantEquivClass(
   }
 
   if (SE.isSCEVable(AccInstTy)) {
-    isl_id *ParamId = S.getIdForParam(SE.getSCEV(AccInst));
+    isl_id *ParamId = S.getIdForParam(SE.getSCEV(AccInst)).release();
     if (ParamId)
       IDToValue[ParamId] = PreloadVal;
     isl_id_free(ParamId);
@@ -1214,8 +1415,8 @@ bool IslNodeBuilder::preloadInvariantEquivClass(
 
   BasicBlock *EntryBB = &Builder.GetInsertBlock()->getParent()->getEntryBlock();
   auto *Alloca = new AllocaInst(AccInstTy, DL.getAllocaAddrSpace(),
-                                AccInst->getName() + ".preload.s2a");
-  Alloca->insertBefore(&*EntryBB->getFirstInsertionPt());
+                                AccInst->getName() + ".preload.s2a",
+                                &*EntryBB->getFirstInsertionPt());
   Builder.CreateStore(PreloadVal, Alloca);
   ValueMapT PreloadedPointer;
   PreloadedPointer[PreloadVal] = AccInst;
@@ -1229,7 +1430,7 @@ bool IslNodeBuilder::preloadInvariantEquivClass(
       // current SAI could be the base pointer of the derived SAI, however we
       // should only change the base pointer of the derived SAI if we actually
       // preloaded it.
-      if (BasePtr == MA->getBaseAddr()) {
+      if (BasePtr == MA->getOriginalBaseAddr()) {
         assert(BasePtr->getType() == PreloadVal->getType());
         DerivedSAI->setBasePtr(PreloadVal);
       }
@@ -1241,7 +1442,6 @@ bool IslNodeBuilder::preloadInvariantEquivClass(
   }
 
   for (const MemoryAccess *MA : MAs) {
-
     Instruction *MAAccInst = MA->getAccessInstruction();
     // Use the escape system to get the correct value to users outside the SCoP.
     BlockGenerator::EscapeUserVectorTy EscapeUsers;
@@ -1260,7 +1460,7 @@ bool IslNodeBuilder::preloadInvariantEquivClass(
   return true;
 }
 
-void IslNodeBuilder::allocateNewArrays() {
+void IslNodeBuilder::allocateNewArrays(BBPair StartExitBlocks) {
   for (auto &SAI : S.arrays()) {
     if (SAI->getBasePtr())
       continue;
@@ -1270,6 +1470,9 @@ void IslNodeBuilder::allocateNewArrays() {
            "created arrays that require memory allocation.");
 
     Type *NewArrayType = nullptr;
+
+    // Get the size of the array = size(dim_1)*...*size(dim_n)
+    uint64_t ArraySizeInt = 1;
     for (int i = SAI->getNumberOfDimensions() - 1; i >= 0; i--) {
       auto *DimSize = SAI->getDimensionSize(i);
       unsigned UnsignedDimSize = static_cast<const SCEVConstant *>(DimSize)
@@ -1280,19 +1483,47 @@ void IslNodeBuilder::allocateNewArrays() {
         NewArrayType = SAI->getElementType();
 
       NewArrayType = ArrayType::get(NewArrayType, UnsignedDimSize);
+      ArraySizeInt *= UnsignedDimSize;
     }
 
-    auto InstIt =
-        Builder.GetInsertBlock()->getParent()->getEntryBlock().getTerminator();
-    auto *CreatedArray = new AllocaInst(NewArrayType, DL.getAllocaAddrSpace(),
-                                        SAI->getName(), &*InstIt);
-    CreatedArray->setAlignment(PollyTargetFirstLevelCacheLineSize);
-    SAI->setBasePtr(CreatedArray);
+    if (SAI->isOnHeap()) {
+      LLVMContext &Ctx = NewArrayType->getContext();
+
+      // Get the IntPtrTy from the Datalayout
+      auto IntPtrTy = DL.getIntPtrType(Ctx);
+
+      // Get the size of the element type in bits
+      unsigned Size = SAI->getElemSizeInBytes();
+
+      // Insert the malloc call at polly.start
+      auto InstIt = std::get<0>(StartExitBlocks)->getTerminator();
+      auto *CreatedArray = CallInst::CreateMalloc(
+          &*InstIt, IntPtrTy, SAI->getElementType(),
+          ConstantInt::get(Type::getInt64Ty(Ctx), Size),
+          ConstantInt::get(Type::getInt64Ty(Ctx), ArraySizeInt), nullptr,
+          SAI->getName());
+
+      SAI->setBasePtr(CreatedArray);
+
+      // Insert the free call at polly.exiting
+      CallInst::CreateFree(CreatedArray,
+                           std::get<1>(StartExitBlocks)->getTerminator());
+    } else {
+      auto InstIt = Builder.GetInsertBlock()
+                        ->getParent()
+                        ->getEntryBlock()
+                        .getTerminator();
+
+      auto *CreatedArray = new AllocaInst(NewArrayType, DL.getAllocaAddrSpace(),
+                                          SAI->getName(), &*InstIt);
+      if (PollyTargetFirstLevelCacheLineSize)
+        CreatedArray->setAlignment(Align(PollyTargetFirstLevelCacheLineSize));
+      SAI->setBasePtr(CreatedArray);
+    }
   }
 }
 
 bool IslNodeBuilder::preloadInvariantLoads() {
-
   auto &InvariantEquivClasses = S.getInvariantAccesses();
   if (InvariantEquivClasses.empty())
     return true;
@@ -1313,6 +1544,12 @@ void IslNodeBuilder::addParameters(__isl_take isl_set *Context) {
   // Materialize values for the parameters of the SCoP.
   materializeParameters();
 
+  // materialize the outermost dimension parameters for a Fortran array.
+  // NOTE: materializeParameters() does not work since it looks through
+  // the SCEVs. We don't have a corresponding SCEV for the array size
+  // parameter
+  materializeFortranArrayOutermostDimension();
+
   // Generate values for the current loop iteration for all surrounding loops.
   //
   // We may also reference loops outside of the scop which do not contain the
@@ -1325,11 +1562,7 @@ void IslNodeBuilder::addParameters(__isl_take isl_set *Context) {
     L = L->getParentLoop();
 
   while (L != nullptr) {
-    const SCEV *OuterLIV = SE.getAddRecExpr(SE.getUnknown(Builder.getInt64(0)),
-                                            SE.getUnknown(Builder.getInt64(1)),
-                                            L, SCEV::FlagAnyWrap);
-    Value *V = generateSCEV(OuterLIV);
-    OutsideLoopIterations[L] = SE.getUnknown(V);
+    materializeNonScopLoopInductionVariable(L);
     L = L->getParentLoop();
   }
 
@@ -1359,9 +1592,20 @@ Value *IslNodeBuilder::generateSCEV(const SCEV *Expr) {
 /// The AST expression we generate to perform the run-time check assumes
 /// computations on integer types of infinite size. As we only use 64-bit
 /// arithmetic we check for overflows, in case of which we set the result
-/// of this run-time check to false to be cosnservatively correct,
+/// of this run-time check to false to be conservatively correct,
 Value *IslNodeBuilder::createRTC(isl_ast_expr *Condition) {
   auto ExprBuilder = getExprBuilder();
+
+  // In case the AST expression has integers larger than 64 bit, bail out. The
+  // resulting LLVM-IR will contain operations on types that use more than 64
+  // bits. These are -- in case wrapping intrinsics are used -- translated to
+  // runtime library calls that are not available on all systems (e.g., Android)
+  // and consequently will result in linker errors.
+  if (ExprBuilder.hasLargeInts(isl::manage_copy(Condition))) {
+    isl_ast_expr_free(Condition);
+    return Builder.getFalse();
+  }
+
   ExprBuilder.setTrackOverflow(true);
   Value *RTC = ExprBuilder.create(Condition);
   if (!RTC->getType()->isIntegerTy(1))
@@ -1374,8 +1618,12 @@ Value *IslNodeBuilder::createRTC(isl_ast_expr *Condition) {
     RuntimeDebugBuilder::createCPUPrinter(
         Builder,
         "F: " + F->getName().str() + " R: " + S.getRegion().getNameStr() +
-            " __RTC: ",
-        RTC, " Overflow: ", OverflowHappened, "\n");
+            "RTC: ",
+        RTC, " Overflow: ", OverflowHappened,
+        "\n"
+        "  (0 failed, -1 succeeded)\n"
+        "  (if one or both are 0 falling back to original code, if both are -1 "
+        "executing Polly code)\n");
   }
 
   RTC = Builder.CreateAnd(RTC, OverflowHappened, "polly.rtc.result");

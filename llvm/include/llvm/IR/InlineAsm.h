@@ -1,9 +1,8 @@
 //===- llvm/InlineAsm.h - Class to represent inline asm strings -*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -18,6 +17,7 @@
 
 #include "llvm/ADT/StringRef.h"
 #include "llvm/IR/Value.h"
+#include "llvm/Support/ErrorHandling.h"
 #include <cassert>
 #include <string>
 #include <vector>
@@ -28,7 +28,7 @@ class FunctionType;
 class PointerType;
 template <class ConstantClass> class ConstantUniqueMap;
 
-class InlineAsm : public Value {
+class InlineAsm final : public Value {
 public:
   enum AsmDialect {
     AD_ATT,
@@ -48,7 +48,6 @@ private:
   InlineAsm(FunctionType *Ty, const std::string &AsmString,
             const std::string &Constraints, bool hasSideEffects,
             bool isAlignStack, AsmDialect asmDialect);
-  ~InlineAsm() override;
 
   /// When the ConstantUniqueMap merges two types and makes two InlineAsms
   /// identical, it destroys one of them with this method.
@@ -102,7 +101,7 @@ public:
     /// input constraint is required to match it (e.g. "0").  The value is the
     /// constraint number that matches this one (for example, if this is
     /// constraint #0 and constraint #4 has the value "0", this will be 4).
-    signed char MatchingInput = -1;
+    int MatchingInput = -1;
 
     /// Code - The constraint code, either the register name (in braces) or the
     /// constraint letter/number.
@@ -129,7 +128,7 @@ public:
     /// input constraint is required to match it (e.g. "0").  The value is the
     /// constraint number that matches this one (for example, if this is
     /// constraint #0 and constraint #4 has the value "0", this will be 4).
-    signed char MatchingInput = -1;
+    int MatchingInput = -1;
 
     /// hasMatchingInput - Return true if this is an output constraint that has
     /// a matching input constraint.
@@ -184,7 +183,7 @@ public:
   }
 
   // Methods for support type inquiry through isa, cast, and dyn_cast:
-  static inline bool classof(const Value *V) {
+  static bool classof(const Value *V) {
     return V->getValueID() == Value::InlineAsmVal;
   }
 
@@ -246,6 +245,7 @@ public:
     Constraint_m,
     Constraint_o,
     Constraint_v,
+    Constraint_A,
     Constraint_Q,
     Constraint_R,
     Constraint_S,
@@ -359,6 +359,96 @@ public:
       return false;
     RC = High - 1;
     return true;
+  }
+
+  static std::vector<StringRef> getExtraInfoNames(unsigned ExtraInfo) {
+    std::vector<StringRef> Result;
+    if (ExtraInfo & InlineAsm::Extra_HasSideEffects)
+      Result.push_back("sideeffect");
+    if (ExtraInfo & InlineAsm::Extra_MayLoad)
+      Result.push_back("mayload");
+    if (ExtraInfo & InlineAsm::Extra_MayStore)
+      Result.push_back("maystore");
+    if (ExtraInfo & InlineAsm::Extra_IsConvergent)
+      Result.push_back("isconvergent");
+    if (ExtraInfo & InlineAsm::Extra_IsAlignStack)
+      Result.push_back("alignstack");
+
+    AsmDialect Dialect =
+        InlineAsm::AsmDialect((ExtraInfo & InlineAsm::Extra_AsmDialect));
+
+    if (Dialect == InlineAsm::AD_ATT)
+      Result.push_back("attdialect");
+    if (Dialect == InlineAsm::AD_Intel)
+      Result.push_back("inteldialect");
+
+    return Result;
+  }
+
+  static StringRef getKindName(unsigned Kind) {
+    switch (Kind) {
+    case InlineAsm::Kind_RegUse:
+      return "reguse";
+    case InlineAsm::Kind_RegDef:
+      return "regdef";
+    case InlineAsm::Kind_RegDefEarlyClobber:
+      return "regdef-ec";
+    case InlineAsm::Kind_Clobber:
+      return "clobber";
+    case InlineAsm::Kind_Imm:
+      return "imm";
+    case InlineAsm::Kind_Mem:
+      return "mem";
+    default:
+      llvm_unreachable("Unknown operand kind");
+    }
+  }
+
+  static StringRef getMemConstraintName(unsigned Constraint) {
+    switch (Constraint) {
+    case InlineAsm::Constraint_es:
+      return "es";
+    case InlineAsm::Constraint_i:
+      return "i";
+    case InlineAsm::Constraint_m:
+      return "m";
+    case InlineAsm::Constraint_o:
+      return "o";
+    case InlineAsm::Constraint_v:
+      return "v";
+    case InlineAsm::Constraint_Q:
+      return "Q";
+    case InlineAsm::Constraint_R:
+      return "R";
+    case InlineAsm::Constraint_S:
+      return "S";
+    case InlineAsm::Constraint_T:
+      return "T";
+    case InlineAsm::Constraint_Um:
+      return "Um";
+    case InlineAsm::Constraint_Un:
+      return "Un";
+    case InlineAsm::Constraint_Uq:
+      return "Uq";
+    case InlineAsm::Constraint_Us:
+      return "Us";
+    case InlineAsm::Constraint_Ut:
+      return "Ut";
+    case InlineAsm::Constraint_Uv:
+      return "Uv";
+    case InlineAsm::Constraint_Uy:
+      return "Uy";
+    case InlineAsm::Constraint_X:
+      return "X";
+    case InlineAsm::Constraint_Z:
+      return "Z";
+    case InlineAsm::Constraint_ZC:
+      return "ZC";
+    case InlineAsm::Constraint_Zy:
+      return "Zy";
+    default:
+      llvm_unreachable("Unknown memory constraint");
+    }
   }
 };
 

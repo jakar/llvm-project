@@ -20,12 +20,22 @@ set(CMAKE_MACOSX_RPATH ON CACHE BOOL "")
 set(LLVM_ENABLE_ZLIB OFF CACHE BOOL "")
 set(LLVM_ENABLE_BACKTRACES OFF CACHE BOOL "")
 set(CLANG_PLUGIN_SUPPORT OFF CACHE BOOL "")
+set(CLANG_SPAWN_CC1 ON CACHE BOOL "")
 set(CLANG_BOOTSTRAP_PASSTHROUGH
   CMAKE_OSX_ARCHITECTURES
   CACHE STRING "")
 
+# Disabling embedded darwin compiler-rt on stage1 builds is required because we
+# don't build stage1 to support arm code generation.
+set(COMPILER_RT_ENABLE_IOS OFF CACHE BOOL "")
+set(COMPILER_RT_ENABLE_WATCHOS OFF CACHE BOOL "")
+set(COMPILER_RT_ENABLE_TVOS OFF CACHE BOOL "")
+
 set(BOOTSTRAP_LLVM_ENABLE_LTO ON CACHE BOOL "")
 set(CMAKE_BUILD_TYPE RelWithDebInfo CACHE STRING "")
+
+set(LIBCXX_ENABLE_NEW_DELETE_DEFINITIONS OFF CACHE BOOL "")
+set(LIBCXXABI_ENABLE_NEW_DELETE_DEFINITIONS ON CACHE BOOL "")
 
 set(CLANG_BOOTSTRAP_TARGETS
   generate-order-file
@@ -39,6 +49,8 @@ set(CLANG_BOOTSTRAP_TARGETS
   clang-test-depends
   distribution
   install-distribution
+  install-xcode-toolchain
+  install-distribution-toolchain
   clang CACHE STRING "")
 
 #bootstrap

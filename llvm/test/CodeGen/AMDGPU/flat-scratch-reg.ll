@@ -1,15 +1,15 @@
 ; RUN: llc -march=amdgcn -mcpu=kaveri -verify-machineinstrs < %s | FileCheck -check-prefix=CI -check-prefix=GCN %s
-; RUN: llc -march=amdgcn -mcpu=fiji -verify-machineinstrs < %s | FileCheck -check-prefix=VI-NOXNACK -check-prefix=GCN %s
+; RUN: llc -march=amdgcn -mcpu=fiji -mattr=-xnack -verify-machineinstrs < %s | FileCheck -check-prefix=VI-NOXNACK -check-prefix=GCN %s
 
 ; RUN: llc -march=amdgcn -mcpu=carrizo -mattr=-xnack -verify-machineinstrs < %s | FileCheck -check-prefix=VI-NOXNACK  -check-prefix=GCN %s
 ; RUN: llc -march=amdgcn -mcpu=stoney -mattr=-xnack -verify-machineinstrs < %s | FileCheck -check-prefix=VI-NOXNACK  -check-prefix=GCN %s
 
-; RUN: llc -march=amdgcn -mcpu=carrizo -verify-machineinstrs < %s | FileCheck -check-prefix=VI-XNACK  -check-prefix=GCN %s
-; RUN: llc -march=amdgcn -mcpu=stoney  -verify-machineinstrs < %s | FileCheck -check-prefix=VI-XNACK  -check-prefix=GCN %s
+; RUN: llc -march=amdgcn -mcpu=carrizo -mattr=+xnack -verify-machineinstrs < %s | FileCheck -check-prefix=VI-XNACK  -check-prefix=GCN %s
+; RUN: llc -march=amdgcn -mcpu=stoney -mattr=+xnack -verify-machineinstrs < %s | FileCheck -check-prefix=VI-XNACK  -check-prefix=GCN %s
 
-; RUN: llc -march=amdgcn -mtriple=amdgcn--amdhsa -mcpu=kaveri -verify-machineinstrs < %s | FileCheck -check-prefix=HSA-CI -check-prefix=GCN %s
-; RUN: llc -march=amdgcn -mtriple=amdgcn--amdhsa -mcpu=carrizo -mattr=-xnack -verify-machineinstrs < %s | FileCheck -check-prefix=HSA-VI-NOXNACK -check-prefix=GCN %s
-; RUN: llc -march=amdgcn -mtriple=amdgcn--amdhsa -mcpu=carrizo -mattr=+xnack -verify-machineinstrs < %s | FileCheck -check-prefix=HSA-VI-XNACK -check-prefix=GCN %s
+; RUN: llc -march=amdgcn -mtriple=amdgcn--amdhsa -mcpu=kaveri --amdhsa-code-object-version=2 -verify-machineinstrs < %s | FileCheck -check-prefix=HSA-CI -check-prefix=GCN %s
+; RUN: llc -march=amdgcn -mtriple=amdgcn--amdhsa -mcpu=carrizo --amdhsa-code-object-version=2 -mattr=-xnack -verify-machineinstrs < %s | FileCheck -check-prefix=HSA-VI-NOXNACK -check-prefix=GCN %s
+; RUN: llc -march=amdgcn -mtriple=amdgcn--amdhsa -mcpu=carrizo --amdhsa-code-object-version=2 -mattr=+xnack -verify-machineinstrs < %s | FileCheck -check-prefix=HSA-VI-XNACK -check-prefix=GCN %s
 
 ; GCN-LABEL: {{^}}no_vcc_no_flat:
 ; HSA-CI: is_xnack_enabled = 0
@@ -21,7 +21,7 @@
 ; VI-XNACK: ; NumSgprs: 12
 define amdgpu_kernel void @no_vcc_no_flat() {
 entry:
-  call void asm sideeffect "", "~{SGPR7}"()
+  call void asm sideeffect "", "~{s7}"()
   ret void
 }
 
@@ -35,7 +35,7 @@ entry:
 ; VI-XNACK: ; NumSgprs: 12
 define amdgpu_kernel void @vcc_no_flat() {
 entry:
-  call void asm sideeffect "", "~{SGPR7},~{VCC}"()
+  call void asm sideeffect "", "~{s7},~{vcc}"()
   ret void
 }
 
@@ -52,7 +52,7 @@ entry:
 ; HSA-VI-XNACK: ; NumSgprs: 14
 define amdgpu_kernel void @no_vcc_flat() {
 entry:
-  call void asm sideeffect "", "~{SGPR7},~{FLAT_SCR}"()
+  call void asm sideeffect "", "~{s7},~{flat_scratch}"()
   ret void
 }
 
@@ -68,7 +68,7 @@ entry:
 ; HSA-VI-XNACK: ; NumSgprs: 14
 define amdgpu_kernel void @vcc_flat() {
 entry:
-  call void asm sideeffect "", "~{SGPR7},~{VCC},~{FLAT_SCR}"()
+  call void asm sideeffect "", "~{s7},~{vcc},~{flat_scratch}"()
   ret void
 }
 
@@ -81,7 +81,7 @@ entry:
 ; VI-XNACK: NumSgprs: 6
 define amdgpu_kernel void @use_flat_scr() #0 {
 entry:
-  call void asm sideeffect "; clobber ", "~{FLAT_SCR}"()
+  call void asm sideeffect "; clobber ", "~{flat_scratch}"()
   ret void
 }
 
@@ -91,7 +91,7 @@ entry:
 ; VI-XNACK: NumSgprs: 6
 define amdgpu_kernel void @use_flat_scr_lo() #0 {
 entry:
-  call void asm sideeffect "; clobber ", "~{FLAT_SCR_LO}"()
+  call void asm sideeffect "; clobber ", "~{flat_scratch_lo}"()
   ret void
 }
 
@@ -101,7 +101,7 @@ entry:
 ; VI-XNACK: NumSgprs: 6
 define amdgpu_kernel void @use_flat_scr_hi() #0 {
 entry:
-  call void asm sideeffect "; clobber ", "~{FLAT_SCR_HI}"()
+  call void asm sideeffect "; clobber ", "~{flat_scratch_hi}"()
   ret void
 }
 

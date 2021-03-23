@@ -1,34 +1,42 @@
-# List of all GlobalISel files.
-set(GLOBAL_ISEL_FILES
-      CallLowering.cpp
-      IRTranslator.cpp
-      InstructionSelect.cpp
-      InstructionSelector.cpp
-      MachineIRBuilder.cpp
-      LegalizerHelper.cpp
-      Legalizer.cpp
-      LegalizerInfo.cpp
-      RegBankSelect.cpp
-      RegisterBank.cpp
-      RegisterBankInfo.cpp
-      Utils.cpp
-      )
+add_llvm_component_library(LLVMGlobalISel
+  CSEInfo.cpp
+  GISelKnownBits.cpp
+  CSEMIRBuilder.cpp
+  CallLowering.cpp
+  GlobalISel.cpp
+  Combiner.cpp
+  CombinerHelper.cpp
+  GISelChangeObserver.cpp
+  IRTranslator.cpp
+  InlineAsmLowering.cpp
+  InstructionSelect.cpp
+  InstructionSelector.cpp
+  LegalityPredicates.cpp
+  LegalizeMutations.cpp
+  Legalizer.cpp
+  LegalizerHelper.cpp
+  LegalizerInfo.cpp
+  Localizer.cpp
+  LostDebugLocObserver.cpp
+  MachineIRBuilder.cpp
+  RegBankSelect.cpp
+  RegisterBank.cpp
+  RegisterBankInfo.cpp
+  Utils.cpp
 
-# Add GlobalISel files to the dependencies if the user wants to build it.
-if(LLVM_BUILD_GLOBAL_ISEL)
-  set(GLOBAL_ISEL_BUILD_FILES ${GLOBAL_ISEL_FILES})
-else()
-  set(GLOBAL_ISEL_BUILD_FILES"")
-  set(LLVM_OPTIONAL_SOURCES LLVMGlobalISel ${GLOBAL_ISEL_FILES})
-endif()
+  ADDITIONAL_HEADER_DIRS
+  ${LLVM_MAIN_INCLUDE_DIR}/llvm/CodeGen/GlobalISel
 
-# In LLVMBuild.txt files, it is not possible to mark a dependency to a
-# library as optional. So instead, generate an empty library if we did
-# not ask for it. 
-add_llvm_library(LLVMGlobalISel
-        ${GLOBAL_ISEL_BUILD_FILES}
-        GlobalISel.cpp
-        
-        DEPENDS
-        intrinsics_gen
+  DEPENDS
+  intrinsics_gen
+
+  LINK_COMPONENTS
+  Analysis
+  CodeGen
+  Core
+  MC
+  SelectionDAG
+  Support
+  Target
+  TransformUtils
   )

@@ -31,8 +31,8 @@
 ; CHECK-NEXT: Assumed Context:
 ; CHECK-NEXT: {  :  }
 ; CHECK-NEXT: Invalid Context:
-; CHECK-NEXT: {  : 1 = 0 }
-; CHECK-NEXT: Arrays {
+; CHECK-NEXT: {  : false }
+; CHECK:      Arrays {
 ; CHECK-NEXT:     i32 MemRef_C[*]; // Element size 4
 ; CHECK-NEXT:     i32 MemRef_A[*]; // Element size 4
 ; CHECK-NEXT: }

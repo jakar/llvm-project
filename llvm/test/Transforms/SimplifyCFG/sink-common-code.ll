@@ -1,4 +1,5 @@
-; RUN: opt < %s -simplifycfg -S | FileCheck %s
+; RUN: opt < %s -simplifycfg -simplifycfg-require-and-preserve-domtree=1 -sink-common-insts -S | FileCheck -enable-var-scope %s
+; RUN: opt < %s -passes='simplify-cfg<sink-common-insts>' -S | FileCheck -enable-var-scope %s
 
 define zeroext i1 @test1(i1 zeroext %flag, i32 %blksA, i32 %blksB, i32 %nblks) {
 entry:
@@ -290,12 +291,12 @@ entry:
 
 if.then:
   %dummy = add i32 %w, 5
-  %sv1 = call i32 @llvm.ctlz.i32(i32 %x)
+  %sv1 = call i32 @llvm.ctlz.i32(i32 %x, i1 false)
   br label %if.end
 
 if.else:
   %dummy1 = add i32 %w, 6
-  %sv2 = call i32 @llvm.cttz.i32(i32 %x)
+  %sv2 = call i32 @llvm.cttz.i32(i32 %x, i1 false)
   br label %if.end
 
 if.end:
@@ -303,8 +304,8 @@ if.end:
   ret i32 1
 }
 
-declare i32 @llvm.ctlz.i32(i32 %x) readnone
-declare i32 @llvm.cttz.i32(i32 %x) readnone
+declare i32 @llvm.ctlz.i32(i32 %x, i1 immarg) readnone
+declare i32 @llvm.cttz.i32(i32 %x, i1 immarg) readnone
 
 ; CHECK-LABEL: test12
 ; CHECK: call i32 @llvm.ctlz
@@ -340,7 +341,7 @@ if.end:
 ; CHECK-LABEL: test13
 ; CHECK-DAG: select
 ; CHECK-DAG: load volatile
-; CHECK: store volatile {{.*}}, !tbaa ![[TBAA:[0-9]]]
+; CHECK: store volatile {{.*}}, !tbaa ![[$TBAA:[0-9]]]
 ; CHECK-NOT: load
 ; CHECK-NOT: store
 
@@ -384,7 +385,7 @@ if.else:
   %gepb = getelementptr inbounds %struct.anon, %struct.anon* %s, i32 0, i32 1
   %sv2 = load i32, i32* %gepb
   %cmp2 = icmp eq i32 %sv2, 57
-  call void @llvm.dbg.value(metadata i32 0, i64 0, metadata !9, metadata !DIExpression()), !dbg !11
+  call void @llvm.dbg.value(metadata i32 0, metadata !9, metadata !DIExpression()), !dbg !11
   br label %if.end
 
 if.end:
@@ -392,7 +393,7 @@ if.end:
   ret i32 1
 }
 
-declare void @llvm.dbg.value(metadata, i64, metadata, metadata)
+declare void @llvm.dbg.value(metadata, metadata, metadata)
 !llvm.module.flags = !{!5, !6}
 !llvm.dbg.cu = !{!7}
 
@@ -768,6 +769,120 @@ if.end:
 ; CHECK-NOT: exact
 ; CHECK: }
 
+
+; FIXME:  Should turn into select
+; CHECK-LABEL: @allow_intrinsic_remove_constant(
+; CHECK: %sv1 = call float @llvm.fma.f32(float %dummy, float 2.000000e+00, float 1.000000e+00)
+; CHECK: %sv2 = call float @llvm.fma.f32(float 2.000000e+00, float %dummy1, float 1.000000e+00)
+define float @allow_intrinsic_remove_constant(i1 zeroext %flag, float %w, float %x, float %y) {
+entry:
+  br i1 %flag, label %if.then, label %if.else
+
+if.then:
+  %dummy = fadd float %w, 4.0
+  %sv1 = call float @llvm.fma.f32(float %dummy, float 2.0, float 1.0)
+  br label %if.end
+
+if.else:
+  %dummy1 = fadd float %w, 8.0
+  %sv2 = call float @llvm.fma.f32(float 2.0, float %dummy1, float 1.0)
+  br label %if.end
+
+if.end:
+  %p = phi float [ %sv1, %if.then ], [ %sv2, %if.else ]
+  ret float %p
+}
+
+declare float @llvm.fma.f32(float, float, float)
+
+; CHECK-LABEL: @no_remove_constant_immarg(
+; CHECK: call i32 @llvm.ctlz.i32(i32 %x, i1 true)
+; CHECK: call i32 @llvm.ctlz.i32(i32 %x, i1 false)
+define i32 @no_remove_constant_immarg(i1 zeroext %flag, i32 %w, i32 %x, i32 %y) {
+entry:
+  br i1 %flag, label %if.then, label %if.else
+
+if.then:
+  %dummy = add i32 %w, 5
+  %sv1 = call i32 @llvm.ctlz.i32(i32 %x, i1 true)
+  br label %if.end
+
+if.else:
+  %dummy1 = add i32 %w, 6
+  %sv2 = call i32 @llvm.ctlz.i32(i32 %x, i1 false)
+  br label %if.end
+
+if.end:
+  %p = phi i32 [ %sv1, %if.then ], [ %sv2, %if.else ]
+  ret i32 1
+}
+
+declare void @llvm.memcpy.p1i8.p1i8.i64(i8 addrspace(1)* nocapture, i8 addrspace(1)* nocapture readonly, i64, i1)
+
+; Make sure a memcpy size isn't replaced with a variable
+; CHECK-LABEL: @no_replace_memcpy_size(
+; CHECK: call void @llvm.memcpy.p1i8.p1i8.i64(i8 addrspace(1)* %dst, i8 addrspace(1)* %src, i64 1024, i1 false)
+; CHECK: call void @llvm.memcpy.p1i8.p1i8.i64(i8 addrspace(1)* %dst, i8 addrspace(1)* %src, i64 4096, i1 false)
+define void @no_replace_memcpy_size(i1 zeroext %flag, i8 addrspace(1)* %dst, i8 addrspace(1)* %src) {
+entry:
+  br i1 %flag, label %if.then, label %if.else
+
+if.then:
+  call void @llvm.memcpy.p1i8.p1i8.i64(i8 addrspace(1)* %dst, i8 addrspace(1)* %src, i64 1024, i1 false)
+  br label %if.end
+
+if.else:
+  call void @llvm.memcpy.p1i8.p1i8.i64(i8 addrspace(1)* %dst, i8 addrspace(1)* %src, i64 4096, i1 false)
+  br label %if.end
+
+if.end:
+  ret void
+}
+
+declare void @llvm.memmove.p1i8.p1i8.i64(i8 addrspace(1)* nocapture, i8 addrspace(1)* nocapture readonly, i64, i1)
+
+; Make sure a memmove size isn't replaced with a variable
+; CHECK-LABEL: @no_replace_memmove_size(
+; CHECK: call void @llvm.memmove.p1i8.p1i8.i64(i8 addrspace(1)* %dst, i8 addrspace(1)* %src, i64 1024, i1 false)
+; CHECK: call void @llvm.memmove.p1i8.p1i8.i64(i8 addrspace(1)* %dst, i8 addrspace(1)* %src, i64 4096, i1 false)
+define void @no_replace_memmove_size(i1 zeroext %flag, i8 addrspace(1)* %dst, i8 addrspace(1)* %src) {
+entry:
+  br i1 %flag, label %if.then, label %if.else
+
+if.then:
+  call void @llvm.memmove.p1i8.p1i8.i64(i8 addrspace(1)* %dst, i8 addrspace(1)* %src, i64 1024, i1 false)
+  br label %if.end
+
+if.else:
+  call void @llvm.memmove.p1i8.p1i8.i64(i8 addrspace(1)* %dst, i8 addrspace(1)* %src, i64 4096, i1 false)
+  br label %if.end
+
+if.end:
+  ret void
+}
+
+declare void @llvm.memset.p1i8.i64(i8 addrspace(1)* nocapture, i8, i64, i1)
+
+; Make sure a memset size isn't replaced with a variable
+; CHECK-LABEL: @no_replace_memset_size(
+; CHECK: call void @llvm.memset.p1i8.i64(i8 addrspace(1)* %dst, i8 0, i64 1024, i1 false)
+; CHECK: call void @llvm.memset.p1i8.i64(i8 addrspace(1)* %dst, i8 0, i64 4096, i1 false)
+define void @no_replace_memset_size(i1 zeroext %flag, i8 addrspace(1)* %dst) {
+entry:
+  br i1 %flag, label %if.then, label %if.else
+
+if.then:
+  call void @llvm.memset.p1i8.i64(i8 addrspace(1)* %dst, i8 0, i64 1024, i1 false)
+  br label %if.end
+
+if.else:
+  call void @llvm.memset.p1i8.i64(i8 addrspace(1)* %dst, i8 0, i64 4096, i1 false)
+  br label %if.end
+
+if.end:
+  ret void
+}
+
 ; Check that simplifycfg doesn't sink and merge inline-asm instructions.
 
 define i32 @test_inline_asm1(i32 %c, i32 %r6) {
@@ -818,6 +933,100 @@ merge:
 ; CHECK: right:
 ; CHECK-NEXT:   %val1 = call i32 @call_target() [ "deopt"(i32 20) ]
 
-; CHECK: ![[TBAA]] = !{![[TYPE:[0-9]]], ![[TYPE]], i64 0}
+%T = type {i32, i32}
+
+define i32 @test_insertvalue(i1 zeroext %flag, %T %P) {
+entry:
+  br i1 %flag, label %if.then, label %if.else
+
+if.then:
+  %t1 = insertvalue %T %P, i32 0, 0
+  br label %if.end
+
+if.else:
+  %t2 = insertvalue %T %P, i32 1, 0
+  br label %if.end
+
+if.end:
+  %t = phi %T [%t1, %if.then], [%t2, %if.else]
+  ret i32 1
+}
+
+; CHECK-LABEL: @test_insertvalue
+; CHECK: select
+; CHECK: insertvalue
+; CHECK-NOT: insertvalue
+
+
+declare void @baz(i32)
+
+define void @test_sink_void_calls(i32 %x) {
+entry:
+  switch i32 %x, label %default [
+    i32 0, label %bb0
+    i32 1, label %bb1
+    i32 2, label %bb2
+    i32 3, label %bb3
+    i32 4, label %bb4
+  ]
+bb0:
+  call void @baz(i32 12)
+  br label %return
+bb1:
+  call void @baz(i32 34)
+  br label %return
+bb2:
+  call void @baz(i32 56)
+  br label %return
+bb3:
+  call void @baz(i32 78)
+  br label %return
+bb4:
+  call void @baz(i32 90)
+  br label %return
+default:
+  unreachable
+return:
+  ret void
+
+; Check that the calls get sunk to the return block.
+; We would previously not sink calls without uses, see PR41259.
+; CHECK-LABEL: @test_sink_void_calls
+; CHECK-NOT: call
+; CHECK-LABEL: return:
+; CHECK: phi
+; CHECK: call
+; CHECK-NOT: call
+; CHECK: ret
+}
+
+; CHECK-LABEL: @test_not_sink_lifetime_marker
+; CHECK-NOT: select
+; CHECK: call void @llvm.lifetime.end
+; CHECK: call void @llvm.lifetime.end
+define i32 @test_not_sink_lifetime_marker(i1 zeroext %flag, i32 %x) {
+entry:
+  %y = alloca i32
+  %z = alloca i32
+  br i1 %flag, label %if.then, label %if.else
+
+if.then:
+  %y.cast = bitcast i32* %y to i8*
+  call void @llvm.lifetime.end.p0i8(i64 4, i8* %y.cast)
+  br label %if.end
+
+if.else:
+  %z.cast = bitcast i32* %z to i8*
+  call void @llvm.lifetime.end.p0i8(i64 4, i8* %z.cast)
+  br label %if.end
+
+if.end:
+  ret i32 1
+}
+
+declare void @llvm.lifetime.start.p0i8(i64, i8* nocapture)
+declare void @llvm.lifetime.end.p0i8(i64, i8* nocapture)
+
+; CHECK: ![[$TBAA]] = !{![[TYPE:[0-9]]], ![[TYPE]], i64 0}
 ; CHECK: ![[TYPE]] = !{!"float", ![[TEXT:[0-9]]]}
 ; CHECK: ![[TEXT]] = !{!"an example type tree"}

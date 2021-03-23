@@ -1,9 +1,8 @@
-//===-- Module.cpp - Implement the Module class ---------------------------===//
+//===- Module.cpp - Implement the Module class ----------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -13,24 +12,47 @@
 
 #include "llvm/IR/Module.h"
 #include "SymbolTableListTraitsImpl.h"
-#include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/Optional.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallString.h"
-#include "llvm/ADT/StringExtras.h"
+#include "llvm/ADT/SmallVector.h"
+#include "llvm/ADT/StringMap.h"
+#include "llvm/ADT/StringRef.h"
+#include "llvm/ADT/Twine.h"
+#include "llvm/IR/Attributes.h"
+#include "llvm/IR/Comdat.h"
 #include "llvm/IR/Constants.h"
-#include "llvm/IR/DerivedTypes.h"
+#include "llvm/IR/DataLayout.h"
 #include "llvm/IR/DebugInfoMetadata.h"
+#include "llvm/IR/DerivedTypes.h"
+#include "llvm/IR/Function.h"
 #include "llvm/IR/GVMaterializer.h"
-#include "llvm/IR/InstrTypes.h"
+#include "llvm/IR/GlobalAlias.h"
+#include "llvm/IR/GlobalIFunc.h"
+#include "llvm/IR/GlobalValue.h"
+#include "llvm/IR/GlobalVariable.h"
 #include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/Metadata.h"
+#include "llvm/IR/ModuleSummaryIndex.h"
+#include "llvm/IR/SymbolTableListTraits.h"
+#include "llvm/IR/Type.h"
 #include "llvm/IR/TypeFinder.h"
-#include "llvm/Support/Dwarf.h"
+#include "llvm/IR/Value.h"
+#include "llvm/IR/ValueSymbolTable.h"
+#include "llvm/Pass.h"
+#include "llvm/Support/Casting.h"
+#include "llvm/Support/CodeGen.h"
 #include "llvm/Support/Error.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/RandomNumberGenerator.h"
+#include "llvm/Support/VersionTuple.h"
 #include <algorithm>
-#include <cstdlib>
+#include <cassert>
+#include <cstdint>
+#include <memory>
+#include <utility>
+#include <vector>
 
 using namespace llvm;
 
@@ -50,9 +72,9 @@ template class llvm::SymbolTableListTraits<GlobalIFunc>;
 //
 
 Module::Module(StringRef MID, LLVMContext &C)
-    : Context(C), Materializer(), ModuleID(MID), SourceFileName(MID), DL("") {
-  ValSymTab = new ValueSymbolTable();
-  NamedMDSymTab = new StringMap<NamedMDNode *>();
+    : Context(C), ValSymTab(std::make_unique<ValueSymbolTable>()),
+      Materializer(), ModuleID(std::string(MID)),
+      SourceFileName(std::string(MID)), DL("") {
   Context.addModule(this);
 }
 
@@ -63,13 +85,11 @@ Module::~Module() {
   FunctionList.clear();
   AliasList.clear();
   IFuncList.clear();
-  NamedMDList.clear();
-  delete ValSymTab;
-  delete static_cast<StringMap<NamedMDNode *> *>(NamedMDSymTab);
 }
 
-RandomNumberGenerator *Module::createRNG(const Pass* P) const {
-  SmallString<32> Salt(P->getPassName());
+std::unique_ptr<RandomNumberGenerator>
+Module::createRNG(const StringRef Name) const {
+  SmallString<32> Salt(Name);
 
   // This RNG is guaranteed to produce the same random stream only
   // when the Module ID and thus the input filename is the same. This
@@ -83,7 +103,8 @@ RandomNumberGenerator *Module::createRNG(const Pass* P) const {
   // store salt metadata from the Module constructor.
   Salt += sys::path::filename(getModuleIdentifier());
 
-  return new RandomNumberGenerator(Salt);
+  return std::unique_ptr<RandomNumberGenerator>(
+      new RandomNumberGenerator(Salt));
 }
 
 /// getNamedValue - Return the first global value in the module with
@@ -119,30 +140,31 @@ void Module::getOperandBundleTags(SmallVectorImpl<StringRef> &Result) const {
 // it.  This is nice because it allows most passes to get away with not handling
 // the symbol table directly for this common task.
 //
-Constant *Module::getOrInsertFunction(StringRef Name, FunctionType *Ty,
-                                      AttributeList AttributeList) {
+FunctionCallee Module::getOrInsertFunction(StringRef Name, FunctionType *Ty,
+                                           AttributeList AttributeList) {
   // See if we have a definition for the specified function already.
   GlobalValue *F = getNamedValue(Name);
   if (!F) {
     // Nope, add it
-    Function *New = Function::Create(Ty, GlobalVariable::ExternalLinkage, Name);
+    Function *New = Function::Create(Ty, GlobalVariable::ExternalLinkage,
+                                     DL.getProgramAddressSpace(), Name);
     if (!New->isIntrinsic())       // Intrinsics get attrs set on construction
       New->setAttributes(AttributeList);
     FunctionList.push_back(New);
-    return New;                    // Return the new prototype.
+    return {Ty, New}; // Return the new prototype.
   }
 
   // If the function exists but has the wrong type, return a bitcast to the
   // right type.
-  if (F->getType() != PointerType::getUnqual(Ty))
-    return ConstantExpr::getBitCast(F, PointerType::getUnqual(Ty));
+  auto *PTy = PointerType::get(Ty, F->getAddressSpace());
+  if (F->getType() != PTy)
+    return {Ty, ConstantExpr::getBitCast(F, PTy)};
 
   // Otherwise, we just found the existing function or a prototype.
-  return F;
+  return {Ty, F};
 }
 
-Constant *Module::getOrInsertFunction(StringRef Name,
-                                      FunctionType *Ty) {
+FunctionCallee Module::getOrInsertFunction(StringRef Name, FunctionType *Ty) {
   return getOrInsertFunction(Name, Ty, AttributeList());
 }
 
@@ -179,16 +201,14 @@ GlobalVariable *Module::getGlobalVariable(StringRef Name,
 ///      with a constantexpr cast to the right type.
 ///   3. Finally, if the existing global is the correct declaration, return the
 ///      existing global.
-Constant *Module::getOrInsertGlobal(StringRef Name, Type *Ty) {
+Constant *Module::getOrInsertGlobal(
+    StringRef Name, Type *Ty,
+    function_ref<GlobalVariable *()> CreateGlobalCallback) {
   // See if we have a definition for the specified global already.
   GlobalVariable *GV = dyn_cast_or_null<GlobalVariable>(getNamedValue(Name));
-  if (!GV) {
-    // Nope, add it
-    GlobalVariable *New =
-      new GlobalVariable(*this, Ty, false, GlobalVariable::ExternalLinkage,
-                         nullptr, Name);
-     return New;                    // Return the new declaration.
-  }
+  if (!GV)
+    GV = CreateGlobalCallback();
+  assert(GV && "The CreateGlobalCallback is expected to create a global");
 
   // If the variable exists but has the wrong type, return a bitcast to the
   // right type.
@@ -199,6 +219,14 @@ Constant *Module::getOrInsertGlobal(StringRef Name, Type *Ty) {
 
   // Otherwise, we just found the existing function or a prototype.
   return GV;
+}
+
+// Overload to construct a global variable using its constructor's defaults.
+Constant *Module::getOrInsertGlobal(StringRef Name, Type *Ty) {
+  return getOrInsertGlobal(Name, Ty, [&] {
+    return new GlobalVariable(*this, Ty, false, GlobalVariable::ExternalLinkage,
+                              nullptr, Name);
+  });
 }
 
 //===----------------------------------------------------------------------===//
@@ -222,15 +250,14 @@ GlobalIFunc *Module::getNamedIFunc(StringRef Name) const {
 NamedMDNode *Module::getNamedMetadata(const Twine &Name) const {
   SmallString<256> NameData;
   StringRef NameRef = Name.toStringRef(NameData);
-  return static_cast<StringMap<NamedMDNode*> *>(NamedMDSymTab)->lookup(NameRef);
+  return NamedMDSymTab.lookup(NameRef);
 }
 
 /// getOrInsertNamedMetadata - Return the first named MDNode in the module
 /// with the specified name. This method returns a new NamedMDNode if a
 /// NamedMDNode with the specified name is not found.
 NamedMDNode *Module::getOrInsertNamedMetadata(StringRef Name) {
-  NamedMDNode *&NMD =
-    (*static_cast<StringMap<NamedMDNode *> *>(NamedMDSymTab))[Name];
+  NamedMDNode *&NMD = NamedMDSymTab[Name];
   if (!NMD) {
     NMD = new NamedMDNode(Name);
     NMD->setParent(this);
@@ -242,7 +269,7 @@ NamedMDNode *Module::getOrInsertNamedMetadata(StringRef Name) {
 /// eraseNamedMetadata - Remove the given NamedMDNode from this module and
 /// delete it.
 void Module::eraseNamedMetadata(NamedMDNode *NMD) {
-  static_cast<StringMap<NamedMDNode *> *>(NamedMDSymTab)->erase(NMD->getName());
+  NamedMDSymTab.erase(NMD->getName());
   NamedMDList.erase(NMD->getIterator());
 }
 
@@ -257,6 +284,20 @@ bool Module::isValidModFlagBehavior(Metadata *MD, ModFlagBehavior &MFB) {
   return false;
 }
 
+bool Module::isValidModuleFlag(const MDNode &ModFlag, ModFlagBehavior &MFB,
+                               MDString *&Key, Metadata *&Val) {
+  if (ModFlag.getNumOperands() < 3)
+    return false;
+  if (!isValidModFlagBehavior(ModFlag.getOperand(0), MFB))
+    return false;
+  MDString *K = dyn_cast_or_null<MDString>(ModFlag.getOperand(1));
+  if (!K)
+    return false;
+  Key = K;
+  Val = ModFlag.getOperand(2);
+  return true;
+}
+
 /// getModuleFlagsMetadata - Returns the module flags in the provided vector.
 void Module::
 getModuleFlagsMetadata(SmallVectorImpl<ModuleFlagEntry> &Flags) const {
@@ -265,13 +306,11 @@ getModuleFlagsMetadata(SmallVectorImpl<ModuleFlagEntry> &Flags) const {
 
   for (const MDNode *Flag : ModFlags->operands()) {
     ModFlagBehavior MFB;
-    if (Flag->getNumOperands() >= 3 &&
-        isValidModFlagBehavior(Flag->getOperand(0), MFB) &&
-        dyn_cast_or_null<MDString>(Flag->getOperand(1))) {
+    MDString *Key = nullptr;
+    Metadata *Val = nullptr;
+    if (isValidModuleFlag(*Flag, MFB, Key, Val)) {
       // Check the operands of the MDNode before accessing the operands.
       // The verifier will actually catch these failures.
-      MDString *Key = cast<MDString>(Flag->getOperand(1));
-      Metadata *Val = Flag->getOperand(2);
       Flags.push_back(ModuleFlagEntry(MFB, Key, Val));
     }
   }
@@ -332,6 +371,23 @@ void Module::addModuleFlag(MDNode *Node) {
   getOrInsertModuleFlagsMetadata()->addOperand(Node);
 }
 
+void Module::setModuleFlag(ModFlagBehavior Behavior, StringRef Key,
+                           Metadata *Val) {
+  NamedMDNode *ModFlags = getOrInsertModuleFlagsMetadata();
+  // Replace the flag if it already exists.
+  for (unsigned I = 0, E = ModFlags->getNumOperands(); I != E; ++I) {
+    MDNode *Flag = ModFlags->getOperand(I);
+    ModFlagBehavior MFB;
+    MDString *K = nullptr;
+    Metadata *V = nullptr;
+    if (isValidModuleFlag(*Flag, MFB, K, V) && K->getString() == Key) {
+      Flag->replaceOperandWith(2, Val);
+      return;
+    }
+  }
+  addModuleFlag(Behavior, Key, Val);
+}
+
 void Module::setDataLayout(StringRef Desc) {
   DL.reset(Desc);
 }
@@ -351,6 +407,22 @@ void Module::debug_compile_units_iterator::SkipNoDebugCUs() {
   while (CUs && (Idx < CUs->getNumOperands()) &&
          ((*this)->getEmissionKind() == DICompileUnit::NoDebug))
     ++Idx;
+}
+
+iterator_range<Module::global_object_iterator> Module::global_objects() {
+  return concat<GlobalObject>(functions(), globals());
+}
+iterator_range<Module::const_global_object_iterator>
+Module::global_objects() const {
+  return concat<const GlobalObject>(functions(), globals());
+}
+
+iterator_range<Module::global_value_iterator> Module::global_values() {
+  return concat<GlobalValue>(functions(), globals(), aliases(), ifuncs());
+}
+iterator_range<Module::const_global_value_iterator>
+Module::global_values() const {
+  return concat<const GlobalValue>(functions(), globals(), aliases(), ifuncs());
 }
 
 //===----------------------------------------------------------------------===//
@@ -401,6 +473,56 @@ std::vector<StructType *> Module::getIdentifiedStructTypes() const {
   return Ret;
 }
 
+std::string Module::getUniqueIntrinsicName(StringRef BaseName, Intrinsic::ID Id,
+                                           const FunctionType *Proto) {
+  auto Encode = [&BaseName](unsigned Suffix) {
+    return (Twine(BaseName) + "." + Twine(Suffix)).str();
+  };
+
+  {
+    // fast path - the prototype is already known
+    auto UinItInserted = UniquedIntrinsicNames.insert({{Id, Proto}, 0});
+    if (!UinItInserted.second)
+      return Encode(UinItInserted.first->second);
+  }
+
+  // Not known yet. A new entry was created with index 0. Check if there already
+  // exists a matching declaration, or select a new entry.
+
+  // Start looking for names with the current known maximum count (or 0).
+  auto NiidItInserted = CurrentIntrinsicIds.insert({BaseName, 0});
+  unsigned Count = NiidItInserted.first->second;
+
+  // This might be slow if a whole population of intrinsics already existed, but
+  // we cache the values for later usage.
+  std::string NewName;
+  while (true) {
+    NewName = Encode(Count);
+    GlobalValue *F = getNamedValue(NewName);
+    if (!F) {
+      // Reserve this entry for the new proto
+      UniquedIntrinsicNames[{Id, Proto}] = Count;
+      break;
+    }
+
+    // A declaration with this name already exists. Remember it.
+    FunctionType *FT = dyn_cast<FunctionType>(F->getType()->getElementType());
+    auto UinItInserted = UniquedIntrinsicNames.insert({{Id, FT}, Count});
+    if (FT == Proto) {
+      // It was a declaration for our prototype. This entry was allocated in the
+      // beginning. Update the count to match the existing declaration.
+      UinItInserted.first->second = Count;
+      break;
+    }
+
+    ++Count;
+  }
+
+  NiidItInserted.first->second = Count + 1;
+
+  return NewName;
+}
+
 // dropAllReferences() - This function causes all the subelements to "let go"
 // of all references that they are maintaining.  This allows one to 'delete' a
 // whole module at a time, even though there may be circular references... first
@@ -437,11 +559,23 @@ unsigned Module::getDwarfVersion() const {
   return cast<ConstantInt>(Val->getValue())->getZExtValue();
 }
 
+bool Module::isDwarf64() const {
+  auto *Val = cast_or_null<ConstantAsMetadata>(getModuleFlag("DWARF64"));
+  return Val && cast<ConstantInt>(Val->getValue())->isOne();
+}
+
 unsigned Module::getCodeViewFlag() const {
   auto *Val = cast_or_null<ConstantAsMetadata>(getModuleFlag("CodeView"));
   if (!Val)
     return 0;
   return cast<ConstantInt>(Val->getValue())->getZExtValue();
+}
+
+unsigned Module::getInstructionCount() {
+  unsigned NumInstrs = 0;
+  for (Function &F : FunctionList)
+    NumInstrs += F.getInstructionCount();
+  return NumInstrs;
 }
 
 Comdat *Module::getOrInsertComdat(StringRef Name) {
@@ -461,7 +595,7 @@ PICLevel::Level Module::getPICLevel() const {
 }
 
 void Module::setPICLevel(PICLevel::Level PL) {
-  addModuleFlag(ModFlagBehavior::Error, "PIC Level", PL);
+  addModuleFlag(ModFlagBehavior::Max, "PIC Level", PL);
 }
 
 PIELevel::Level Module::getPIELevel() const {
@@ -475,23 +609,107 @@ PIELevel::Level Module::getPIELevel() const {
 }
 
 void Module::setPIELevel(PIELevel::Level PL) {
-  addModuleFlag(ModFlagBehavior::Error, "PIE Level", PL);
+  addModuleFlag(ModFlagBehavior::Max, "PIE Level", PL);
 }
 
-void Module::setProfileSummary(Metadata *M) {
-  addModuleFlag(ModFlagBehavior::Error, "ProfileSummary", M);
+Optional<CodeModel::Model> Module::getCodeModel() const {
+  auto *Val = cast_or_null<ConstantAsMetadata>(getModuleFlag("Code Model"));
+
+  if (!Val)
+    return None;
+
+  return static_cast<CodeModel::Model>(
+      cast<ConstantInt>(Val->getValue())->getZExtValue());
 }
 
-Metadata *Module::getProfileSummary() {
-  return getModuleFlag("ProfileSummary");
+void Module::setCodeModel(CodeModel::Model CL) {
+  // Linking object files with different code models is undefined behavior
+  // because the compiler would have to generate additional code (to span
+  // longer jumps) if a larger code model is used with a smaller one.
+  // Therefore we will treat attempts to mix code models as an error.
+  addModuleFlag(ModFlagBehavior::Error, "Code Model", CL);
+}
+
+void Module::setProfileSummary(Metadata *M, ProfileSummary::Kind Kind) {
+  if (Kind == ProfileSummary::PSK_CSInstr)
+    setModuleFlag(ModFlagBehavior::Error, "CSProfileSummary", M);
+  else
+    setModuleFlag(ModFlagBehavior::Error, "ProfileSummary", M);
+}
+
+Metadata *Module::getProfileSummary(bool IsCS) const {
+  return (IsCS ? getModuleFlag("CSProfileSummary")
+               : getModuleFlag("ProfileSummary"));
+}
+
+bool Module::getSemanticInterposition() const {
+  Metadata *MF = getModuleFlag("SemanticInterposition");
+
+  auto *Val = cast_or_null<ConstantAsMetadata>(MF);
+  if (!Val)
+    return false;
+
+  return cast<ConstantInt>(Val->getValue())->getZExtValue();
+}
+
+void Module::setSemanticInterposition(bool SI) {
+  addModuleFlag(ModFlagBehavior::Error, "SemanticInterposition", SI);
 }
 
 void Module::setOwnedMemoryBuffer(std::unique_ptr<MemoryBuffer> MB) {
   OwnedMemoryBuffer = std::move(MB);
 }
 
+bool Module::getRtLibUseGOT() const {
+  auto *Val = cast_or_null<ConstantAsMetadata>(getModuleFlag("RtLibUseGOT"));
+  return Val && (cast<ConstantInt>(Val->getValue())->getZExtValue() > 0);
+}
+
+void Module::setRtLibUseGOT() {
+  addModuleFlag(ModFlagBehavior::Max, "RtLibUseGOT", 1);
+}
+
+void Module::setSDKVersion(const VersionTuple &V) {
+  SmallVector<unsigned, 3> Entries;
+  Entries.push_back(V.getMajor());
+  if (auto Minor = V.getMinor()) {
+    Entries.push_back(*Minor);
+    if (auto Subminor = V.getSubminor())
+      Entries.push_back(*Subminor);
+    // Ignore the 'build' component as it can't be represented in the object
+    // file.
+  }
+  addModuleFlag(ModFlagBehavior::Warning, "SDK Version",
+                ConstantDataArray::get(Context, Entries));
+}
+
+VersionTuple Module::getSDKVersion() const {
+  auto *CM = dyn_cast_or_null<ConstantAsMetadata>(getModuleFlag("SDK Version"));
+  if (!CM)
+    return {};
+  auto *Arr = dyn_cast_or_null<ConstantDataArray>(CM->getValue());
+  if (!Arr)
+    return {};
+  auto getVersionComponent = [&](unsigned Index) -> Optional<unsigned> {
+    if (Index >= Arr->getNumElements())
+      return None;
+    return (unsigned)Arr->getElementAsInteger(Index);
+  };
+  auto Major = getVersionComponent(0);
+  if (!Major)
+    return {};
+  VersionTuple Result = VersionTuple(*Major);
+  if (auto Minor = getVersionComponent(1)) {
+    Result = VersionTuple(*Major, *Minor);
+    if (auto Subminor = getVersionComponent(2)) {
+      Result = VersionTuple(*Major, *Minor, *Subminor);
+    }
+  }
+  return Result;
+}
+
 GlobalVariable *llvm::collectUsedGlobalVariables(
-    const Module &M, SmallPtrSetImpl<GlobalValue *> &Set, bool CompilerUsed) {
+    const Module &M, SmallVectorImpl<GlobalValue *> &Vec, bool CompilerUsed) {
   const char *Name = CompilerUsed ? "llvm.compiler.used" : "llvm.used";
   GlobalVariable *GV = M.getGlobalVariable(Name);
   if (!GV || !GV->hasInitializer())
@@ -499,8 +717,28 @@ GlobalVariable *llvm::collectUsedGlobalVariables(
 
   const ConstantArray *Init = cast<ConstantArray>(GV->getInitializer());
   for (Value *Op : Init->operands()) {
-    GlobalValue *G = cast<GlobalValue>(Op->stripPointerCastsNoFollowAliases());
-    Set.insert(G);
+    GlobalValue *G = cast<GlobalValue>(Op->stripPointerCasts());
+    Vec.push_back(G);
   }
   return GV;
+}
+
+void Module::setPartialSampleProfileRatio(const ModuleSummaryIndex &Index) {
+  if (auto *SummaryMD = getProfileSummary(/*IsCS*/ false)) {
+    std::unique_ptr<ProfileSummary> ProfileSummary(
+        ProfileSummary::getFromMD(SummaryMD));
+    if (ProfileSummary) {
+      if (ProfileSummary->getKind() != ProfileSummary::PSK_Sample ||
+          !ProfileSummary->isPartialProfile())
+        return;
+      uint64_t BlockCount = Index.getBlockCount();
+      uint32_t NumCounts = ProfileSummary->getNumCounts();
+      if (!NumCounts)
+        return;
+      double Ratio = (double)BlockCount / NumCounts;
+      ProfileSummary->setPartialProfileRatio(Ratio);
+      setProfileSummary(ProfileSummary->getMD(getContext()),
+                        ProfileSummary::PSK_Sample);
+    }
+  }
 }

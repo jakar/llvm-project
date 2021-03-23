@@ -1,7 +1,7 @@
-; RUN: opt %loadPolly -basicaa -loop-rotate -indvars       -polly-prepare \
+; RUN: opt %loadPolly -basic-aa -loop-rotate -indvars       -polly-prepare \
 ; RUN: -polly-invariant-load-hoisting=true -polly-scops -analyze < %s \
 ; RUN: | FileCheck %s
-; RUN: opt %loadPolly -basicaa -loop-rotate -indvars -licm -polly-prepare \
+; RUN: opt %loadPolly -basic-aa -loop-rotate -indvars -licm -polly-prepare \
 ; RUN: -polly-invariant-load-hoisting=true -polly-scops -analyze < %s \
 ; RUN: | FileCheck %s
 ;
@@ -49,6 +49,6 @@ for.end:                                          ; preds = %for.cond
 ;
 ; CHECK: Statements {
 ; CHECK:      Stmt_for_body
-; CHECK-DAG:     MustWriteAccess :=  [Reduction Type: NONE] [Scalar: 0]
+; CHECK:     MustWriteAccess :=  [Reduction Type: NONE] [Scalar: 0]
 ; CHECK-NEXT:        [n, j] -> { Stmt_for_body[i0] -> MemRef_A[i0] };
 ; CHECK:     }

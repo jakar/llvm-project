@@ -1,4 +1,4 @@
-; RUN: opt < %s -tailcallelim -S | FileCheck %s
+; RUN: opt < %s -tailcallelim -verify-dom-info -S | FileCheck %s
 
 define i32 @f_1(i32 %x) {
 ; CHECK-LABEL: @f_1(
@@ -54,4 +54,14 @@ catch:
 
 exit:
   ret void
+}
+
+; CHECK-LABEL: @test_clang_arc_attachedcall(
+; CHECK: tail call i8* @getObj(
+
+declare i8* @getObj()
+
+define i8* @test_clang_arc_attachedcall() {
+  %r = call i8* @getObj() [ "clang.arc.attachedcall"(i64 0) ]
+  ret i8* %r
 }

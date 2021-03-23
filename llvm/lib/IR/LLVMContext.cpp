@@ -1,9 +1,8 @@
 //===-- LLVMContext.cpp - Implement LLVMContext ---------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -13,15 +12,17 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/IR/LLVMContext.h"
+#include "LLVMContextImpl.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/Twine.h"
-#include "LLVMContextImpl.h"
 #include "llvm/IR/DiagnosticInfo.h"
 #include "llvm/IR/DiagnosticPrinter.h"
+#include "llvm/IR/LLVMRemarkStreamer.h"
 #include "llvm/IR/Metadata.h"
 #include "llvm/IR/Module.h"
+#include "llvm/Remarks/RemarkStreamer.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/raw_ostream.h"
@@ -36,29 +37,9 @@ LLVMContext::LLVMContext() : pImpl(new LLVMContextImpl(*this)) {
   // Create the fixed metadata kinds. This is done in the same order as the
   // MD_* enum values so that they correspond.
   std::pair<unsigned, StringRef> MDKinds[] = {
-    {MD_dbg, "dbg"},
-    {MD_tbaa, "tbaa"},
-    {MD_prof, "prof"},
-    {MD_fpmath, "fpmath"},
-    {MD_range, "range"},
-    {MD_tbaa_struct, "tbaa.struct"},
-    {MD_invariant_load, "invariant.load"},
-    {MD_alias_scope, "alias.scope"},
-    {MD_noalias, "noalias"},
-    {MD_nontemporal, "nontemporal"},
-    {MD_mem_parallel_loop_access, "llvm.mem.parallel_loop_access"},
-    {MD_nonnull, "nonnull"},
-    {MD_dereferenceable, "dereferenceable"},
-    {MD_dereferenceable_or_null, "dereferenceable_or_null"},
-    {MD_make_implicit, "make.implicit"},
-    {MD_unpredictable, "unpredictable"},
-    {MD_invariant_group, "invariant.group"},
-    {MD_align, "align"},
-    {MD_loop, "llvm.loop"},
-    {MD_type, "type"},
-    {MD_section_prefix, "section_prefix"},
-    {MD_absolute_symbol, "absolute_symbol"},
-    {MD_associated, "associated"},
+#define LLVM_FIXED_MD_KIND(EnumID, Name, Value) {EnumID, Name},
+#include "llvm/IR/FixedMetadataKinds.def"
+#undef LLVM_FIXED_MD_KIND
   };
 
   for (auto &MDKind : MDKinds) {
@@ -81,6 +62,39 @@ LLVMContext::LLVMContext() : pImpl(new LLVMContextImpl(*this)) {
   assert(GCTransitionEntry->second == LLVMContext::OB_gc_transition &&
          "gc-transition operand bundle id drifted!");
   (void)GCTransitionEntry;
+
+  auto *CFGuardTargetEntry = pImpl->getOrInsertBundleTag("cfguardtarget");
+  assert(CFGuardTargetEntry->second == LLVMContext::OB_cfguardtarget &&
+         "cfguardtarget operand bundle id drifted!");
+  (void)CFGuardTargetEntry;
+
+  auto *PreallocatedEntry = pImpl->getOrInsertBundleTag("preallocated");
+  assert(PreallocatedEntry->second == LLVMContext::OB_preallocated &&
+         "preallocated operand bundle id drifted!");
+  (void)PreallocatedEntry;
+
+  auto *GCLiveEntry = pImpl->getOrInsertBundleTag("gc-live");
+  assert(GCLiveEntry->second == LLVMContext::OB_gc_live &&
+         "gc-transition operand bundle id drifted!");
+  (void)GCLiveEntry;
+
+  auto *ClangAttachedCall =
+      pImpl->getOrInsertBundleTag("clang.arc.attachedcall");
+  assert(ClangAttachedCall->second == LLVMContext::OB_clang_arc_attachedcall &&
+         "clang.arc.attachedcall operand bundle id drifted!");
+  (void)ClangAttachedCall;
+
+  SyncScope::ID SingleThreadSSID =
+      pImpl->getOrInsertSyncScopeID("singlethread");
+  assert(SingleThreadSSID == SyncScope::SingleThread &&
+         "singlethread synchronization scope ID drifted!");
+  (void)SingleThreadSSID;
+
+  SyncScope::ID SystemSSID =
+      pImpl->getOrInsertSyncScopeID("");
+  assert(SystemSSID == SyncScope::System &&
+         "system synchronization scope ID drifted!");
+  (void)SystemSSID;
 }
 
 LLVMContext::~LLVMContext() { delete pImpl; }
@@ -97,55 +111,68 @@ void LLVMContext::removeModule(Module *M) {
 // Recoverable Backend Errors
 //===----------------------------------------------------------------------===//
 
-void LLVMContext::
-setInlineAsmDiagnosticHandler(InlineAsmDiagHandlerTy DiagHandler,
-                              void *DiagContext) {
-  pImpl->InlineAsmDiagHandler = DiagHandler;
-  pImpl->InlineAsmDiagContext = DiagContext;
-}
-
-/// getInlineAsmDiagnosticHandler - Return the diagnostic handler set by
-/// setInlineAsmDiagnosticHandler.
-LLVMContext::InlineAsmDiagHandlerTy
-LLVMContext::getInlineAsmDiagnosticHandler() const {
-  return pImpl->InlineAsmDiagHandler;
-}
-
-/// getInlineAsmDiagnosticContext - Return the diagnostic context set by
-/// setInlineAsmDiagnosticHandler.
-void *LLVMContext::getInlineAsmDiagnosticContext() const {
-  return pImpl->InlineAsmDiagContext;
-}
-
-void LLVMContext::setDiagnosticHandler(DiagnosticHandlerTy DiagnosticHandler,
-                                       void *DiagnosticContext,
-                                       bool RespectFilters) {
-  pImpl->DiagnosticHandler = DiagnosticHandler;
-  pImpl->DiagnosticContext = DiagnosticContext;
+void LLVMContext::setDiagnosticHandlerCallBack(
+    DiagnosticHandler::DiagnosticHandlerTy DiagnosticHandler,
+    void *DiagnosticContext, bool RespectFilters) {
+  pImpl->DiagHandler->DiagHandlerCallback = DiagnosticHandler;
+  pImpl->DiagHandler->DiagnosticContext = DiagnosticContext;
   pImpl->RespectDiagnosticFilters = RespectFilters;
 }
 
-void LLVMContext::setDiagnosticHotnessRequested(bool Requested) {
-  pImpl->DiagnosticHotnessRequested = Requested;
-}
-bool LLVMContext::getDiagnosticHotnessRequested() const {
-  return pImpl->DiagnosticHotnessRequested;
-}
-
-yaml::Output *LLVMContext::getDiagnosticsOutputFile() {
-  return pImpl->DiagnosticsOutputFile.get();
+void LLVMContext::setDiagnosticHandler(std::unique_ptr<DiagnosticHandler> &&DH,
+                                      bool RespectFilters) {
+  pImpl->DiagHandler = std::move(DH);
+  pImpl->RespectDiagnosticFilters = RespectFilters;
 }
 
-void LLVMContext::setDiagnosticsOutputFile(std::unique_ptr<yaml::Output> F) {
-  pImpl->DiagnosticsOutputFile = std::move(F);
+void LLVMContext::setDiagnosticsHotnessRequested(bool Requested) {
+  pImpl->DiagnosticsHotnessRequested = Requested;
+}
+bool LLVMContext::getDiagnosticsHotnessRequested() const {
+  return pImpl->DiagnosticsHotnessRequested;
 }
 
-LLVMContext::DiagnosticHandlerTy LLVMContext::getDiagnosticHandler() const {
-  return pImpl->DiagnosticHandler;
+void LLVMContext::setDiagnosticsHotnessThreshold(Optional<uint64_t> Threshold) {
+  pImpl->DiagnosticsHotnessThreshold = Threshold;
+}
+
+uint64_t LLVMContext::getDiagnosticsHotnessThreshold() const {
+  return pImpl->DiagnosticsHotnessThreshold.getValueOr(UINT64_MAX);
+}
+
+bool LLVMContext::isDiagnosticsHotnessThresholdSetFromPSI() const {
+  return !pImpl->DiagnosticsHotnessThreshold.hasValue();
+}
+
+remarks::RemarkStreamer *LLVMContext::getMainRemarkStreamer() {
+  return pImpl->MainRemarkStreamer.get();
+}
+const remarks::RemarkStreamer *LLVMContext::getMainRemarkStreamer() const {
+  return const_cast<LLVMContext *>(this)->getMainRemarkStreamer();
+}
+void LLVMContext::setMainRemarkStreamer(
+    std::unique_ptr<remarks::RemarkStreamer> RemarkStreamer) {
+  pImpl->MainRemarkStreamer = std::move(RemarkStreamer);
+}
+
+LLVMRemarkStreamer *LLVMContext::getLLVMRemarkStreamer() {
+  return pImpl->LLVMRS.get();
+}
+const LLVMRemarkStreamer *LLVMContext::getLLVMRemarkStreamer() const {
+  return const_cast<LLVMContext *>(this)->getLLVMRemarkStreamer();
+}
+void LLVMContext::setLLVMRemarkStreamer(
+    std::unique_ptr<LLVMRemarkStreamer> RemarkStreamer) {
+  pImpl->LLVMRS = std::move(RemarkStreamer);
+}
+
+DiagnosticHandler::DiagnosticHandlerTy
+LLVMContext::getDiagnosticHandlerCallBack() const {
+  return pImpl->DiagHandler->DiagHandlerCallback;
 }
 
 void *LLVMContext::getDiagnosticContext() const {
-  return pImpl->DiagnosticContext;
+  return pImpl->DiagHandler->DiagnosticContext;
 }
 
 void LLVMContext::setYieldCallback(YieldCallbackTy Callback, void *OpaqueHandle)
@@ -173,8 +200,12 @@ static bool isDiagnosticEnabled(const DiagnosticInfo &DI) {
   // pattern, passed via one of the -pass-remarks* flags, matches the name of
   // the pass that is emitting the diagnostic. If there is no match, ignore the
   // diagnostic and return.
+  //
+  // Also noisy remarks are only enabled if we have hotness information to sort
+  // them.
   if (auto *Remark = dyn_cast<DiagnosticInfoOptimizationBase>(&DI))
-    return Remark->isEnabled();
+    return Remark->isEnabled() &&
+           (!Remark->isVerbose() || Remark->getHotness());
 
   return true;
 }
@@ -195,12 +226,15 @@ LLVMContext::getDiagnosticMessagePrefix(DiagnosticSeverity Severity) {
 }
 
 void LLVMContext::diagnose(const DiagnosticInfo &DI) {
+  if (auto *OptDiagBase = dyn_cast<DiagnosticInfoOptimizationBase>(&DI))
+    if (LLVMRemarkStreamer *RS = getLLVMRemarkStreamer())
+      RS->emit(*OptDiagBase);
+
   // If there is a report handler, use it.
-  if (pImpl->DiagnosticHandler) {
-    if (!pImpl->RespectDiagnosticFilters || isDiagnosticEnabled(DI))
-      pImpl->DiagnosticHandler(DI, pImpl->DiagnosticContext);
+  if (pImpl->DiagHandler &&
+      (!pImpl->RespectDiagnosticFilters || isDiagnosticEnabled(DI)) &&
+      pImpl->DiagHandler->handleDiagnostics(DI))
     return;
-  }
 
   if (!isDiagnosticEnabled(DI))
     return;
@@ -244,8 +278,21 @@ void LLVMContext::getOperandBundleTags(SmallVectorImpl<StringRef> &Tags) const {
   pImpl->getOperandBundleTags(Tags);
 }
 
+StringMapEntry<uint32_t> *
+LLVMContext::getOrInsertBundleTag(StringRef TagName) const {
+  return pImpl->getOrInsertBundleTag(TagName);
+}
+
 uint32_t LLVMContext::getOperandBundleTagID(StringRef Tag) const {
   return pImpl->getOperandBundleTagID(Tag);
+}
+
+SyncScope::ID LLVMContext::getOrInsertSyncScopeID(StringRef SSN) {
+  return pImpl->getOrInsertSyncScopeID(SSN);
+}
+
+void LLVMContext::getSyncScopeNames(SmallVectorImpl<StringRef> &SSNs) const {
+  pImpl->getSyncScopeNames(SSNs);
 }
 
 void LLVMContext::setGC(const Function &Fn, std::string GCName) {
@@ -285,6 +332,18 @@ void LLVMContext::setDiscardValueNames(bool Discard) {
   pImpl->DiscardValueNames = Discard;
 }
 
-OptBisect &LLVMContext::getOptBisect() {
-  return pImpl->getOptBisect();
+OptPassGate &LLVMContext::getOptPassGate() const {
+  return pImpl->getOptPassGate();
+}
+
+void LLVMContext::setOptPassGate(OptPassGate& OPG) {
+  pImpl->setOptPassGate(OPG);
+}
+
+const DiagnosticHandler *LLVMContext::getDiagHandlerPtr() const {
+  return pImpl->DiagHandler.get();
+}
+
+std::unique_ptr<DiagnosticHandler> LLVMContext::getDiagnosticHandler() {
+  return std::move(pImpl->DiagHandler);
 }

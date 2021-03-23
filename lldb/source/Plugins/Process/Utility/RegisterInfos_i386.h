@@ -1,9 +1,8 @@
 //===-- RegisterInfos_i386.h ------------------------------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -11,7 +10,6 @@
 #include <cstddef>
 #include <cstdint>
 
-// Project includes
 
 #ifdef DECLARE_REGISTER_INFOS_I386_STRUCT
 
@@ -27,19 +25,19 @@
 // Based on DNBArchImplI386.cpp from debugserver
 #define YMM_OFFSET(reg_index)                                                  \
   (LLVM_EXTENSION offsetof(UserArea, i387) +                                   \
-   LLVM_EXTENSION offsetof(FPR, xstate) +                                      \
+   LLVM_EXTENSION offsetof(FPR, fxsave) +                                      \
    LLVM_EXTENSION offsetof(FXSAVE, xmm[7]) + sizeof(XMMReg) +                  \
    (32 * reg_index))
 
-#define BNDR_OFFSET(reg_index) \
-    (LLVM_EXTENSION offsetof(UserArea, i387) + \
-     LLVM_EXTENSION offsetof(FPR, xstate) + \
-     LLVM_EXTENSION offsetof(XSAVE, mpxr[reg_index]))
+#define BNDR_OFFSET(reg_index)                                                 \
+  (LLVM_EXTENSION offsetof(UserArea, i387) +                                   \
+   LLVM_EXTENSION offsetof(FPR, xsave) +                                       \
+   LLVM_EXTENSION offsetof(XSAVE, mpxr[reg_index]))
 
-#define BNDC_OFFSET(reg_index) \
-    (LLVM_EXTENSION offsetof(UserArea, i387) + \
-     LLVM_EXTENSION offsetof(FPR, xstate) + \
-     LLVM_EXTENSION offsetof(XSAVE, mpxc[reg_index]))
+#define BNDC_OFFSET(reg_index)                                                 \
+  (LLVM_EXTENSION offsetof(UserArea, i387) +                                   \
+   LLVM_EXTENSION offsetof(FPR, xsave) +                                       \
+   LLVM_EXTENSION offsetof(XSAVE, mpxc[reg_index]))
 
 // Number of bytes needed to represent a FPR.
 #if !defined(FPR_SIZE)
@@ -89,15 +87,14 @@
              nullptr, nullptr, nullptr, 0                                      \
   }
 
-#define DEFINE_FP_MM(reg, i)                                                   \
+#define DEFINE_FP_MM(reg, i, streg)                                            \
   {                                                                            \
-    #reg #i, nullptr, sizeof(uint64_t),                                        \
-                          LLVM_EXTENSION FPR_OFFSET(                           \
-                              stmm[i]), eEncodingUint, eFormatHex,             \
-                              {ehframe_mm##i##_i386, dwarf_mm##i##_i386,       \
-                               LLDB_INVALID_REGNUM, LLDB_INVALID_REGNUM,       \
-                               lldb_mm##i##_i386 },                            \
-                               nullptr, nullptr, nullptr, 0                    \
+    #reg #i, nullptr, sizeof(uint64_t), LLVM_EXTENSION FPR_OFFSET(stmm[i]),    \
+    eEncodingUint, eFormatHex,                                                 \
+    {dwarf_mm##i##_i386, dwarf_mm##i##_i386, LLDB_INVALID_REGNUM,              \
+     LLDB_INVALID_REGNUM, lldb_mm##i##_i386 },                                 \
+    RegisterContextPOSIX_x86::g_contained_##streg##_32,                        \
+    RegisterContextPOSIX_x86::g_invalidate_##streg##_32, nullptr, 0            \
   }
 
 #define DEFINE_XMM(reg, i)                                                     \
@@ -147,7 +144,7 @@
         DR_OFFSET(i), eEncodingUint, eFormatHex,                               \
                   {LLDB_INVALID_REGNUM, LLDB_INVALID_REGNUM,                   \
                    LLDB_INVALID_REGNUM, LLDB_INVALID_REGNUM,                   \
-                   LLDB_INVALID_REGNUM },                                      \
+                   lldb_##reg##i##_i386 },                                     \
                    nullptr, nullptr, nullptr, 0                                \
   }
 
@@ -253,10 +250,12 @@ static RegisterInfo g_register_infos_i386[] = {
     // FP registers.
     DEFINE_FP_ST(st, 0), DEFINE_FP_ST(st, 1), DEFINE_FP_ST(st, 2),
     DEFINE_FP_ST(st, 3), DEFINE_FP_ST(st, 4), DEFINE_FP_ST(st, 5),
-    DEFINE_FP_ST(st, 6), DEFINE_FP_ST(st, 7), DEFINE_FP_MM(mm, 0),
-    DEFINE_FP_MM(mm, 1), DEFINE_FP_MM(mm, 2), DEFINE_FP_MM(mm, 3),
-    DEFINE_FP_MM(mm, 4), DEFINE_FP_MM(mm, 5), DEFINE_FP_MM(mm, 6),
-    DEFINE_FP_MM(mm, 7),
+    DEFINE_FP_ST(st, 6), DEFINE_FP_ST(st, 7),
+
+    DEFINE_FP_MM(mm, 0, st0), DEFINE_FP_MM(mm, 1, st1),
+    DEFINE_FP_MM(mm, 2, st2), DEFINE_FP_MM(mm, 3, st3),
+    DEFINE_FP_MM(mm, 4, st4), DEFINE_FP_MM(mm, 5, st5),
+    DEFINE_FP_MM(mm, 6, st6), DEFINE_FP_MM(mm, 7, st7),
 
     // XMM registers
     DEFINE_XMM(xmm, 0), DEFINE_XMM(xmm, 1), DEFINE_XMM(xmm, 2),

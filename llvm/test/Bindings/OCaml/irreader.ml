@@ -1,8 +1,8 @@
-(* RUN: cp %s %T/irreader.ml
- * RUN: %ocamlc -g -w +A -package llvm.irreader -linkpkg %T/irreader.ml -o %t
- * RUN: %t
- * RUN: %ocamlopt -g -w +A -package llvm.irreader -linkpkg %T/irreader.ml -o %t
- * RUN: %t
+(* RUN: rm -rf %t && mkdir -p %t && cp %s %t/irreader.ml
+ * RUN: %ocamlc -g -w +A -package llvm.irreader -linkpkg %t/irreader.ml -o %t/executable
+ * RUN: %t/executable
+ * RUN: %ocamlopt -g -w +A -package llvm.irreader -linkpkg %t/irreader.ml -o %t/executable
+ * RUN: %t/executable
  * XFAIL: vg_leak
  *)
 
@@ -38,7 +38,7 @@ let test_irreader () =
     let m   = parse_ir context buf in
     match lookup_global "foo" m with
     | Some foo ->
-        insist ((global_initializer foo) = (const_int (i32_type context) 42))
+        insist ((global_initializer foo) = (Some (const_int (i32_type context) 42)))
     | None ->
         failwith "global"
   end;

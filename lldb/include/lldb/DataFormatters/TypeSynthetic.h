@@ -1,32 +1,27 @@
 //===-- TypeSynthetic.h -----------------------------------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef lldb_TypeSynthetic_h_
-#define lldb_TypeSynthetic_h_
+#ifndef LLDB_DATAFORMATTERS_TYPESYNTHETIC_H
+#define LLDB_DATAFORMATTERS_TYPESYNTHETIC_H
 
-// C Includes
 #include <stdint.h>
 
-// C++ Includes
 #include <functional>
 #include <initializer_list>
 #include <memory>
 #include <string>
 #include <vector>
 
-// Other libraries and framework includes
-// Project includes
 #include "lldb/lldb-enumerations.h"
 #include "lldb/lldb-public.h"
 
-#include "lldb/Core/StructuredData.h"
 #include "lldb/Core/ValueObject.h"
+#include "lldb/Utility/StructuredData.h"
 
 namespace lldb_private {
 class SyntheticChildrenFrontEnd {
@@ -52,37 +47,32 @@ public:
 
   virtual lldb::ValueObjectSP GetChildAtIndex(size_t idx) = 0;
 
-  virtual size_t GetIndexOfChildWithName(const ConstString &name) = 0;
+  virtual size_t GetIndexOfChildWithName(ConstString name) = 0;
 
   // this function is assumed to always succeed and it if fails, the front-end
-  // should know to deal
-  // with it in the correct way (most probably, by refusing to return any
-  // children)
-  // the return value of Update() should actually be interpreted as
-  // "ValueObjectSyntheticFilter cache is good/bad"
-  // if =true, ValueObjectSyntheticFilter is allowed to use the children it
-  // fetched previously and cached
-  // if =false, ValueObjectSyntheticFilter must throw away its cache, and query
-  // again for children
+  // should know to deal with it in the correct way (most probably, by refusing
+  // to return any children) the return value of Update() should actually be
+  // interpreted as "ValueObjectSyntheticFilter cache is good/bad" if =true,
+  // ValueObjectSyntheticFilter is allowed to use the children it fetched
+  // previously and cached if =false, ValueObjectSyntheticFilter must throw
+  // away its cache, and query again for children
   virtual bool Update() = 0;
 
   // if this function returns false, then CalculateNumChildren() MUST return 0
-  // since UI frontends
-  // might validly decide not to inquire for children given a false return value
-  // from this call
-  // if it returns true, then CalculateNumChildren() can return any number >= 0
-  // (0 being valid)
-  // it should if at all possible be more efficient than CalculateNumChildren()
+  // since UI frontends might validly decide not to inquire for children given
+  // a false return value from this call if it returns true, then
+  // CalculateNumChildren() can return any number >= 0 (0 being valid) it
+  // should if at all possible be more efficient than CalculateNumChildren()
   virtual bool MightHaveChildren() = 0;
 
   // if this function returns a non-null ValueObject, then the returned
-  // ValueObject will stand
-  // for this ValueObject whenever a "value" request is made to this ValueObject
+  // ValueObject will stand for this ValueObject whenever a "value" request is
+  // made to this ValueObject
   virtual lldb::ValueObjectSP GetSyntheticValue() { return nullptr; }
 
-  // if this function returns a non-empty ConstString, then clients are expected
-  // to use the return
-  // as the name of the type of this ValueObject for display purposes
+  // if this function returns a non-empty ConstString, then clients are
+  // expected to use the return as the name of the type of this ValueObject for
+  // display purposes
   virtual ConstString GetSyntheticTypeName() { return ConstString(); }
 
   typedef std::shared_ptr<SyntheticChildrenFrontEnd> SharedPointer;
@@ -106,7 +96,9 @@ protected:
 
 private:
   bool m_valid;
-  DISALLOW_COPY_AND_ASSIGN(SyntheticChildrenFrontEnd);
+  SyntheticChildrenFrontEnd(const SyntheticChildrenFrontEnd &) = delete;
+  const SyntheticChildrenFrontEnd &
+  operator=(const SyntheticChildrenFrontEnd &) = delete;
 };
 
 class SyntheticValueProviderFrontEnd : public SyntheticChildrenFrontEnd {
@@ -120,7 +112,7 @@ public:
 
   lldb::ValueObjectSP GetChildAtIndex(size_t idx) override { return nullptr; }
 
-  size_t GetIndexOfChildWithName(const ConstString &name) override {
+  size_t GetIndexOfChildWithName(ConstString name) override {
     return UINT32_MAX;
   }
 
@@ -131,7 +123,10 @@ public:
   lldb::ValueObjectSP GetSyntheticValue() override = 0;
 
 private:
-  DISALLOW_COPY_AND_ASSIGN(SyntheticValueProviderFrontEnd);
+  SyntheticValueProviderFrontEnd(const SyntheticValueProviderFrontEnd &) =
+      delete;
+  const SyntheticValueProviderFrontEnd &
+  operator=(const SyntheticValueProviderFrontEnd &) = delete;
 };
 
 class SyntheticChildren {
@@ -212,6 +207,19 @@ public:
       return *this;
     }
 
+    bool GetFrontEndWantsDereference() const {
+      return (m_flags & lldb::eTypeOptionFrontEndWantsDereference) ==
+             lldb::eTypeOptionFrontEndWantsDereference;
+    }
+
+    Flags &SetFrontEndWantsDereference(bool value = true) {
+      if (value)
+        m_flags |= lldb::eTypeOptionFrontEndWantsDereference;
+      else
+        m_flags &= ~lldb::eTypeOptionFrontEndWantsDereference;
+      return *this;
+    }
+
     uint32_t GetValue() { return m_flags; }
 
     void SetValue(uint32_t value) { m_flags = value; }
@@ -231,6 +239,8 @@ public:
   bool SkipsReferences() const { return m_flags.GetSkipReferences(); }
 
   bool NonCacheable() const { return m_flags.GetNonCacheable(); }
+  
+  bool WantsDereference() const { return m_flags.GetFrontEndWantsDereference();} 
 
   void SetCascades(bool value) { m_flags.SetCascades(value); }
 
@@ -260,7 +270,8 @@ protected:
   Flags m_flags;
 
 private:
-  DISALLOW_COPY_AND_ASSIGN(SyntheticChildren);
+  SyntheticChildren(const SyntheticChildren &) = delete;
+  const SyntheticChildren &operator=(const SyntheticChildren &) = delete;
 };
 
 class TypeFilterImpl : public SyntheticChildren {
@@ -321,14 +332,15 @@ public:
 
     bool MightHaveChildren() override { return filter->GetCount() > 0; }
 
-    size_t GetIndexOfChildWithName(const ConstString &name) override;
+    size_t GetIndexOfChildWithName(ConstString name) override;
 
     typedef std::shared_ptr<SyntheticChildrenFrontEnd> SharedPointer;
 
   private:
     TypeFilterImpl *filter;
 
-    DISALLOW_COPY_AND_ASSIGN(FrontEnd);
+    FrontEnd(const FrontEnd &) = delete;
+    const FrontEnd &operator=(const FrontEnd &) = delete;
   };
 
   SyntheticChildrenFrontEnd::AutoPointer
@@ -339,7 +351,8 @@ public:
   typedef std::shared_ptr<TypeFilterImpl> SharedPointer;
 
 private:
-  DISALLOW_COPY_AND_ASSIGN(TypeFilterImpl);
+  TypeFilterImpl(const TypeFilterImpl &) = delete;
+  const TypeFilterImpl &operator=(const TypeFilterImpl &) = delete;
 };
 
 class CXXSyntheticChildren : public SyntheticChildren {
@@ -349,7 +362,7 @@ public:
       CreateFrontEndCallback;
   CXXSyntheticChildren(const SyntheticChildren::Flags &flags,
                        const char *description, CreateFrontEndCallback callback)
-      : SyntheticChildren(flags), m_create_callback(callback),
+      : SyntheticChildren(flags), m_create_callback(std::move(callback)),
         m_description(description ? description : "") {}
 
   bool IsScripted() override { return false; }
@@ -367,10 +380,9 @@ protected:
   std::string m_description;
 
 private:
-  DISALLOW_COPY_AND_ASSIGN(CXXSyntheticChildren);
+  CXXSyntheticChildren(const CXXSyntheticChildren &) = delete;
+  const CXXSyntheticChildren &operator=(const CXXSyntheticChildren &) = delete;
 };
-
-#ifndef LLDB_DISABLE_PYTHON
 
 class ScriptedSyntheticChildren : public SyntheticChildren {
   std::string m_python_class;
@@ -419,7 +431,7 @@ public:
 
     bool MightHaveChildren() override;
 
-    size_t GetIndexOfChildWithName(const ConstString &name) override;
+    size_t GetIndexOfChildWithName(ConstString name) override;
 
     lldb::ValueObjectSP GetSyntheticValue() override;
 
@@ -432,7 +444,8 @@ public:
     StructuredData::ObjectSP m_wrapper_sp;
     ScriptInterpreter *m_interpreter;
 
-    DISALLOW_COPY_AND_ASSIGN(FrontEnd);
+    FrontEnd(const FrontEnd &) = delete;
+    const FrontEnd &operator=(const FrontEnd &) = delete;
   };
 
   SyntheticChildrenFrontEnd::AutoPointer
@@ -445,9 +458,10 @@ public:
   }
 
 private:
-  DISALLOW_COPY_AND_ASSIGN(ScriptedSyntheticChildren);
+  ScriptedSyntheticChildren(const ScriptedSyntheticChildren &) = delete;
+  const ScriptedSyntheticChildren &
+  operator=(const ScriptedSyntheticChildren &) = delete;
 };
-#endif
 } // namespace lldb_private
 
-#endif // lldb_TypeSynthetic_h_
+#endif // LLDB_DATAFORMATTERS_TYPESYNTHETIC_H

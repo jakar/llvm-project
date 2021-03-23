@@ -1,33 +1,28 @@
-//===-- NSError.cpp ---------------------------------------------*- C++ -*-===//
+//===-- NSError.cpp -------------------------------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
-// C Includes
-// C++ Includes
-// Other libraries and framework includes
 #include "clang/AST/DeclCXX.h"
 
-// Project includes
 #include "Cocoa.h"
 
+#include "Plugins/TypeSystem/Clang/TypeSystemClang.h"
 #include "lldb/Core/ValueObject.h"
 #include "lldb/Core/ValueObjectConstResult.h"
 #include "lldb/DataFormatters/FormattersHelpers.h"
-#include "lldb/Symbol/ClangASTContext.h"
-#include "lldb/Target/ObjCLanguageRuntime.h"
 #include "lldb/Target/ProcessStructReader.h"
 #include "lldb/Target/Target.h"
 #include "lldb/Utility/DataBufferHeap.h"
 #include "lldb/Utility/Endian.h"
-#include "lldb/Utility/Error.h"
+#include "lldb/Utility/Status.h"
 #include "lldb/Utility/Stream.h"
 
 #include "Plugins/Language/ObjC/NSString.h"
+#include "Plugins/LanguageRuntime/ObjC/ObjCLanguageRuntime.h"
 
 using namespace lldb;
 using namespace lldb_private;
@@ -46,7 +41,7 @@ static lldb::addr_t DerefToNSErrorPointer(ValueObject &valobj) {
       Flags pointee_flags(pointee_type.GetTypeInfo());
       if (pointee_flags.AllSet(eTypeIsPointer)) {
         if (ProcessSP process_sp = valobj.GetProcessSP()) {
-          Error error;
+          Status error;
           ptr_value = process_sp->ReadPointerFromMemory(ptr_value, error);
         }
       }
@@ -71,7 +66,7 @@ bool lldb_private::formatters::NSError_SummaryProvider(
   lldb::addr_t code_location = ptr_value + 2 * ptr_size;
   lldb::addr_t domain_location = ptr_value + 3 * ptr_size;
 
-  Error error;
+  Status error;
   uint64_t code = process_sp->ReadUnsignedIntegerFromMemory(code_location,
                                                             ptr_size, 0, error);
   if (error.Fail())
@@ -91,10 +86,10 @@ bool lldb_private::formatters::NSError_SummaryProvider(
 
   ValueObjectSP domain_str_sp = ValueObject::CreateValueObjectFromData(
       "domain_str", isw.GetAsData(process_sp->GetByteOrder()),
-      valobj.GetExecutionContextRef(), process_sp->GetTarget()
-                                           .GetScratchClangASTContext()
-                                           ->GetBasicType(lldb::eBasicTypeVoid)
-                                           .GetPointerType());
+      valobj.GetExecutionContextRef(),
+      ScratchTypeSystemClang::GetForTarget(process_sp->GetTarget())
+          ->GetBasicType(lldb::eBasicTypeVoid)
+          .GetPointerType());
 
   if (!domain_str_sp)
     return false;
@@ -152,7 +147,7 @@ public:
     size_t ptr_size = process_sp->GetAddressByteSize();
 
     userinfo_location += 4 * ptr_size;
-    Error error;
+    Status error;
     lldb::addr_t userinfo =
         process_sp->ReadPointerFromMemory(userinfo_location, error);
     if (userinfo == LLDB_INVALID_ADDRESS || error.Fail())
@@ -161,14 +156,14 @@ public:
     m_child_sp = CreateValueObjectFromData(
         "_userInfo", isw.GetAsData(process_sp->GetByteOrder()),
         m_backend.GetExecutionContextRef(),
-        process_sp->GetTarget().GetScratchClangASTContext()->GetBasicType(
-            lldb::eBasicTypeObjCID));
+        ScratchTypeSystemClang::GetForTarget(process_sp->GetTarget())
+            ->GetBasicType(lldb::eBasicTypeObjCID));
     return false;
   }
 
   bool MightHaveChildren() override { return true; }
 
-  size_t GetIndexOfChildWithName(const ConstString &name) override {
+  size_t GetIndexOfChildWithName(ConstString name) override {
     static ConstString g___userInfo("_userInfo");
     if (name == g___userInfo)
       return 0;
@@ -177,12 +172,11 @@ public:
 
 private:
   // the child here can be "real" (i.e. an actual child of the root) or
-  // synthetized from raw memory
-  // if the former, I need to store a plain pointer to it - or else a loop of
-  // references will cause this entire hierarchy of values to leak
-  // if the latter, then I need to store a SharedPointer to it - so that it only
-  // goes away when everyone else in the cluster goes away
-  // oh joy!
+  // synthetized from raw memory if the former, I need to store a plain pointer
+  // to it - or else a loop of references will cause this entire hierarchy of
+  // values to leak if the latter, then I need to store a SharedPointer to it -
+  // so that it only goes away when everyone else in the cluster goes away oh
+  // joy!
   ValueObject *m_child_ptr;
   ValueObjectSP m_child_sp;
 };
@@ -193,9 +187,7 @@ lldb_private::formatters::NSErrorSyntheticFrontEndCreator(
   lldb::ProcessSP process_sp(valobj_sp->GetProcessSP());
   if (!process_sp)
     return nullptr;
-  ObjCLanguageRuntime *runtime =
-      (ObjCLanguageRuntime *)process_sp->GetLanguageRuntime(
-          lldb::eLanguageTypeObjC);
+  ObjCLanguageRuntime *runtime = ObjCLanguageRuntime::Get(*process_sp);
   if (!runtime)
     return nullptr;
 

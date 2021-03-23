@@ -1,5 +1,8 @@
 ; RUN: llc < %s -enable-shrink-wrap=true | FileCheck %s
 
+; TODO: add preallocated versions of tests
+; we don't yet support conditionally called preallocated calls after the setup
+
 ; chkstk cannot come before the usual prologue, since it adjusts ESP.
 ; If chkstk is used in the prologue, we also have to be careful about preserving
 ; EAX if it is used.
@@ -61,7 +64,7 @@ false:
 
 ; CHECK-LABEL: @use_eax_before_prologue@8: # @use_eax_before_prologue
 ; CHECK: movl %ecx, %eax
-; CHECK: cmpl %edx, %eax
+; CHECK: cmpl %edx, %ecx
 ; CHECK: jge LBB1_2
 ; CHECK: pushl %eax
 ; CHECK: movl $4092, %eax

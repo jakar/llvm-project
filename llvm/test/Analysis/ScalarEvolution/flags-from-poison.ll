@@ -1,4 +1,5 @@
-; RUN: opt < %s -S -analyze -scalar-evolution | FileCheck %s
+; RUN: opt < %s -S -analyze -enable-new-pm=0 -scalar-evolution | FileCheck %s
+; RUN: opt < %s -S -disable-output "-passes=print<scalar-evolution>" 2>&1 | FileCheck %s
 
 ; Positive and negative tests for inferring flags like nsw from
 ; reasoning about how a poison value from overflow would trigger
@@ -205,7 +206,7 @@ exit:
   ret void
 }
 
-; Demonstrate why we need a Visited set in llvm::programUndefinedIfFullPoison.
+; Demonstrate why we need a Visited set in llvm::programUndefinedIfPoison.
 define void @test-add-not-header5(float* %input, i32 %offset) {
 ; CHECK-LABEL: @test-add-not-header5
 entry:
@@ -525,6 +526,106 @@ exit:
   ret void
 }
 
+; Example where a shl should get the nuw flag
+define void @test-shl-nuw-edgecase(float* %input, i32 %start, i32 %numIterations) {
+; CHECK-LABEL: @test-shl-nuw-edgecase
+entry:
+  br label %loop
+loop:
+  %i = phi i32 [ %nexti, %loop ], [ %start, %entry ]
+
+; CHECK: %index32 =
+; CHECK: --> {(-2147483648 * %start),+,-2147483648}<%loop>
+  %index32 = shl nuw i32 %i, 31
+
+; CHECK: %index64 =
+; CHECK: --> (sext i32 {(-2147483648 * %start),+,-2147483648}<%loop>
+  %index64 = sext i32 %index32 to i64
+
+  %ptr = getelementptr inbounds float, float* %input, i64 %index64
+  %nexti = add nsw i32 %i, 1
+  %f = load float, float* %ptr, align 4
+  %exitcond = icmp eq i32 %nexti, %numIterations
+  br i1 %exitcond, label %exit, label %loop
+exit:
+  ret void
+}
+
+; Example where a shl should get the nuw flag
+define void @test-shl-nuw-nsw(float* %input, i32 %start, i32 %numIterations) {
+; CHECK-LABEL: @test-shl-nuw-nsw
+entry:
+  br label %loop
+loop:
+  %i = phi i32 [ %nexti, %loop ], [ %start, %entry ]
+
+; CHECK: %index32 =
+; CHECK: --> {(-2147483648 * %start),+,-2147483648}<nsw><%loop>
+  %index32 = shl nuw nsw i32 %i, 31
+
+; CHECK: %index64 =
+; CHECK: --> {(sext i32 (-2147483648 * %start) to i64),+,-2147483648}<nsw><%loop>
+  %index64 = sext i32 %index32 to i64
+
+  %ptr = getelementptr inbounds float, float* %input, i64 %index64
+  %nexti = add nsw i32 %i, 1
+  %f = load float, float* %ptr, align 4
+  %exitcond = icmp eq i32 %nexti, %numIterations
+  br i1 %exitcond, label %exit, label %loop
+exit:
+  ret void
+}
+
+; Example where a shl should not get the nsw flag
+define void @test-shl-no-nsw(float* %input, i32 %start, i32 %numIterations) {
+; CHECK-LABEL: @test-shl-no-nsw
+entry:
+  br label %loop
+loop:
+  %i = phi i32 [ %nexti, %loop ], [ %start, %entry ]
+
+; CHECK: %index32 =
+; CHECK: --> {(-2147483648 * %start),+,-2147483648}<%loop>
+  %index32 = shl nsw i32 %i, 31
+
+; CHECK: %index64 =
+; CHECK: --> (sext i32 {(-2147483648 * %start),+,-2147483648}<%loop>
+  %index64 = sext i32 %index32 to i64
+
+  %ptr = getelementptr inbounds float, float* %input, i64 %index64
+  %nexti = add nsw i32 %i, 1
+  %f = load float, float* %ptr, align 4
+  %exitcond = icmp eq i32 %nexti, %numIterations
+  br i1 %exitcond, label %exit, label %loop
+exit:
+  ret void
+}
+
+; Example where a shl should get the nsw flag.
+define void @test-shl-nsw-edgecase(float* %input, i32 %start, i32 %numIterations) {
+; CHECK-LABEL: @test-shl-nsw-edgecase
+entry:
+  br label %loop
+loop:
+  %i = phi i32 [ %nexti, %loop ], [ %start, %entry ]
+
+; CHECK: %index32 =
+; CHECK: --> {(1073741824 * %start),+,1073741824}<nsw><%loop>
+  %index32 = shl nsw i32 %i, 30
+
+; CHECK: %index64 =
+; CHECK: --> {(sext i32 (1073741824 * %start) to i64),+,1073741824}<nsw><%loop>
+  %index64 = sext i32 %index32 to i64
+
+  %ptr = getelementptr inbounds float, float* %input, i64 %index64
+  %nexti = add nsw i32 %i, 1
+  %f = load float, float* %ptr, align 4
+  %exitcond = icmp eq i32 %nexti, %numIterations
+  br i1 %exitcond, label %exit, label %loop
+exit:
+  ret void
+}
+
 ; Example where a shl should get the nuw flag.
 define void @test-shl-nuw(float* %input, i32 %numIterations) {
 ; CHECK-LABEL: @test-shl-nuw
@@ -609,8 +710,42 @@ loop:
   %index32 = sub nsw i32 %i, %sub
 
 ; CHECK: %index64 =
-; CHECK: --> {(sext i32 (-1 * %sub) to i64),+,1}<nsw>
+; CHECK: --> {(-1 * (sext i32 %sub to i64))<nsw>,+,1}<nsw
   %index64 = sext i32 %index32 to i64
+
+  %ptr = getelementptr inbounds float, float* %input, i64 %index64
+  %nexti = add nsw i32 %i, 1
+  %f = load float, float* %ptr, align 4
+  %exitcond = icmp eq i32 %nexti, %numIterations
+  br i1 %exitcond, label %exit, label %loop
+exit:
+  ret void
+}
+
+; Example checking that a sext is pushed onto a sub's operands if the sub is an
+; overflow intrinsic.
+define void @test-sext-sub(float* %input, i32 %sub, i32 %numIterations) {
+; CHECK-LABEL: @test-sext-sub
+entry:
+  br label %loop
+loop:
+  %i = phi i32 [ %nexti, %cont ], [ 0, %entry ]
+
+; CHECK: %val = extractvalue { i32, i1 } %ssub, 0
+; CHECK: --> {(-1 * %sub),+,1}<nw>
+  %ssub = tail call { i32, i1 } @llvm.ssub.with.overflow.i32(i32 %i, i32 %sub)
+  %val = extractvalue { i32, i1 } %ssub, 0
+  %ovfl = extractvalue { i32, i1 } %ssub, 1
+  br i1 %ovfl, label %trap, label %cont
+
+trap:
+  tail call void @llvm.trap()
+  unreachable
+
+cont:
+; CHECK: %index64 =
+; CHECK: --> {(-1 * (sext i32 %sub to i64))<nsw>,+,1}<nsw
+  %index64 = sext i32 %val to i64
 
   %ptr = getelementptr inbounds float, float* %input, i64 %index64
   %nexti = add nsw i32 %i, 1

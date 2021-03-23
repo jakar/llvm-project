@@ -18,6 +18,7 @@
 ;	     C[i][j] += alpha * A[i][k] * B[k][j];
 ;        }
 ;
+; CHECK-LABEL: Printing analysis 'Polly - Generate an AST from the SCoP (isl)' for region: 'bb8 => bb32' in function 'kernel_gemm':
 ; CHECK:    {
 ; CHECK-NEXT:      // 1st level tiling - Tiles
 ; CHECK-NEXT:      for (int c0 = 0; c0 <= 32; c0 += 1)
@@ -42,6 +43,7 @@
 ; CHECK-NEXT:          for (int c3 = 0; c3 <= 131; c3 += 1)
 ; CHECK-NEXT:            for (int c4 = 0; c4 <= 23; c4 += 1)
 ; CHECK-NEXT:              for (int c5 = 0; c5 <= min(255, -256 * c1 + 1022); c5 += 1) {
+; CHECK-NEXT:                // Loop Vectorizer Disabled
 ; CHECK-NEXT:                // Register tiling - Points
 ; CHECK-NEXT:                {
 ; CHECK-NEXT:                  Stmt_Copy_0(96 * c2 + 4 * c4, 8 * c3, 256 * c1 + c5);

@@ -22,7 +22,7 @@ int conv1d = conv1.operator int(); // expected-error {{no member named 'operator
 
 struct Conv2 {
   operator auto() { return 0; }  // expected-note {{previous}}
-  operator auto() { return 0.; } // expected-error {{cannot be redeclared}} expected-error {{cannot initialize return object of type 'auto' with an rvalue of type 'double'}}
+  operator auto() { return 0.; } // expected-error {{cannot be redeclared}}
 };
 
 struct Conv3 {
@@ -53,6 +53,25 @@ auto b(bool k) {
   if (k)
     return "hello";
   return "goodbye";
+}
+
+// Allow 'operator auto' to call only the explicit operator auto.
+struct BothOps {
+  template <typename T> operator T();
+  template <typename T> operator T *();
+  operator auto() { return 0; }
+  operator auto *() { return this; }
+};
+struct JustTemplateOp {
+  template <typename T> operator T();
+  template <typename T> operator T *();
+};
+
+auto c() {
+  BothOps().operator auto(); // ok
+  BothOps().operator auto *(); // ok
+  JustTemplateOp().operator auto(); // expected-error {{no member named 'operator auto' in 'JustTemplateOp'}}
+  JustTemplateOp().operator auto *(); // expected-error {{no member named 'operator auto *' in 'JustTemplateOp'}}
 }
 
 auto *ptr_1() {
@@ -402,6 +421,7 @@ namespace DecltypeAutoShouldNotBeADecltypeSpecifier {
   namespace Dtor {
     struct A {};
     void f(A a) { a.~decltype(auto)(); } // expected-error {{'decltype(auto)' not allowed here}}
+    void g(int i) { i.~decltype(auto)(); } // expected-error {{'decltype(auto)' not allowed here}}
   }
 
   namespace BaseClass {
@@ -532,4 +552,79 @@ namespace PR24989 {
 
 void forinit_decltypeauto() {
   for (decltype(auto) forinit_decltypeauto_inner();;) {} // expected-warning {{interpreted as a function}} expected-note {{replace}}
+}
+
+namespace PR33222 {
+  auto f1();
+  auto f2();
+
+  template<typename T> decltype(auto) g0(T x) { return x.n; }
+  template<typename T> decltype(auto) g1(T);
+  template<typename T> decltype(auto) g2(T);
+
+  struct X {
+    static auto f1();
+    static auto f2();
+
+    template<typename T> static decltype(auto) g0(T x) { return x.n; }
+    template<typename T> static decltype(auto) g1(T);
+    template<typename T> static decltype(auto) g2(T);
+  };
+
+  template<typename U> class A {
+    friend auto f1();
+    friend auto f2();
+
+    friend decltype(auto) g0<>(A);
+    template<typename T> friend decltype(auto) g1(T);
+    template<typename T> friend decltype(auto) g2(T);
+
+    friend auto X::f1();
+    friend auto X::f2();
+
+    // FIXME (PR38882): 'A' names the class template not the injected-class-name here!
+    friend decltype(auto) X::g0<>(A<U>);
+    // FIXME (PR38882): ::T hides the template parameter if both are named T here!
+    template<typename T_> friend decltype(auto) X::g1(T_);
+    template<typename T_> friend decltype(auto) X::g2(T_);
+
+    int n;
+  };
+
+  auto f1() { return A<int>().n; }
+  template<typename T> decltype(auto) g1(T x) { return A<int>().n; }
+
+  auto X::f1() { return A<int>().n; }
+  template<typename T> decltype(auto) X::g1(T x) { return A<int>().n; }
+
+  A<int> ai;
+  int k1 = g0(ai);
+  int k2 = X::g0(ai);
+
+  int k3 = g1(ai);
+  int k4 = X::g1(ai);
+
+  auto f2() { return A<int>().n; }
+  template<typename T> decltype(auto) g2(T x) { return A<int>().n; }
+
+  auto X::f2() { return A<int>().n; }
+  template<typename T> decltype(auto) X::g2(T x) { return A<int>().n; }
+
+  int k5 = g2(ai);
+  int k6 = X::g2(ai);
+
+  template<typename> struct B {
+    auto *q() { return (float*)0; } // expected-note 2{{previous}}
+  };
+  template<> auto *B<char[1]>::q() { return (int*)0; }
+  template<> auto B<char[2]>::q() { return (int*)0; } // expected-error {{return type}}
+  template<> int B<char[3]>::q() { return 0; } // expected-error {{return type}}
+}
+
+namespace PR46637 {
+  using A = auto () -> auto; // expected-error {{'auto' not allowed in type alias}}
+  using B = auto (*)() -> auto; // expected-error {{'auto' not allowed in type alias}}
+  template<auto (*)() -> auto> struct X {}; // expected-error {{'auto' not allowed in template parameter until C++17}}
+  template<typename T> struct Y { T x; };
+  Y<auto() -> auto> y; // expected-error {{'auto' not allowed in template argument}}
 }

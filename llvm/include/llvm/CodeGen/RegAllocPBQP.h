@@ -1,9 +1,8 @@
 //===- RegAllocPBQP.h -------------------------------------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -23,6 +22,8 @@
 #include "llvm/CodeGen/PBQP/Math.h"
 #include "llvm/CodeGen/PBQP/ReductionRules.h"
 #include "llvm/CodeGen/PBQP/Solution.h"
+#include "llvm/CodeGen/Register.h"
+#include "llvm/MC/MCRegister.h"
 #include "llvm/Support/ErrorHandling.h"
 #include <algorithm>
 #include <cassert>
@@ -43,10 +44,10 @@ class raw_ostream;
 namespace PBQP {
 namespace RegAlloc {
 
-/// @brief Spill option index.
+/// Spill option index.
 inline unsigned getSpillOptionIdx() { return 0; }
 
-/// \brief Metadata to speed allocatability test.
+/// Metadata to speed allocatability test.
 ///
 /// Keeps track of the number of infinities in each row and column.
 class MatrixMetadata {
@@ -89,7 +90,7 @@ private:
   std::unique_ptr<bool[]> UnsafeCols;
 };
 
-/// \brief Holds a vector of the allowed physical regs for a vreg.
+/// Holds a vector of the allowed physical regs for a vreg.
 class AllowedRegVector {
   friend hash_code hash_value(const AllowedRegVector &);
 
@@ -97,13 +98,13 @@ public:
   AllowedRegVector() = default;
   AllowedRegVector(AllowedRegVector &&) = default;
 
-  AllowedRegVector(const std::vector<unsigned> &OptVec)
-    : NumOpts(OptVec.size()), Opts(new unsigned[NumOpts]) {
+  AllowedRegVector(const std::vector<MCRegister> &OptVec)
+      : NumOpts(OptVec.size()), Opts(new MCRegister[NumOpts]) {
     std::copy(OptVec.begin(), OptVec.end(), Opts.get());
   }
 
   unsigned size() const { return NumOpts; }
-  unsigned operator[](size_t I) const { return Opts[I]; }
+  MCRegister operator[](size_t I) const { return Opts[I]; }
 
   bool operator==(const AllowedRegVector &Other) const {
     if (NumOpts != Other.NumOpts)
@@ -117,23 +118,23 @@ public:
 
 private:
   unsigned NumOpts = 0;
-  std::unique_ptr<unsigned[]> Opts;
+  std::unique_ptr<MCRegister[]> Opts;
 };
 
 inline hash_code hash_value(const AllowedRegVector &OptRegs) {
-  unsigned *OStart = OptRegs.Opts.get();
-  unsigned *OEnd = OptRegs.Opts.get() + OptRegs.NumOpts;
+  MCRegister *OStart = OptRegs.Opts.get();
+  MCRegister *OEnd = OptRegs.Opts.get() + OptRegs.NumOpts;
   return hash_combine(OptRegs.NumOpts,
                       hash_combine_range(OStart, OEnd));
 }
 
-/// \brief Holds graph-level metadata relevant to PBQP RA problems.
+/// Holds graph-level metadata relevant to PBQP RA problems.
 class GraphMetadata {
 private:
-  typedef ValuePool<AllowedRegVector> AllowedRegVecPool;
+  using AllowedRegVecPool = ValuePool<AllowedRegVector>;
 
 public:
-  typedef AllowedRegVecPool::PoolRef AllowedRegVecRef;
+  using AllowedRegVecRef = AllowedRegVecPool::PoolRef;
 
   GraphMetadata(MachineFunction &MF,
                 LiveIntervals &LIS,
@@ -144,11 +145,11 @@ public:
   LiveIntervals &LIS;
   MachineBlockFrequencyInfo &MBFI;
 
-  void setNodeIdForVReg(unsigned VReg, GraphBase::NodeId NId) {
-    VRegToNodeId[VReg] = NId;
+  void setNodeIdForVReg(Register VReg, GraphBase::NodeId NId) {
+    VRegToNodeId[VReg.id()] = NId;
   }
 
-  GraphBase::NodeId getNodeIdForVReg(unsigned VReg) const {
+  GraphBase::NodeId getNodeIdForVReg(Register VReg) const {
     auto VRegItr = VRegToNodeId.find(VReg);
     if (VRegItr == VRegToNodeId.end())
       return GraphBase::invalidNodeId();
@@ -160,24 +161,24 @@ public:
   }
 
 private:
-  DenseMap<unsigned, GraphBase::NodeId> VRegToNodeId;
+  DenseMap<Register, GraphBase::NodeId> VRegToNodeId;
   AllowedRegVecPool AllowedRegVecs;
 };
 
-/// \brief Holds solver state and other metadata relevant to each PBQP RA node.
+/// Holds solver state and other metadata relevant to each PBQP RA node.
 class NodeMetadata {
 public:
-  typedef RegAlloc::AllowedRegVector AllowedRegVector;
+  using AllowedRegVector = RegAlloc::AllowedRegVector;
 
   // The node's reduction state. The order in this enum is important,
   // as it is assumed nodes can only progress up (i.e. towards being
   // optimally reducible) when reducing the graph.
-  typedef enum {
+  using ReductionState = enum {
     Unprocessed,
     NotProvablyAllocatable,
     ConservativelyAllocatable,
     OptimallyReducible
-  } ReductionState;
+  };
 
   NodeMetadata() = default;
 
@@ -198,8 +199,8 @@ public:
   NodeMetadata(NodeMetadata &&) = default;
   NodeMetadata& operator=(NodeMetadata &&) = default;
 
-  void setVReg(unsigned VReg) { this->VReg = VReg; }
-  unsigned getVReg() const { return VReg; }
+  void setVReg(Register VReg) { this->VReg = VReg; }
+  Register getVReg() const { return VReg; }
 
   void setAllowedRegs(GraphMetadata::AllowedRegVecRef AllowedRegs) {
     this->AllowedRegs = std::move(AllowedRegs);
@@ -257,7 +258,7 @@ private:
   unsigned NumOpts = 0;
   unsigned DeniedOpts = 0;
   std::unique_ptr<unsigned[]> OptUnsafeEdges;
-  unsigned VReg = 0;
+  Register VReg;
   GraphMetadata::AllowedRegVecRef AllowedRegs;
 
 #ifndef NDEBUG
@@ -267,23 +268,23 @@ private:
 
 class RegAllocSolverImpl {
 private:
-  typedef MDMatrix<MatrixMetadata> RAMatrix;
+  using RAMatrix = MDMatrix<MatrixMetadata>;
 
 public:
-  typedef PBQP::Vector RawVector;
-  typedef PBQP::Matrix RawMatrix;
-  typedef PBQP::Vector Vector;
-  typedef RAMatrix     Matrix;
-  typedef PBQP::PoolCostAllocator<Vector, Matrix> CostAllocator;
+  using RawVector = PBQP::Vector;
+  using RawMatrix = PBQP::Matrix;
+  using Vector = PBQP::Vector;
+  using Matrix = RAMatrix;
+  using CostAllocator = PBQP::PoolCostAllocator<Vector, Matrix>;
 
-  typedef GraphBase::NodeId NodeId;
-  typedef GraphBase::EdgeId EdgeId;
+  using NodeId = GraphBase::NodeId;
+  using EdgeId = GraphBase::EdgeId;
 
-  typedef RegAlloc::NodeMetadata NodeMetadata;
-  struct EdgeMetadata { };
-  typedef RegAlloc::GraphMetadata GraphMetadata;
+  using NodeMetadata = RegAlloc::NodeMetadata;
+  struct EdgeMetadata {};
+  using GraphMetadata = RegAlloc::GraphMetadata;
 
-  typedef PBQP::Graph<RegAllocSolverImpl> Graph;
+  using Graph = PBQP::Graph<RegAllocSolverImpl>;
 
   RegAllocSolverImpl(Graph &G) : G(G) {}
 
@@ -426,7 +427,7 @@ private:
   std::vector<GraphBase::NodeId> reduce() {
     assert(!G.empty() && "Cannot reduce empty graph.");
 
-    typedef GraphBase::NodeId NodeId;
+    using NodeId = GraphBase::NodeId;
     std::vector<NodeId> NodeStack;
 
     // Consume worklists.
@@ -459,7 +460,6 @@ private:
         ConservativelyAllocatableNodes.erase(NItr);
         NodeStack.push_back(NId);
         G.disconnectAllNeighborsFromNode(NId);
-
       } else if (!NotProvablyAllocatableNodes.empty()) {
         NodeSet::iterator NItr =
           std::min_element(NotProvablyAllocatableNodes.begin(),
@@ -493,7 +493,7 @@ private:
   };
 
   Graph& G;
-  typedef std::set<NodeId> NodeSet;
+  using NodeSet = std::set<NodeId>;
   NodeSet OptimallyReducibleNodes;
   NodeSet ConservativelyAllocatableNodes;
   NodeSet NotProvablyAllocatableNodes;
@@ -501,19 +501,19 @@ private:
 
 class PBQPRAGraph : public PBQP::Graph<RegAllocSolverImpl> {
 private:
-  typedef PBQP::Graph<RegAllocSolverImpl> BaseT;
+  using BaseT = PBQP::Graph<RegAllocSolverImpl>;
 
 public:
   PBQPRAGraph(GraphMetadata Metadata) : BaseT(std::move(Metadata)) {}
 
-  /// @brief Dump this graph to dbgs().
+  /// Dump this graph to dbgs().
   void dump() const;
 
-  /// @brief Dump this graph to an output stream.
+  /// Dump this graph to an output stream.
   /// @param OS Output stream to print on.
   void dump(raw_ostream &OS) const;
 
-  /// @brief Print a representation of this graph in DOT format.
+  /// Print a representation of this graph in DOT format.
   /// @param OS Output stream to print on.
   void printDot(raw_ostream &OS) const;
 };
@@ -528,7 +528,7 @@ inline Solution solve(PBQPRAGraph& G) {
 } // end namespace RegAlloc
 } // end namespace PBQP
 
-/// @brief Create a PBQP register allocator instance.
+/// Create a PBQP register allocator instance.
 FunctionPass *
 createPBQPRegisterAllocator(char *customPassID = nullptr);
 

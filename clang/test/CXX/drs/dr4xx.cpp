@@ -1,7 +1,7 @@
 // RUN: env ASAN_OPTIONS=detect_stack_use_after_return=0 %clang_cc1 -std=c++98 %s -verify -fexceptions -fcxx-exceptions -pedantic-errors
 // RUN: env ASAN_OPTIONS=detect_stack_use_after_return=0 %clang_cc1 -std=c++11 %s -verify -fexceptions -fcxx-exceptions -pedantic-errors
 // RUN: env ASAN_OPTIONS=detect_stack_use_after_return=0 %clang_cc1 -std=c++14 %s -verify -fexceptions -fcxx-exceptions -pedantic-errors
-// RUN: env ASAN_OPTIONS=detect_stack_use_after_return=0 %clang_cc1 -std=c++1z %s -verify -fexceptions -fcxx-exceptions -pedantic-errors
+// RUN: env ASAN_OPTIONS=detect_stack_use_after_return=0 %clang_cc1 -std=c++17 %s -verify -fexceptions -fcxx-exceptions -pedantic-errors
 
 // FIXME: __SIZE_TYPE__ expands to 'long long' on some targets.
 __extension__ typedef __SIZE_TYPE__ size_t;
@@ -22,6 +22,9 @@ namespace dr401 { // dr401: yes
   class B {
   protected:
     typedef int type; // expected-note {{protected}}
+#if __cplusplus == 199711L
+    // expected-note@-2 {{protected}}
+#endif
   };
 
   class C {
@@ -79,6 +82,9 @@ namespace dr406 { // dr406: yes
   typedef struct {
     static int n; // expected-error {{static data member 'n' not allowed in anonymous struct}}
   } A;
+  typedef union {
+    static int n; // expected-error {{static data member 'n' not allowed in anonymous union}}
+  } B;
 }
 
 namespace dr407 { // dr407: 3.8
@@ -291,13 +297,11 @@ namespace dr420 { // dr420: yes
   void test2(T p) {
     p->template Y<int>::~Y<int>();
     p->~Y<int>();
-    // FIXME: This is ill-formed, but this diagnostic is terrible. We should
-    // reject this in the parser.
-    p->template ~Y<int>(); // expected-error 2{{no member named '~typename Y<int>'}}
+    p->template ~Y<int>(); // expected-error {{'template' keyword not permitted in destructor name}}
   }
   template<typename T> struct Y {};
-  template void test2(Y<int>*); // expected-note {{instantiation}}
-  template void test2(ptr<Y<int> >); // expected-note {{instantiation}}
+  template void test2(Y<int>*);
+  template void test2(ptr<Y<int> >);
 
   void test3(int *p, ptr<int> q) {
     typedef int Int;
@@ -315,8 +319,8 @@ namespace dr420 { // dr420: yes
     q->~id<int>();
     p->id<int>::~id<int>();
     q->id<int>::~id<int>();
-    p->template id<int>::~id<int>(); // expected-error {{expected unqualified-id}}
-    q->template id<int>::~id<int>(); // expected-error {{expected unqualified-id}}
+    p->template id<int>::~id<int>(); // OK since dr2292
+    q->template id<int>::~id<int>(); // OK since dr2292
     p->A::template id<int>::~id<int>();
     q->A::template id<int>::~id<int>();
   }
@@ -483,14 +487,21 @@ namespace dr433 { // dr433: yes
   S<int> s;
 }
 
-namespace dr434 { // dr434: yes
+namespace dr434 { // dr434: sup 2352
   void f() {
     const int ci = 0;
     int *pi = 0;
-    const int *&rpci = pi; // expected-error {{cannot bind}}
+    const int *&rpci = pi; // expected-error {{incompatible qualifiers}}
+    const int * const &rcpci = pi; // OK
     rpci = &ci;
     *pi = 1;
   }
+
+#if __cplusplus >= 201103L
+  int *pi = 0;
+  const int * const &rcpci = pi;
+  static_assert(&rcpci == &pi, "");
+#endif
 }
 
 // dr435: na
@@ -507,16 +518,16 @@ namespace dr437 { // dr437: sup 1308
   struct S {
     void f() throw(S);
 #if __cplusplus > 201402L
-    // expected-error@-2 {{ISO C++1z does not allow}} expected-note@-2 {{use 'noexcept}}
+    // expected-error@-2 {{ISO C++17 does not allow}} expected-note@-2 {{use 'noexcept}}
 #endif
     void g() throw(T<S>);
 #if __cplusplus > 201402L
-    // expected-error@-2 {{ISO C++1z does not allow}} expected-note@-2 {{use 'noexcept}}
+    // expected-error@-2 {{ISO C++17 does not allow}} expected-note@-2 {{use 'noexcept}}
 #endif
     struct U;
     void h() throw(U);
 #if __cplusplus > 201402L
-    // expected-error@-2 {{ISO C++1z does not allow}} expected-note@-2 {{use 'noexcept}}
+    // expected-error@-2 {{ISO C++17 does not allow}} expected-note@-2 {{use 'noexcept}}
 #endif
     struct U {};
   };
@@ -530,10 +541,10 @@ namespace dr437 { // dr437: sup 1308
 
 namespace dr444 { // dr444: yes
   struct D;
-  struct B { // expected-note {{candidate is the implicit copy}} expected-note 0-1 {{implicit move}}
+  struct B {                    // expected-note {{candidate function (the implicit copy}} expected-note 0-1 {{implicit move}}
     D &operator=(D &) = delete; // expected-error 0-1{{extension}} expected-note {{deleted}}
   };
-  struct D : B { // expected-note {{candidate is the implicit}} expected-note 0-1 {{implicit move}}
+  struct D : B { // expected-note {{candidate function (the implicit copy}} expected-note 0-1 {{implicit move}}
     using B::operator=;
   } extern d;
   void f() {
@@ -593,10 +604,10 @@ namespace dr447 { // dr447: yes
     U<__builtin_offsetof(A, n)>::type a;
     U<__builtin_offsetof(T, n)>::type b; // expected-error +{{}} expected-warning 0+{{}}
     // as an extension, we allow the member-designator to include array indices
-    g(__builtin_offsetof(A, a[0])).h<int>(); // expected-error {{extension}}
-    g(__builtin_offsetof(A, a[N])).h<int>(); // expected-error {{extension}}
-    U<__builtin_offsetof(A, a[0])>::type c; // expected-error {{extension}}
-    U<__builtin_offsetof(A, a[N])>::type d; // expected-error {{extension}} expected-error +{{}} expected-warning 0+{{}}
+    g(__builtin_offsetof(A, a[0])).h<int>();
+    g(__builtin_offsetof(A, a[N])).h<int>();
+    U<__builtin_offsetof(A, a[0])>::type c;
+    U<__builtin_offsetof(A, a[N])>::type d; // expected-error +{{}} expected-warning 0+{{}}
   }
 }
 
@@ -633,8 +644,8 @@ namespace dr450 { // dr450: yes
 
 namespace dr451 { // dr451: yes
   const int a = 1 / 0; // expected-warning {{undefined}}
-  const int b = 1 / 0; // expected-warning {{undefined}}
-  int arr[b]; // expected-error +{{variable length arr}}
+  const int b = 1 / 0; // expected-warning {{undefined}} expected-note {{here}} expected-note 0-1{{division by zero}}
+  int arr[b]; // expected-error +{{variable length arr}} expected-note {{initializer of 'b' is not a constant}}
 }
 
 namespace dr452 { // dr452: yes
@@ -671,7 +682,7 @@ namespace dr457 { // dr457: yes
   const int a = 1;
   const volatile int b = 1;
   int ax[a];
-  int bx[b]; // expected-error +{{variable length array}}
+  int bx[b]; // expected-error +{{variable length array}} expected-note {{read of volatile}}
 
   enum E {
     ea = a,
@@ -679,7 +690,7 @@ namespace dr457 { // dr457: yes
   };
 }
 
-namespace dr458 { // dr458: no
+namespace dr458 { // dr458: 11
   struct A {
     int T;
     int f();
@@ -695,9 +706,9 @@ namespace dr458 { // dr458: no
   int A::f() {
     return T;
   }
-  template<typename T>
+  template<typename T> // expected-note {{declared here}}
   int A::g() {
-    return T; // FIXME: this is invalid, it finds the template parameter
+    return T; // expected-error {{'T' does not refer to a value}}
   }
 
   template<typename T>
@@ -708,9 +719,9 @@ namespace dr458 { // dr458: no
   int B<T>::g() {
     return T;
   }
-  template<typename U> template<typename T>
+  template<typename U> template<typename T> // expected-note {{declared here}}
   int B<U>::h() {
-    return T; // FIXME: this is invalid, it finds the template parameter
+    return T; // expected-error {{'T' does not refer to a value}}
   }
 }
 
@@ -793,24 +804,9 @@ namespace dr468 { // dr468: yes c++11
 }
 
 namespace dr469 { // dr469: no
-  // FIXME: The core issue here didn't really answer the question. We don't
-  // deduce 'const T' from a function or reference type in a class template...
-  template<typename T> struct X; // expected-note 2{{here}}
+  template<typename T> struct X; // expected-note {{here}}
   template<typename T> struct X<const T> {};
   X<int&> x; // expected-error {{undefined}}
-  X<int()> y; // expected-error {{undefined}}
-
-  // ... but we do in a function template. GCC and EDG fail deduction of 'f'
-  // and the second 'h'.
-  template<typename T> void f(const T *);
-  template<typename T> void g(T *, const T * = 0);
-  template<typename T> void h(T *) { T::error; }
-  template<typename T> void h(const T *);
-  void i() {
-    f(&i);
-    g(&i);
-    h(&i);
-  }
 }
 
 namespace dr470 { // dr470: yes
@@ -1092,8 +1088,8 @@ namespace dr486 { // dr486: yes
 
 namespace dr487 { // dr487: yes
   enum E { e };
-  int operator+(int, E);
-  int i[4 + e]; // expected-error 2{{variable length array}}
+  int operator+(int, E); // expected-note 0-1{{here}}
+  int i[4 + e]; // expected-error 2{{variable length array}} expected-note 0-1{{non-constexpr}}
 }
 
 namespace dr488 { // dr488: yes c++11
@@ -1202,7 +1198,7 @@ namespace dr495 { // dr495: 3.5
   long n2 = s2;
 }
 
-namespace dr496 { // dr496: sup dr2094
+namespace dr496 { // dr496: sup 2094
   struct A { int n; };
   struct B { volatile int n; };
   int check1[ __is_trivially_copyable(const int) ? 1 : -1];

@@ -7,16 +7,19 @@ add_clang_library(clangFormat
   Format.cpp
   FormatToken.cpp
   FormatTokenLexer.cpp
+  MacroExpander.cpp
   NamespaceEndCommentsFixer.cpp
   SortJavaScriptImports.cpp
   TokenAnalyzer.cpp
   TokenAnnotator.cpp
   UnwrappedLineFormatter.cpp
   UnwrappedLineParser.cpp
+  UsingDeclarationsSorter.cpp
   WhitespaceManager.cpp
 
   LINK_LIBS
   clangBasic
   clangLex
   clangToolingCore
+  clangToolingInclusions
   )

@@ -1,9 +1,8 @@
 //===- lib/ReaderWriter/YAML/ReaderWriterYAML.cpp -------------------------===//
 //
-//                             The LLVM Linker
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -26,6 +25,7 @@
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/Twine.h"
+#include "llvm/BinaryFormat/Magic.h"
 #include "llvm/Support/Allocator.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/Error.h"
@@ -43,6 +43,7 @@
 #include <system_error>
 #include <vector>
 
+using llvm::file_magic;
 using llvm::yaml::MappingTraits;
 using llvm::yaml::ScalarEnumerationTraits;
 using llvm::yaml::ScalarTraits;
@@ -88,7 +89,7 @@ public:
           llvm::raw_string_ostream buffer(storage);
           buffer << llvm::format("L%03d", _unnamedCounter++);
           StringRef newName = copyString(buffer.str());
-          _refNames[target] = newName;
+          _refNames[target] = std::string(newName);
           DEBUG_WITH_TYPE("WriterYAML",
                           llvm::dbgs() << "unnamed atom: creating ref-name: '"
                                        << newName << "' ("
@@ -118,9 +119,9 @@ public:
       llvm::raw_string_ostream buffer(Storage);
       buffer << atom.name() << llvm::format(".%03d", ++_collisionCount);
       StringRef newName = copyString(buffer.str());
-      _refNames[&atom] = newName;
+      _refNames[&atom] = std::string(newName);
       DEBUG_WITH_TYPE("WriterYAML",
-                      llvm::dbgs() << "name collsion: creating ref-name: '"
+                      llvm::dbgs() << "name collision: creating ref-name: '"
                                    << newName << "' ("
                                    << (const void *)newName.data()
                                    << ", " << newName.size() << ")\n");
@@ -132,9 +133,9 @@ public:
         llvm::raw_string_ostream buffer2(Storage2);
         buffer2 << prevAtom->name() << llvm::format(".%03d", ++_collisionCount);
         StringRef newName2 = copyString(buffer2.str());
-        _refNames[prevAtom] = newName2;
+        _refNames[prevAtom] = std::string(newName2);
         DEBUG_WITH_TYPE("WriterYAML",
-                        llvm::dbgs() << "name collsion: creating ref-name: '"
+                        llvm::dbgs() << "name collision: creating ref-name: '"
                                      << newName2 << "' ("
                                      << (const void *)newName2.data() << ", "
                                      << newName2.size() << ")\n");
@@ -278,7 +279,7 @@ template <> struct ScalarTraits<RefKind> {
     return StringRef("unknown reference kind");
   }
 
-  static bool mustQuote(StringRef) { return false; }
+  static QuotingType mustQuote(StringRef) { return QuotingType::None; }
 };
 
 template <> struct ScalarEnumerationTraits<lld::File::Kind> {
@@ -493,7 +494,7 @@ template <> struct ScalarTraits<lld::DefinedAtom::Alignment> {
     return StringRef(); // returning empty string means success
   }
 
-  static bool mustQuote(StringRef) { return false; }
+  static QuotingType mustQuote(StringRef) { return QuotingType::None; }
 };
 
 template <> struct ScalarEnumerationTraits<FileKinds> {
@@ -550,7 +551,7 @@ template <> struct ScalarTraits<ImplicitHex8> {
     return StringRef(); // returning empty string means success
   }
 
-  static bool mustQuote(StringRef) { return false; }
+  static QuotingType mustQuote(StringRef) { return QuotingType::None; }
 };
 
 // YAML conversion for std::vector<const lld::File*>
@@ -1298,7 +1299,7 @@ public:
   llvm::Error writeFile(const lld::File &file, StringRef outPath) override {
     // Create stream to path.
     std::error_code ec;
-    llvm::raw_fd_ostream out(outPath, ec, llvm::sys::fs::F_Text);
+    llvm::raw_fd_ostream out(outPath, ec, llvm::sys::fs::OF_Text);
     if (ec)
       return llvm::errorCodeToError(ec);
 

@@ -1,9 +1,8 @@
 //===- MCAsmInfoCOFF.cpp - COFF asm properties ----------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -25,9 +24,9 @@ MCAsmInfoCOFF::MCAsmInfoCOFF() {
   COMMDirectiveAlignmentIsInBytes = false;
   LCOMMDirectiveAlignmentType = LCOMM::ByteAlignment;
   HasDotTypeDotSizeDirective = false;
-  HasSingleParameterDotFile = false;
+  HasSingleParameterDotFile = true;
   WeakRefDirective = "\t.weak\t";
-  HasLinkOnceDirective = true;
+  AvoidWeakIfComdat = true;
 
   // Doesn't support visibility:
   HiddenVisibilityAttr = HiddenDeclarationVisibilityAttr = MCSA_Invalid;
@@ -37,10 +36,17 @@ MCAsmInfoCOFF::MCAsmInfoCOFF() {
   SupportsDebugInformation = true;
   NeedsDwarfSectionOffsetDirective = true;
 
-  UseIntegratedAssembler = true;
-
   // At least MSVC inline-asm does AShr.
   UseLogicalShr = false;
+
+  // If this is a COFF target, assume that it supports associative comdats. It's
+  // part of the spec.
+  HasCOFFAssociativeComdats = true;
+
+  // We can generate constants in comdat sections that can be shared,
+  // but in order not to create null typed symbols, we actually need to
+  // make them global symbols as well.
+  HasCOFFComdatConstants = true;
 }
 
 void MCAsmInfoMicrosoft::anchor() {}
@@ -49,4 +55,12 @@ MCAsmInfoMicrosoft::MCAsmInfoMicrosoft() = default;
 
 void MCAsmInfoGNUCOFF::anchor() {}
 
-MCAsmInfoGNUCOFF::MCAsmInfoGNUCOFF() = default;
+MCAsmInfoGNUCOFF::MCAsmInfoGNUCOFF() {
+  // If this is a GNU environment (mingw or cygwin), don't use associative
+  // comdats for jump tables, unwind information, and other data associated with
+  // a function.
+  HasCOFFAssociativeComdats = false;
+
+  // We don't create constants in comdat sections for MinGW.
+  HasCOFFComdatConstants = false;
+}

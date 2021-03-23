@@ -1,14 +1,13 @@
 //===-- WebAssemblyUtilities - WebAssembly Utility Functions ---*- C++ -*-====//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 ///
 /// \file
-/// \brief This file contains the declaration of the WebAssembly-specific
+/// This file contains the declaration of the WebAssembly-specific
 /// utility functions.
 ///
 //===----------------------------------------------------------------------===//
@@ -20,23 +19,40 @@ namespace llvm {
 
 class MachineBasicBlock;
 class MachineInstr;
-class MachineLoop;
+class MachineOperand;
+class MCContext;
+class MCSymbolWasm;
+class StringRef;
 class WebAssemblyFunctionInfo;
+class WebAssemblySubtarget;
 
 namespace WebAssembly {
 
-bool isArgument(const MachineInstr &MI);
-bool isCopy(const MachineInstr &MI);
-bool isTee(const MachineInstr &MI);
 bool isChild(const MachineInstr &MI, const WebAssemblyFunctionInfo &MFI);
-bool isCallIndirect(const MachineInstr &MI);
+bool mayThrow(const MachineInstr &MI);
+
+// Exception-related function names
+extern const char *const ClangCallTerminateFn;
+extern const char *const CxaBeginCatchFn;
+extern const char *const CxaRethrowFn;
+extern const char *const StdTerminateFn;
+extern const char *const PersonalityWrapperFn;
+
+/// Returns the operand number of a callee, assuming the argument is a call
+/// instruction.
+const MachineOperand &getCalleeOp(const MachineInstr &MI);
+
+/// Returns the __indirect_function_table, for use in call_indirect and in
+/// function bitcasts.
+MCSymbolWasm *
+getOrCreateFunctionTableSymbol(MCContext &Ctx,
+                               const WebAssemblySubtarget *Subtarget);
+
+/// Find a catch instruction from an EH pad. Returns null if no catch
+/// instruction found or the catch is in an invalid location.
+MachineInstr *findCatch(MachineBasicBlock *EHPad);
 
 } // end namespace WebAssembly
-
-/// Return the "bottom" block of a loop. This differs from
-/// MachineLoop::getBottomBlock in that it works even if the loop is
-/// discontiguous.
-MachineBasicBlock *LoopBottom(const MachineLoop *Loop);
 
 } // end namespace llvm
 

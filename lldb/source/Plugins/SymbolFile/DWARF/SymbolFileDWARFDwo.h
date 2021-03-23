@@ -1,54 +1,48 @@
 //===-- SymbolFileDWARFDwo.h ------------------------------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef SymbolFileDWARFDwo_SymbolFileDWARFDwo_h_
-#define SymbolFileDWARFDwo_SymbolFileDWARFDwo_h_
+#ifndef LLDB_SOURCE_PLUGINS_SYMBOLFILE_DWARF_SYMBOLFILEDWARFDWO_H
+#define LLDB_SOURCE_PLUGINS_SYMBOLFILE_DWARF_SYMBOLFILEDWARFDWO_H
 
-// C Includes
-// C++ Includes
-// Other libraries and framework includes
-// Project includes
 #include "SymbolFileDWARF.h"
 
 class SymbolFileDWARFDwo : public SymbolFileDWARF {
+  /// LLVM RTTI support.
+  static char ID;
+
 public:
-  SymbolFileDWARFDwo(lldb::ObjectFileSP objfile, DWARFCompileUnit *dwarf_cu);
+  /// LLVM RTTI support.
+  /// \{
+  bool isA(const void *ClassID) const override {
+    return ClassID == &ID || SymbolFileDWARF::isA(ClassID);
+  }
+  static bool classof(const SymbolFile *obj) { return obj->isA(&ID); }
+  /// \}
+
+  SymbolFileDWARFDwo(SymbolFileDWARF &m_base_symbol_file,
+                     lldb::ObjectFileSP objfile, uint32_t id);
 
   ~SymbolFileDWARFDwo() override = default;
 
-  lldb::CompUnitSP ParseCompileUnit(DWARFCompileUnit *dwarf_cu,
-                                    uint32_t cu_idx) override;
+  DWARFCompileUnit *GetDWOCompileUnitForHash(uint64_t hash);
 
-  DWARFCompileUnit *GetCompileUnit();
+  void GetObjCMethods(lldb_private::ConstString class_name,
+                      llvm::function_ref<bool(DWARFDIE die)> callback) override;
 
-  DWARFCompileUnit *
-  GetDWARFCompileUnit(lldb_private::CompileUnit *comp_unit) override;
-
-  lldb_private::DWARFExpression::LocationListFormat
-  GetLocationListFormat() const override;
-
-  lldb_private::TypeSystem *
+  llvm::Expected<lldb_private::TypeSystem &>
   GetTypeSystemForLanguage(lldb::LanguageType language) override;
 
   DWARFDIE
   GetDIE(const DIERef &die_ref) override;
 
-  std::unique_ptr<SymbolFileDWARFDwo>
-  GetDwoSymbolFileForCompileUnit(DWARFCompileUnit &dwarf_cu,
-                                 const DWARFDebugInfoEntry &cu_die) override {
-    return nullptr;
-  }
+  llvm::Optional<uint32_t> GetDwoNum() override { return GetID() >> 32; }
 
 protected:
-  void LoadSectionData(lldb::SectionType sect_type,
-                       lldb_private::DWARFDataExtractor &data) override;
-
   DIEToTypePtr &GetDIEToType() override;
 
   DIEToVariableSP &GetDIEToVariable() override;
@@ -62,10 +56,17 @@ protected:
   lldb::TypeSP FindDefinitionTypeForDWARFDeclContext(
       const DWARFDeclContext &die_decl_ctx) override;
 
-  SymbolFileDWARF *GetBaseSymbolFile();
+  lldb::TypeSP FindCompleteObjCDefinitionTypeForDIE(
+      const DWARFDIE &die, lldb_private::ConstString type_name,
+      bool must_be_implementation) override;
 
-  lldb::ObjectFileSP m_obj_file_sp;
-  DWARFCompileUnit *m_base_dwarf_cu;
+  SymbolFileDWARF &GetBaseSymbolFile() { return m_base_symbol_file; }
+
+  /// If this file contains exactly one compile unit, this function will return
+  /// it. Otherwise it returns nullptr.
+  DWARFCompileUnit *FindSingleCompileUnit();
+
+  SymbolFileDWARF &m_base_symbol_file;
 };
 
-#endif // SymbolFileDWARFDwo_SymbolFileDWARFDwo_h_
+#endif // LLDB_SOURCE_PLUGINS_SYMBOLFILE_DWARF_SYMBOLFILEDWARFDWO_H

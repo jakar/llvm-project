@@ -1,5 +1,5 @@
-; RUN: llc < %s -stack-symbol-ordering=0 -mcpu=generic -march=x86-64 -mattr=+avx -mtriple=i686-apple-darwin10 | FileCheck %s
-; RUN: llc < %s -stack-symbol-ordering=0 -mcpu=generic -stackrealign -stack-alignment=32 -march=x86-64 -mattr=+avx -mtriple=i686-apple-darwin10 | FileCheck %s -check-prefix=FORCE-ALIGN
+; RUN: llc < %s -stack-symbol-ordering=0 -mcpu=generic -mattr=+avx -mtriple=x86_64-apple-darwin10 | FileCheck %s
+; RUN: llc < %s -stack-symbol-ordering=0 -mcpu=generic -stackrealign -stack-alignment=32 -mattr=+avx -mtriple=x86_64-apple-darwin10 | FileCheck %s -check-prefix=FORCE-ALIGN
 ; rdar://11496434
 
 ; no VLAs or dynamic alignment
@@ -152,14 +152,14 @@ declare void @t6_helper2(<8 x float>)
 ; the base pointer we use the original adjustment.
 %struct.struct_t = type { [5 x i32] }
 
-define void @t7(i32 %size, %struct.struct_t* byval align 8 %arg1) nounwind uwtable {
+define void @t7(i32 %size, %struct.struct_t* byval(%struct.struct_t) align 8 %arg1) nounwind uwtable {
 entry:
   %x = alloca i32, align 32
   store i32 0, i32* %x, align 32
   %0 = zext i32 %size to i64
   %vla = alloca i32, i64 %0, align 16
   %1 = load i32, i32* %x, align 32
-  call void @bar(i32 %1, i32* %vla, %struct.struct_t* byval align 8 %arg1)
+  call void @bar(i32 %1, i32* %vla, %struct.struct_t* byval(%struct.struct_t) align 8 %arg1)
   ret void
 
 ; CHECK: _t7
@@ -181,7 +181,7 @@ entry:
 
 declare i8* @llvm.stacksave() nounwind
 
-declare void @bar(i32, i32*, %struct.struct_t* byval align 8)
+declare void @bar(i32, i32*, %struct.struct_t* byval(%struct.struct_t) align 8)
 
 declare void @llvm.stackrestore(i8*) nounwind
 

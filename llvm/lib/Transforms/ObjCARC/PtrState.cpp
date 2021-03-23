@@ -1,17 +1,29 @@
-//===--- PtrState.cpp -----------------------------------------------------===//
+//===- PtrState.cpp -------------------------------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
 #include "PtrState.h"
 #include "DependencyAnalysis.h"
 #include "ObjCARC.h"
+#include "llvm/Analysis/ObjCARCAnalysisUtils.h"
+#include "llvm/Analysis/ObjCARCInstKind.h"
+#include "llvm/Analysis/ObjCARCUtil.h"
+#include "llvm/IR/BasicBlock.h"
+#include "llvm/IR/Instruction.h"
+#include "llvm/IR/Instructions.h"
+#include "llvm/IR/Value.h"
+#include "llvm/Support/Casting.h"
+#include "llvm/Support/Compiler.h"
 #include "llvm/Support/Debug.h"
+#include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/raw_ostream.h"
+#include <cassert>
+#include <iterator>
+#include <utility>
 
 using namespace llvm;
 using namespace llvm::objcarc;
@@ -32,8 +44,6 @@ raw_ostream &llvm::objcarc::operator<<(raw_ostream &OS, const Sequence S) {
     return OS << "S_CanRelease";
   case S_Use:
     return OS << "S_Use";
-  case S_Release:
-    return OS << "S_Release";
   case S_MovableRelease:
     return OS << "S_MovableRelease";
   case S_Stop:
@@ -63,12 +73,10 @@ static Sequence MergeSeqs(Sequence A, Sequence B, bool TopDown) {
   } else {
     // Choose the side which is further along in the sequence.
     if ((A == S_Use || A == S_CanRelease) &&
-        (B == S_Use || B == S_Release || B == S_Stop || B == S_MovableRelease))
+        (B == S_Use || B == S_Stop || B == S_MovableRelease))
       return A;
     // If both sides are releases, choose the more conservative one.
-    if (A == S_Stop && (B == S_Release || B == S_MovableRelease))
-      return A;
-    if (A == S_Release && B == S_MovableRelease)
+    if (A == S_Stop && B == S_MovableRelease)
       return A;
   }
 
@@ -114,22 +122,23 @@ bool RRInfo::Merge(const RRInfo &Other) {
 //===----------------------------------------------------------------------===//
 
 void PtrState::SetKnownPositiveRefCount() {
-  DEBUG(dbgs() << "        Setting Known Positive.\n");
+  LLVM_DEBUG(dbgs() << "        Setting Known Positive.\n");
   KnownPositiveRefCount = true;
 }
 
 void PtrState::ClearKnownPositiveRefCount() {
-  DEBUG(dbgs() << "        Clearing Known Positive.\n");
+  LLVM_DEBUG(dbgs() << "        Clearing Known Positive.\n");
   KnownPositiveRefCount = false;
 }
 
 void PtrState::SetSeq(Sequence NewSeq) {
-  DEBUG(dbgs() << "            Old: " << GetSeq() << "; New: " << NewSeq << "\n");
+  LLVM_DEBUG(dbgs() << "            Old: " << GetSeq() << "; New: " << NewSeq
+                    << "\n");
   Seq = NewSeq;
 }
 
 void PtrState::ResetSequenceProgress(Sequence NewSeq) {
-  DEBUG(dbgs() << "        Resetting sequence progress.\n");
+  LLVM_DEBUG(dbgs() << "        Resetting sequence progress.\n");
   SetSeq(NewSeq);
   Partial = false;
   RRI.clear();
@@ -171,15 +180,18 @@ bool BottomUpPtrState::InitBottomUp(ARCMDKindCache &Cache, Instruction *I) {
   // pairs by making PtrState hold a stack of states, but this is
   // simple and avoids adding overhead for the non-nested case.
   bool NestingDetected = false;
-  if (GetSeq() == S_Release || GetSeq() == S_MovableRelease) {
-    DEBUG(dbgs() << "        Found nested releases (i.e. a release pair)\n");
+  if (GetSeq() == S_MovableRelease) {
+    LLVM_DEBUG(
+        dbgs() << "        Found nested releases (i.e. a release pair)\n");
     NestingDetected = true;
   }
 
   MDNode *ReleaseMetadata =
       I->getMetadata(Cache.get(ARCMDKindID::ImpreciseRelease));
-  Sequence NewSeq = ReleaseMetadata ? S_MovableRelease : S_Release;
+  Sequence NewSeq = ReleaseMetadata ? S_MovableRelease : S_Stop;
   ResetSequenceProgress(NewSeq);
+  if (NewSeq == S_Stop)
+    InsertReverseInsertPt(I);
   SetReleaseMetadata(ReleaseMetadata);
   SetKnownSafe(HasKnownPositiveRefCount());
   SetTailCallRelease(cast<CallInst>(I)->isTailCall());
@@ -194,7 +206,6 @@ bool BottomUpPtrState::MatchWithRetain() {
   Sequence OldSeq = GetSeq();
   switch (OldSeq) {
   case S_Stop:
-  case S_Release:
   case S_MovableRelease:
   case S_Use:
     // If OldSeq is not S_Use or OldSeq is S_Use and we are tracking an
@@ -219,17 +230,16 @@ bool BottomUpPtrState::HandlePotentialAlterRefCount(Instruction *Inst,
   Sequence S = GetSeq();
 
   // Check for possible releases.
-  if (!CanAlterRefCount(Inst, Ptr, PA, Class))
+  if (!CanDecrementRefCount(Inst, Ptr, PA, Class))
     return false;
 
-  DEBUG(dbgs() << "            CanAlterRefCount: Seq: " << S << "; " << *Ptr
-               << "\n");
+  LLVM_DEBUG(dbgs() << "            CanAlterRefCount: Seq: " << S << "; "
+                    << *Ptr << "\n");
   switch (S) {
   case S_Use:
     SetSeq(S_CanRelease);
     return true;
   case S_CanRelease:
-  case S_Release:
   case S_MovableRelease:
   case S_Stop:
   case S_None:
@@ -250,37 +260,51 @@ void BottomUpPtrState::HandlePotentialUse(BasicBlock *BB, Instruction *Inst,
     // If this is an invoke instruction, we're scanning it as part of
     // one of its successor blocks, since we can't insert code after it
     // in its own block, and we don't want to split critical edges.
-    if (isa<InvokeInst>(Inst))
-      InsertReverseInsertPt(&*BB->getFirstInsertionPt());
-    else
-      InsertReverseInsertPt(&*++Inst->getIterator());
+    BasicBlock::iterator InsertAfter;
+    if (isa<InvokeInst>(Inst)) {
+      const auto IP = BB->getFirstInsertionPt();
+      InsertAfter = IP == BB->end() ? std::prev(BB->end()) : IP;
+      if (isa<CatchSwitchInst>(InsertAfter))
+        // A catchswitch must be the only non-phi instruction in its basic
+        // block, so attempting to insert an instruction into such a block would
+        // produce invalid IR.
+        SetCFGHazardAfflicted(true);
+    } else {
+      InsertAfter = std::next(Inst->getIterator());
+    }
+
+    if (InsertAfter != BB->end())
+      InsertAfter = skipDebugIntrinsics(InsertAfter);
+
+    InsertReverseInsertPt(&*InsertAfter);
+
+    // Don't insert anything between a call/invoke with operand bundle
+    // "clang.arc.attachedcall" and the retainRV/claimRV call that uses the call
+    // result.
+    if (auto *CB = dyn_cast<CallBase>(Inst))
+      if (objcarc::hasAttachedCallOpBundle(CB))
+        SetCFGHazardAfflicted(true);
   };
 
   // Check for possible direct uses.
   switch (GetSeq()) {
-  case S_Release:
   case S_MovableRelease:
     if (CanUse(Inst, Ptr, PA, Class)) {
-      DEBUG(dbgs() << "            CanUse: Seq: " << GetSeq() << "; " << *Ptr
-                   << "\n");
+      LLVM_DEBUG(dbgs() << "            CanUse: Seq: " << GetSeq() << "; "
+                        << *Ptr << "\n");
       SetSeqAndInsertReverseInsertPt(S_Use);
-    } else if (Seq == S_Release && IsUser(Class)) {
-      DEBUG(dbgs() << "            PreciseReleaseUse: Seq: " << GetSeq() << "; "
-                   << *Ptr << "\n");
-      // Non-movable releases depend on any possible objc pointer use.
-      SetSeqAndInsertReverseInsertPt(S_Stop);
     } else if (const auto *Call = getreturnRVOperand(*Inst, Class)) {
       if (CanUse(Call, Ptr, PA, GetBasicARCInstKind(Call))) {
-        DEBUG(dbgs() << "            ReleaseUse: Seq: " << GetSeq() << "; "
-                     << *Ptr << "\n");
+        LLVM_DEBUG(dbgs() << "            ReleaseUse: Seq: " << GetSeq() << "; "
+                          << *Ptr << "\n");
         SetSeqAndInsertReverseInsertPt(S_Stop);
       }
     }
     break;
   case S_Stop:
     if (CanUse(Inst, Ptr, PA, Class)) {
-      DEBUG(dbgs() << "            PreciseStopUse: Seq: " << GetSeq() << "; "
-                   << *Ptr << "\n");
+      LLVM_DEBUG(dbgs() << "            PreciseStopUse: Seq: " << GetSeq()
+                        << "; " << *Ptr << "\n");
       SetSeq(S_Use);
     }
     break;
@@ -344,31 +368,35 @@ bool TopDownPtrState::MatchWithRelease(ARCMDKindCache &Cache,
   case S_None:
     return false;
   case S_Stop:
-  case S_Release:
   case S_MovableRelease:
     llvm_unreachable("top-down pointer in bottom up state!");
   }
   llvm_unreachable("Sequence unknown enum value");
 }
 
-bool TopDownPtrState::HandlePotentialAlterRefCount(Instruction *Inst,
-                                                   const Value *Ptr,
-                                                   ProvenanceAnalysis &PA,
-                                                   ARCInstKind Class) {
+bool TopDownPtrState::HandlePotentialAlterRefCount(
+    Instruction *Inst, const Value *Ptr, ProvenanceAnalysis &PA,
+    ARCInstKind Class, const BundledRetainClaimRVs &BundledRVs) {
   // Check for possible releases. Treat clang.arc.use as a releasing instruction
   // to prevent sinking a retain past it.
-  if (!CanAlterRefCount(Inst, Ptr, PA, Class) &&
+  if (!CanDecrementRefCount(Inst, Ptr, PA, Class) &&
       Class != ARCInstKind::IntrinsicUser)
     return false;
 
-  DEBUG(dbgs() << "            CanAlterRefCount: Seq: " << GetSeq() << "; " << *Ptr
-               << "\n");
+  LLVM_DEBUG(dbgs() << "            CanAlterRefCount: Seq: " << GetSeq() << "; "
+                    << *Ptr << "\n");
   ClearKnownPositiveRefCount();
   switch (GetSeq()) {
   case S_Retain:
     SetSeq(S_CanRelease);
     assert(!HasReverseInsertPts());
     InsertReverseInsertPt(Inst);
+
+    // Don't insert anything between a call/invoke with operand bundle
+    // "clang.arc.attachedcall" and the retainRV/claimRV call that uses the call
+    // result.
+    if (BundledRVs.contains(Inst))
+      SetCFGHazardAfflicted(true);
 
     // One call can't cause a transition from S_Retain to S_CanRelease
     // and S_CanRelease to S_Use. If we've made the first transition,
@@ -379,7 +407,6 @@ bool TopDownPtrState::HandlePotentialAlterRefCount(Instruction *Inst,
   case S_None:
     return false;
   case S_Stop:
-  case S_Release:
   case S_MovableRelease:
     llvm_unreachable("top-down pointer in release state!");
   }
@@ -394,8 +421,8 @@ void TopDownPtrState::HandlePotentialUse(Instruction *Inst, const Value *Ptr,
   case S_CanRelease:
     if (!CanUse(Inst, Ptr, PA, Class))
       return;
-    DEBUG(dbgs() << "             CanUse: Seq: " << GetSeq() << "; " << *Ptr
-                 << "\n");
+    LLVM_DEBUG(dbgs() << "             CanUse: Seq: " << GetSeq() << "; "
+                      << *Ptr << "\n");
     SetSeq(S_Use);
     return;
   case S_Retain:
@@ -403,7 +430,6 @@ void TopDownPtrState::HandlePotentialUse(Instruction *Inst, const Value *Ptr,
   case S_None:
     return;
   case S_Stop:
-  case S_Release:
   case S_MovableRelease:
     llvm_unreachable("top-down pointer in release state!");
   }

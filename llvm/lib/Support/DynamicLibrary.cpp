@@ -1,9 +1,8 @@
 //===-- DynamicLibrary.cpp - Runtime link/load libraries --------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -14,6 +13,7 @@
 #include "llvm/Support/DynamicLibrary.h"
 #include "llvm-c/Support.h"
 #include "llvm/ADT/DenseSet.h"
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/Config/config.h"
 #include "llvm/Support/ManagedStatic.h"
@@ -39,16 +39,14 @@ public:
   HandleSet() : Process(nullptr) {}
   ~HandleSet();
 
-  HandleList::iterator Find(void *Handle) {
-    return std::find(Handles.begin(), Handles.end(), Handle);
-  }
+  HandleList::iterator Find(void *Handle) { return find(Handles, Handle); }
 
   bool Contains(void *Handle) {
     return Handle == Process || Find(Handle) != Handles.end();
   }
 
   bool AddLibrary(void *Handle, bool IsProcess = false, bool CanClose = true) {
-#ifdef LLVM_ON_WIN32
+#ifdef _WIN32
     assert((Handle == this ? IsProcess : !IsProcess) && "Bad Handle.");
 #endif
 
@@ -60,7 +58,7 @@ public:
       }
       Handles.push_back(Handle);
     } else {
-#ifndef LLVM_ON_WIN32
+#ifndef _WIN32
       if (Process) {
         if (CanClose)
           DLClose(Process);
@@ -73,19 +71,37 @@ public:
     return true;
   }
 
-  void *Lookup(const char *Symbol) {
-    // Process handle gets first try.
+  void *LibLookup(const char *Symbol, DynamicLibrary::SearchOrdering Order) {
+    if (Order & SO_LoadOrder) {
+      for (void *Handle : Handles) {
+        if (void *Ptr = DLSym(Handle, Symbol))
+          return Ptr;
+      }
+    } else {
+      for (void *Handle : llvm::reverse(Handles)) {
+        if (void *Ptr = DLSym(Handle, Symbol))
+          return Ptr;
+      }
+    }
+    return nullptr;
+  }
+
+  void *Lookup(const char *Symbol, DynamicLibrary::SearchOrdering Order) {
+    assert(!((Order & SO_LoadedFirst) && (Order & SO_LoadedLast)) &&
+           "Invalid Ordering");
+
+    if (!Process || (Order & SO_LoadedFirst)) {
+      if (void *Ptr = LibLookup(Symbol, Order))
+        return Ptr;
+    }
     if (Process) {
+      // Use OS facilities to search the current binary and all loaded libs.
       if (void *Ptr = DLSym(Process, Symbol))
         return Ptr;
-#ifndef NDEBUG
-      for (void *Handle : Handles)
-        assert(!DLSym(Handle, Symbol) && "Symbol exists in non process handle");
-#endif
-    } else {
-      // Iterate in reverse, so newer libraries/symbols override older.
-      for (auto &&I = Handles.rbegin(), E = Handles.rend(); I != E; ++I) {
-        if (void *Ptr = DLSym(*I, Symbol))
+
+      // Search any libs that might have been skipped because of RTLD_LOCAL.
+      if (Order & SO_LoadedLast) {
+        if (void *Ptr = LibLookup(Symbol, Order))
           return Ptr;
       }
     }
@@ -100,9 +116,9 @@ static llvm::ManagedStatic<llvm::StringMap<void *>> ExplicitSymbols;
 static llvm::ManagedStatic<DynamicLibrary::HandleSet> OpenedHandles;
 // Lock for ExplicitSymbols and OpenedHandles.
 static llvm::ManagedStatic<llvm::sys::SmartMutex<true>> SymbolsMutex;
-}
+} // namespace
 
-#ifdef LLVM_ON_WIN32
+#ifdef _WIN32
 
 #include "Windows/DynamicLibrary.inc"
 
@@ -113,12 +129,14 @@ static llvm::ManagedStatic<llvm::sys::SmartMutex<true>> SymbolsMutex;
 #endif
 
 char DynamicLibrary::Invalid;
+DynamicLibrary::SearchOrdering DynamicLibrary::SearchOrder =
+    DynamicLibrary::SO_Linker;
 
 namespace llvm {
 void *SearchForAddressOfSpecialSymbol(const char *SymbolName) {
   return DoSearch(SymbolName); // DynamicLibrary.inc
 }
-}
+} // namespace llvm
 
 void DynamicLibrary::AddSymbol(StringRef SymbolName, void *SymbolValue) {
   SmartScopedLock<true> Lock(*SymbolsMutex);
@@ -127,10 +145,15 @@ void DynamicLibrary::AddSymbol(StringRef SymbolName, void *SymbolValue) {
 
 DynamicLibrary DynamicLibrary::getPermanentLibrary(const char *FileName,
                                                    std::string *Err) {
-  SmartScopedLock<true> Lock(*SymbolsMutex);
+  // Force OpenedHandles to be added into the ManagedStatic list before any
+  // ManagedStatic can be added from static constructors in HandleSet::DLOpen.
+  HandleSet& HS = *OpenedHandles;
+
   void *Handle = HandleSet::DLOpen(FileName, Err);
-  if (Handle != &Invalid)
-    OpenedHandles->AddLibrary(Handle, /*IsProcess*/ FileName == nullptr);
+  if (Handle != &Invalid) {
+    SmartScopedLock<true> Lock(*SymbolsMutex);
+    HS.AddLibrary(Handle, /*IsProcess*/ FileName == nullptr);
+  }
 
   return DynamicLibrary(Handle);
 }
@@ -165,7 +188,7 @@ void *DynamicLibrary::SearchForAddressOfSymbol(const char *SymbolName) {
 
     // Now search the libraries.
     if (OpenedHandles.isConstructed()) {
-      if (void *Ptr = OpenedHandles->Lookup(SymbolName))
+      if (void *Ptr = OpenedHandles->Lookup(SymbolName, SearchOrder))
         return Ptr;
     }
   }

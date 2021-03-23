@@ -1,9 +1,8 @@
 //===- NaryReassociate.cpp - Reassociate n-ary expressions ----------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -77,19 +76,46 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/Transforms/Scalar/NaryReassociate.h"
+#include "llvm/ADT/DepthFirstIterator.h"
+#include "llvm/ADT/SmallVector.h"
+#include "llvm/Analysis/AssumptionCache.h"
+#include "llvm/Analysis/ScalarEvolution.h"
+#include "llvm/Analysis/TargetLibraryInfo.h"
+#include "llvm/Analysis/TargetTransformInfo.h"
 #include "llvm/Analysis/ValueTracking.h"
+#include "llvm/IR/BasicBlock.h"
+#include "llvm/IR/Constants.h"
+#include "llvm/IR/DataLayout.h"
+#include "llvm/IR/DerivedTypes.h"
+#include "llvm/IR/Dominators.h"
+#include "llvm/IR/Function.h"
+#include "llvm/IR/GetElementPtrTypeIterator.h"
+#include "llvm/IR/IRBuilder.h"
+#include "llvm/IR/InstrTypes.h"
+#include "llvm/IR/Instruction.h"
+#include "llvm/IR/Instructions.h"
 #include "llvm/IR/Module.h"
+#include "llvm/IR/Operator.h"
 #include "llvm/IR/PatternMatch.h"
-#include "llvm/Support/Debug.h"
-#include "llvm/Support/raw_ostream.h"
+#include "llvm/IR/Type.h"
+#include "llvm/IR/Value.h"
+#include "llvm/IR/ValueHandle.h"
+#include "llvm/InitializePasses.h"
+#include "llvm/Pass.h"
+#include "llvm/Support/Casting.h"
+#include "llvm/Support/ErrorHandling.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/Utils/Local.h"
+#include <cassert>
+#include <cstdint>
+
 using namespace llvm;
 using namespace PatternMatch;
 
 #define DEBUG_TYPE "nary-reassociate"
 
 namespace {
+
 class NaryReassociateLegacyPass : public FunctionPass {
 public:
   static char ID;
@@ -101,6 +127,7 @@ public:
   bool doInitialization(Module &M) override {
     return false;
   }
+
   bool runOnFunction(Function &F) override;
 
   void getAnalysisUsage(AnalysisUsage &AU) const override {
@@ -118,9 +145,11 @@ public:
 private:
   NaryReassociatePass Impl;
 };
-} // anonymous namespace
+
+} // end anonymous namespace
 
 char NaryReassociateLegacyPass::ID = 0;
+
 INITIALIZE_PASS_BEGIN(NaryReassociateLegacyPass, "nary-reassociate",
                       "Nary reassociation", false, false)
 INITIALIZE_PASS_DEPENDENCY(AssumptionCacheTracker)
@@ -142,7 +171,7 @@ bool NaryReassociateLegacyPass::runOnFunction(Function &F) {
   auto *AC = &getAnalysis<AssumptionCacheTracker>().getAssumptionCache(F);
   auto *DT = &getAnalysis<DominatorTreeWrapperPass>().getDomTree();
   auto *SE = &getAnalysis<ScalarEvolutionWrapperPass>().getSE();
-  auto *TLI = &getAnalysis<TargetLibraryInfoWrapperPass>().getTLI();
+  auto *TLI = &getAnalysis<TargetLibraryInfoWrapperPass>().getTLI(F);
   auto *TTI = &getAnalysis<TargetTransformInfoWrapperPass>().getTTI(F);
 
   return Impl.runImpl(F, AC, DT, SE, TLI, TTI);
@@ -184,47 +213,32 @@ bool NaryReassociatePass::runImpl(Function &F, AssumptionCache *AC_,
   return Changed;
 }
 
-// Whitelist the instruction types NaryReassociate handles for now.
-static bool isPotentiallyNaryReassociable(Instruction *I) {
-  switch (I->getOpcode()) {
-  case Instruction::Add:
-  case Instruction::GetElementPtr:
-  case Instruction::Mul:
-    return true;
-  default:
-    return false;
-  }
-}
-
 bool NaryReassociatePass::doOneIteration(Function &F) {
   bool Changed = false;
   SeenExprs.clear();
   // Process the basic blocks in a depth first traversal of the dominator
   // tree. This order ensures that all bases of a candidate are in Candidates
   // when we process it.
+  SmallVector<WeakTrackingVH, 16> DeadInsts;
   for (const auto Node : depth_first(DT)) {
     BasicBlock *BB = Node->getBlock();
-    for (auto I = BB->begin(); I != BB->end(); ++I) {
-      if (SE->isSCEVable(I->getType()) && isPotentiallyNaryReassociable(&*I)) {
-        const SCEV *OldSCEV = SE->getSCEV(&*I);
-        if (Instruction *NewI = tryReassociate(&*I)) {
-          Changed = true;
-          SE->forgetValue(&*I);
-          I->replaceAllUsesWith(NewI);
-          // If SeenExprs constains I's WeakTrackingVH, that entry will be
-          // replaced with
-          // nullptr.
-          RecursivelyDeleteTriviallyDeadInstructions(&*I, TLI);
-          I = NewI->getIterator();
-        }
-        // Add the rewritten instruction to SeenExprs; the original instruction
-        // is deleted.
-        const SCEV *NewSCEV = SE->getSCEV(&*I);
-        SeenExprs[NewSCEV].push_back(WeakTrackingVH(&*I));
+    for (Instruction &OrigI : *BB) {
+      const SCEV *OrigSCEV = nullptr;
+      if (Instruction *NewI = tryReassociate(&OrigI, OrigSCEV)) {
+        Changed = true;
+        OrigI.replaceAllUsesWith(NewI);
+
+        // Add 'OrigI' to the list of dead instructions.
+        DeadInsts.push_back(WeakTrackingVH(&OrigI));
+        // Add the rewritten instruction to SeenExprs; the original
+        // instruction is deleted.
+        const SCEV *NewSCEV = SE->getSCEV(NewI);
+        SeenExprs[NewSCEV].push_back(WeakTrackingVH(NewI));
+
         // Ideally, NewSCEV should equal OldSCEV because tryReassociate(I)
         // is equivalent to I. However, ScalarEvolution::getSCEV may
-        // weaken nsw causing NewSCEV not to equal OldSCEV. For example, suppose
-        // we reassociate
+        // weaken nsw causing NewSCEV not to equal OldSCEV. For example,
+        // suppose we reassociate
         //   I = &a[sext(i +nsw j)] // assuming sizeof(a[0]) = 4
         // to
         //   NewI = &a[sext(i)] + sext(j).
@@ -238,32 +252,47 @@ bool NaryReassociatePass::doOneIteration(Function &F) {
         // equivalence, we add I to SeenExprs[OldSCEV] as well so that we can
         // map both SCEV before and after tryReassociate(I) to I.
         //
-        // This improvement is exercised in @reassociate_gep_nsw in nary-gep.ll.
-        if (NewSCEV != OldSCEV)
-          SeenExprs[OldSCEV].push_back(WeakTrackingVH(&*I));
-      }
+        // This improvement is exercised in @reassociate_gep_nsw in
+        // nary-gep.ll.
+        if (NewSCEV != OrigSCEV)
+          SeenExprs[OrigSCEV].push_back(WeakTrackingVH(NewI));
+      } else if (OrigSCEV)
+        SeenExprs[OrigSCEV].push_back(WeakTrackingVH(&OrigI));
     }
   }
+  // Delete all dead instructions from 'DeadInsts'.
+  // Please note ScalarEvolution is updated along the way.
+  RecursivelyDeleteTriviallyDeadInstructionsPermissive(
+      DeadInsts, TLI, nullptr, [this](Value *V) { SE->forgetValue(V); });
+
   return Changed;
 }
 
-Instruction *NaryReassociatePass::tryReassociate(Instruction *I) {
+Instruction *NaryReassociatePass::tryReassociate(Instruction * I,
+                                                 const SCEV *&OrigSCEV) {
+
+  if (!SE->isSCEVable(I->getType()))
+    return nullptr;
+
   switch (I->getOpcode()) {
   case Instruction::Add:
   case Instruction::Mul:
+    OrigSCEV = SE->getSCEV(I);
     return tryReassociateBinaryOp(cast<BinaryOperator>(I));
   case Instruction::GetElementPtr:
+    OrigSCEV = SE->getSCEV(I);
     return tryReassociateGEP(cast<GetElementPtrInst>(I));
   default:
-    llvm_unreachable("should be filtered out by isPotentiallyNaryReassociable");
+    return nullptr;
   }
+
+  llvm_unreachable("should not be reached");
+  return nullptr;
 }
 
 static bool isGEPFoldable(GetElementPtrInst *GEP,
                           const TargetTransformInfo *TTI) {
-  SmallVector<const Value*, 4> Indices;
-  for (auto I = GEP->idx_begin(); I != GEP->idx_end(); ++I)
-    Indices.push_back(*I);
+  SmallVector<const Value *, 4> Indices(GEP->indices());
   return TTI->getGEPCost(GEP->getSourceElementType(), GEP->getPointerOperand(),
                          Indices) == TargetTransformInfo::TCC_Free;
 }
@@ -334,13 +363,13 @@ NaryReassociatePass::tryReassociateGEPAtIndex(GetElementPtrInst *GEP,
   // Look for GEP's closest dominator that has the same SCEV as GEP except that
   // the I-th index is replaced with LHS.
   SmallVector<const SCEV *, 4> IndexExprs;
-  for (auto Index = GEP->idx_begin(); Index != GEP->idx_end(); ++Index)
-    IndexExprs.push_back(SE->getSCEV(*Index));
+  for (Use &Index : GEP->indices())
+    IndexExprs.push_back(SE->getSCEV(Index));
   // Replace the I-th index with LHS.
   IndexExprs[I] = SE->getSCEV(LHS);
   if (isKnownNonNegative(LHS, *DL, 0, AC, GEP, DT) &&
-      DL->getTypeSizeInBits(LHS->getType()) <
-          DL->getTypeSizeInBits(GEP->getOperand(I)->getType())) {
+      DL->getTypeSizeInBits(LHS->getType()).getFixedSize() <
+          DL->getTypeSizeInBits(GEP->getOperand(I)->getType()).getFixedSize()) {
     // Zero-extend LHS if it is non-negative. InstCombine canonicalizes sext to
     // zext if the source operand is proved non-negative. We should do that
     // consistently so that CandidateExpr more likely appears before. See
@@ -391,8 +420,8 @@ NaryReassociatePass::tryReassociateGEPAtIndex(GetElementPtrInst *GEP,
     RHS = Builder.CreateMul(
         RHS, ConstantInt::get(IntPtrTy, IndexedSize / ElementSize));
   }
-  GetElementPtrInst *NewGEP =
-      cast<GetElementPtrInst>(Builder.CreateGEP(Candidate, RHS));
+  GetElementPtrInst *NewGEP = cast<GetElementPtrInst>(
+      Builder.CreateGEP(GEP->getResultElementType(), Candidate, RHS));
   NewGEP->setIsInBounds(GEP->isInBounds());
   NewGEP->takeName(GEP);
   return NewGEP;
@@ -400,6 +429,9 @@ NaryReassociatePass::tryReassociateGEPAtIndex(GetElementPtrInst *GEP,
 
 Instruction *NaryReassociatePass::tryReassociateBinaryOp(BinaryOperator *I) {
   Value *LHS = I->getOperand(0), *RHS = I->getOperand(1);
+  // There is no need to reassociate 0.
+  if (SE->getSCEV(I)->isZero())
+    return nullptr;
   if (auto *NewI = tryReassociateBinaryOp(LHS, RHS, I))
     return NewI;
   if (auto *NewI = tryReassociateBinaryOp(RHS, LHS, I))

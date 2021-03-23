@@ -1,25 +1,23 @@
-//===--------------------- TildeExpressionResolver.cpp ----------*- C++ -*-===//
+//===-- TildeExpressionResolver.cpp ---------------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
 #include "lldb/Utility/TildeExpressionResolver.h"
 
-#include <assert.h>     // for assert
-#include <system_error> // for error_code
+#include <assert.h>
+#include <system_error>
 
-#include "llvm/ADT/STLExtras.h"      // for any_of
-#include "llvm/ADT/SmallVector.h"    // for SmallVectorImpl
-#include "llvm/Config/llvm-config.h" // for LLVM_ON_WIN32
+#include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Path.h"
-#include "llvm/Support/raw_ostream.h" // for fs
+#include "llvm/Support/raw_ostream.h"
 
-#if !defined(LLVM_ON_WIN32)
+#if !defined(_WIN32)
 #include <pwd.h>
 #endif
 
@@ -49,7 +47,7 @@ bool StandardTildeExpressionResolver::ResolvePartial(StringRef Expr,
   assert(Expr.empty() || Expr[0] == '~');
 
   Output.clear();
-#if defined(LLVM_ON_WIN32) || defined(__ANDROID__)
+#if defined(_WIN32) || defined(__ANDROID__)
   return false;
 #else
   if (Expr.empty())
@@ -60,7 +58,7 @@ bool StandardTildeExpressionResolver::ResolvePartial(StringRef Expr,
   struct passwd *user_entry;
   Expr = Expr.drop_front();
 
-  while ((user_entry = getpwent()) != NULL) {
+  while ((user_entry = getpwent()) != nullptr) {
     StringRef ThisName(user_entry->pw_name);
     if (!ThisName.startswith(Expr))
       continue;
@@ -77,9 +75,8 @@ bool StandardTildeExpressionResolver::ResolvePartial(StringRef Expr,
 
 bool TildeExpressionResolver::ResolveFullPath(
     StringRef Expr, llvm::SmallVectorImpl<char> &Output) {
-  Output.clear();
   if (!Expr.startswith("~")) {
-    Output.append(Expr.begin(), Expr.end());
+    Output.assign(Expr.begin(), Expr.end());
     return false;
   }
 
@@ -87,8 +84,10 @@ bool TildeExpressionResolver::ResolveFullPath(
   StringRef Left =
       Expr.take_until([](char c) { return path::is_separator(c); });
 
-  if (!ResolveExact(Left, Output))
+  if (!ResolveExact(Left, Output)) {
+    Output.assign(Expr.begin(), Expr.end());
     return false;
+  }
 
   Output.append(Expr.begin() + Left.size(), Expr.end());
   return true;

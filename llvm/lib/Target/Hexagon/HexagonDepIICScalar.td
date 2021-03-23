@@ -1,2504 +1,7340 @@
-//===--- HexagonDepIICScalar.td -------------------------------------------===//
+//===----------------------------------------------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
+// Automatically generated file, do not edit!
+//===----------------------------------------------------------------------===//
 
-def tc_049dfb74 : InstrItinClass;
-def tc_0767081f : InstrItinClass;
-def tc_07ac815d : InstrItinClass;
-def tc_090485bb : InstrItinClass;
-def tc_09c86199 : InstrItinClass;
-def tc_09faec3b : InstrItinClass;
-def tc_0cb867f2 : InstrItinClass;
-def tc_1000eb10 : InstrItinClass;
-def tc_128719e8 : InstrItinClass;
-def tc_136c4786 : InstrItinClass;
-def tc_14da557c : InstrItinClass;
-def tc_1b6011fb : InstrItinClass;
-def tc_1b834fe7 : InstrItinClass;
-def tc_1e062b18 : InstrItinClass;
-def tc_1e69aa99 : InstrItinClass;
-def tc_1f9668cc : InstrItinClass;
-def tc_1fe8323c : InstrItinClass;
-def tc_20a8e109 : InstrItinClass;
-def tc_210b2456 : InstrItinClass;
-def tc_251c87b2 : InstrItinClass;
-def tc_261d9b78 : InstrItinClass;
-def tc_28d296df : InstrItinClass;
-def tc_29c14515 : InstrItinClass;
-def tc_2aaab1e0 : InstrItinClass;
-def tc_2c8fe5ae : InstrItinClass;
-def tc_2d1e6f5c : InstrItinClass;
-def tc_2e55aa16 : InstrItinClass;
-def tc_30665cb0 : InstrItinClass;
-def tc_336e698c : InstrItinClass;
-def tc_34e882a4 : InstrItinClass;
-def tc_35fb9d13 : InstrItinClass;
-def tc_37326008 : InstrItinClass;
-def tc_3993c58b : InstrItinClass;
-def tc_3b4892c6 : InstrItinClass;
-def tc_3bea1824 : InstrItinClass;
-def tc_3c10f809 : InstrItinClass;
-def tc_3d905451 : InstrItinClass;
-def tc_3e61d314 : InstrItinClass;
-def tc_3eab77bd : InstrItinClass;
-def tc_43068634 : InstrItinClass;
-def tc_45631a8d : InstrItinClass;
-def tc_47ab9233 : InstrItinClass;
-def tc_47f0b7ad : InstrItinClass;
-def tc_485bb57c : InstrItinClass;
-def tc_4997da4a : InstrItinClass;
-def tc_511f28f6 : InstrItinClass;
-def tc_537e2013 : InstrItinClass;
-def tc_53ee6546 : InstrItinClass;
-def tc_548f402d : InstrItinClass;
-def tc_5625c6c1 : InstrItinClass;
-def tc_580a779c : InstrItinClass;
-def tc_583510c7 : InstrItinClass;
-def tc_5d806107 : InstrItinClass;
-def tc_5fa2857c : InstrItinClass;
-def tc_5fe9fcd0 : InstrItinClass;
-def tc_6264c5e0 : InstrItinClass;
-def tc_639d93ee : InstrItinClass;
-def tc_63cd9d2d : InstrItinClass;
-def tc_65dc7cc4 : InstrItinClass;
-def tc_69bb508b : InstrItinClass;
-def tc_6c52d277 : InstrItinClass;
-def tc_6c576d46 : InstrItinClass;
-def tc_70cabf66 : InstrItinClass;
-def tc_7639d4b0 : InstrItinClass;
-def tc_7675c0e9 : InstrItinClass;
-def tc_76c4c5ef : InstrItinClass;
-def tc_77781686 : InstrItinClass;
-def tc_78b3c689 : InstrItinClass;
-def tc_7986ba30 : InstrItinClass;
-def tc_7bc567a7 : InstrItinClass;
-def tc_7c2dcd4d : InstrItinClass;
-def tc_7ca2ea10 : InstrItinClass;
-def tc_7d01cbdc : InstrItinClass;
-def tc_7d9a56cd : InstrItinClass;
-def tc_81a23d44 : InstrItinClass;
-def tc_821c4233 : InstrItinClass;
-def tc_82f0f122 : InstrItinClass;
-def tc_84630363 : InstrItinClass;
-def tc_86442910 : InstrItinClass;
-def tc_87601822 : InstrItinClass;
-def tc_88fa2da6 : InstrItinClass;
-def tc_8c8041e6 : InstrItinClass;
-def tc_8cb685d9 : InstrItinClass;
-def tc_8def9c57 : InstrItinClass;
-def tc_8f0a6bad : InstrItinClass;
-def tc_8fab9ac3 : InstrItinClass;
-def tc_92d1833c : InstrItinClass;
-def tc_94e6ffd9 : InstrItinClass;
-def tc_95c54f8b : InstrItinClass;
-def tc_9a13af9d : InstrItinClass;
-def tc_9b73d261 : InstrItinClass;
-def tc_9c18c9a5 : InstrItinClass;
-def tc_9c68db63 : InstrItinClass;
-def tc_9ce7a5ab : InstrItinClass;
-def tc_9da3628f : InstrItinClass;
-def tc_9dafb7d3 : InstrItinClass;
-def tc_9df8b0dc : InstrItinClass;
-def tc_9e86015f : InstrItinClass;
-def tc_9f518242 : InstrItinClass;
-def tc_a12a5971 : InstrItinClass;
-def tc_a1fb80e1 : InstrItinClass;
-def tc_a333d2a9 : InstrItinClass;
-def tc_a4567c39 : InstrItinClass;
-def tc_a87879e8 : InstrItinClass;
-def tc_a9c993d9 : InstrItinClass;
-def tc_aad55963 : InstrItinClass;
-def tc_ab1b5e74 : InstrItinClass;
-def tc_ae0722f7 : InstrItinClass;
-def tc_ae2c2dc2 : InstrItinClass;
-def tc_ae762521 : InstrItinClass;
-def tc_b08b653e : InstrItinClass;
-def tc_b08be45e : InstrItinClass;
-def tc_b0f50e3c : InstrItinClass;
-def tc_b189ad4c : InstrItinClass;
-def tc_b324366f : InstrItinClass;
-def tc_b5bfaa60 : InstrItinClass;
-def tc_b5f5a094 : InstrItinClass;
-def tc_b86c7e8b : InstrItinClass;
-def tc_baccf077 : InstrItinClass;
-def tc_bc5561d8 : InstrItinClass;
-def tc_bcf0e36e : InstrItinClass;
-def tc_bd16579e : InstrItinClass;
-def tc_be995eaf : InstrItinClass;
-def tc_bf6fa601 : InstrItinClass;
-def tc_c0cd91a8 : InstrItinClass;
-def tc_c14739d5 : InstrItinClass;
-def tc_c1dbc916 : InstrItinClass;
-def tc_c58f771a : InstrItinClass;
-def tc_c85212ca : InstrItinClass;
-def tc_c8f9a6f6 : InstrItinClass;
-def tc_ca280e8b : InstrItinClass;
-def tc_cbe45117 : InstrItinClass;
-def tc_cd321066 : InstrItinClass;
-def tc_d108a090 : InstrItinClass;
-def tc_d1b5a4b6 : InstrItinClass;
-def tc_d2609065 : InstrItinClass;
-def tc_d267fa19 : InstrItinClass;
-def tc_d2a33af5 : InstrItinClass;
-def tc_d63b71d1 : InstrItinClass;
-def tc_d6a805a8 : InstrItinClass;
-def tc_d95f4e98 : InstrItinClass;
-def tc_da79106e : InstrItinClass;
-def tc_dbe218dd : InstrItinClass;
-def tc_dcfee7ae : InstrItinClass;
-def tc_e17ce9ad : InstrItinClass;
-def tc_e2480a7f : InstrItinClass;
-def tc_e2c08bb4 : InstrItinClass;
-def tc_e2c31426 : InstrItinClass;
-def tc_e578178f : InstrItinClass;
-def tc_e836c161 : InstrItinClass;
-def tc_e8c7a357 : InstrItinClass;
-def tc_eb07ef6f : InstrItinClass;
-def tc_ecfaae86 : InstrItinClass;
-def tc_ef0ebaaa : InstrItinClass;
-def tc_ef2676fd : InstrItinClass;
-def tc_f027ebe9 : InstrItinClass;
-def tc_f055fbb6 : InstrItinClass;
-def tc_f1240c08 : InstrItinClass;
-def tc_f16d5b17 : InstrItinClass;
-def tc_f1aa2cdb : InstrItinClass;
-def tc_f26aa619 : InstrItinClass;
-def tc_f4608adc : InstrItinClass;
-def tc_faab1248 : InstrItinClass;
-def tc_fcee8723 : InstrItinClass;
-def tc_feb4974b : InstrItinClass;
-
-class DepScalarItinV4 {
-  list<InstrItinData> DepScalarItinV4_list = [
-    InstrItinData <tc_049dfb74, [InstrStage<1, [SLOT2]>]>,
-    InstrItinData <tc_0767081f, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_07ac815d, [InstrStage<1, [SLOT2]>]>,
-    InstrItinData <tc_090485bb, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_09c86199, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_09faec3b, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_0cb867f2, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_1000eb10, [InstrStage<1, [SLOT3]>]>,
-    InstrItinData <tc_128719e8, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_136c4786, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_14da557c, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_1b6011fb, [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>]>,
-    InstrItinData <tc_1b834fe7, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_1e062b18, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_1e69aa99, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_1f9668cc, [InstrStage<1, [SLOT2]>]>,
-    InstrItinData <tc_1fe8323c, [InstrStage<1, [SLOT3]>]>,
-    InstrItinData <tc_20a8e109, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_210b2456, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_251c87b2, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_261d9b78, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_28d296df, [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>]>,
-    InstrItinData <tc_29c14515, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_2aaab1e0, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_2c8fe5ae, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_2d1e6f5c, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_2e55aa16, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_30665cb0, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_336e698c, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_34e882a4, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_35fb9d13, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_37326008, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_3993c58b, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_3b4892c6, [InstrStage<1, [SLOT3]>]>,
-    InstrItinData <tc_3bea1824, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_3c10f809, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_3d905451, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_3e61d314, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_3eab77bd, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_43068634, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_45631a8d, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_47ab9233, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_47f0b7ad, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_485bb57c, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_4997da4a, [InstrStage<1, [SLOT3]>]>,
-    InstrItinData <tc_511f28f6, [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>]>,
-    InstrItinData <tc_537e2013, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_53ee6546, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_548f402d, [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>]>,
-    InstrItinData <tc_5625c6c1, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_580a779c, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_583510c7, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_5d806107, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_5fa2857c, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_5fe9fcd0, [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>]>,
-    InstrItinData <tc_6264c5e0, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_639d93ee, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_63cd9d2d, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_65dc7cc4, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_69bb508b, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_6c52d277, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_6c576d46, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_70cabf66, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_7639d4b0, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_7675c0e9, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_76c4c5ef, [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>]>,
-    InstrItinData <tc_77781686, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_78b3c689, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_7986ba30, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_7bc567a7, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_7c2dcd4d, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_7ca2ea10, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_7d01cbdc, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_7d9a56cd, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_81a23d44, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_821c4233, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_82f0f122, [InstrStage<1, [SLOT3]>]>,
-    InstrItinData <tc_84630363, [InstrStage<1, [SLOT2]>]>,
-    InstrItinData <tc_86442910, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_87601822, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_88fa2da6, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_8c8041e6, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_8cb685d9, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_8def9c57, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_8f0a6bad, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_8fab9ac3, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_92d1833c, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_94e6ffd9, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_95c54f8b, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_9a13af9d, [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>]>,
-    InstrItinData <tc_9b73d261, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_9c18c9a5, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_9c68db63, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_9ce7a5ab, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_9da3628f, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_9dafb7d3, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_9df8b0dc, [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>]>,
-    InstrItinData <tc_9e86015f, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_9f518242, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_a12a5971, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_a1fb80e1, [InstrStage<1, [SLOT2]>]>,
-    InstrItinData <tc_a333d2a9, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_a4567c39, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_a87879e8, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_a9c993d9, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_aad55963, [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>]>,
-    InstrItinData <tc_ab1b5e74, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_ae0722f7, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_ae2c2dc2, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_ae762521, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_b08b653e, [InstrStage<1, [SLOT2]>]>,
-    InstrItinData <tc_b08be45e, [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>]>,
-    InstrItinData <tc_b0f50e3c, [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>]>,
-    InstrItinData <tc_b189ad4c, [InstrStage<1, [SLOT2]>]>,
-    InstrItinData <tc_b324366f, [InstrStage<1, [SLOT3]>]>,
-    InstrItinData <tc_b5bfaa60, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_b5f5a094, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_b86c7e8b, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_baccf077, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_bc5561d8, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_bcf0e36e, [InstrStage<1, [SLOT3]>]>,
-    InstrItinData <tc_bd16579e, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_be995eaf, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_bf6fa601, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_c0cd91a8, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_c14739d5, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_c1dbc916, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_c58f771a, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_c85212ca, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_c8f9a6f6, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_ca280e8b, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_cbe45117, [InstrStage<1, [SLOT2]>]>,
-    InstrItinData <tc_cd321066, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_d108a090, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_d1b5a4b6, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_d2609065, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_d267fa19, [InstrStage<1, [SLOT2]>]>,
-    InstrItinData <tc_d2a33af5, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_d63b71d1, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_d6a805a8, [InstrStage<1, [SLOT3]>]>,
-    InstrItinData <tc_d95f4e98, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_da79106e, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_dbe218dd, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_dcfee7ae, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_e17ce9ad, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_e2480a7f, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_e2c08bb4, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_e2c31426, [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>]>,
-    InstrItinData <tc_e578178f, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_e836c161, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_e8c7a357, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_eb07ef6f, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_ecfaae86, [InstrStage<1, [SLOT2]>]>,
-    InstrItinData <tc_ef0ebaaa, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_ef2676fd, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_f027ebe9, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_f055fbb6, [InstrStage<1, [SLOT3]>]>,
-    InstrItinData <tc_f1240c08, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_f16d5b17, [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>]>,
-    InstrItinData <tc_f1aa2cdb, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_f26aa619, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_f4608adc, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_faab1248, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_fcee8723, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_feb4974b, [InstrStage<1, [SLOT3]>]>  ];
-}
+def tc_011e0e9d : InstrItinClass;
+def tc_01d44cb2 : InstrItinClass;
+def tc_01e1be3b : InstrItinClass;
+def tc_02fe1c65 : InstrItinClass;
+def tc_0655b949 : InstrItinClass;
+def tc_075c8dd8 : InstrItinClass;
+def tc_0a195f2c : InstrItinClass;
+def tc_0a6c20ae : InstrItinClass;
+def tc_0ba0d5da : InstrItinClass;
+def tc_0dfac0a7 : InstrItinClass;
+def tc_0fac1eb8 : InstrItinClass;
+def tc_112d30d6 : InstrItinClass;
+def tc_1242dc2a : InstrItinClass;
+def tc_1248597c : InstrItinClass;
+def tc_14ab4f41 : InstrItinClass;
+def tc_151bf368 : InstrItinClass;
+def tc_158aa3f7 : InstrItinClass;
+def tc_197dce51 : InstrItinClass;
+def tc_1981450d : InstrItinClass;
+def tc_1c2c7a4a : InstrItinClass;
+def tc_1c7522a8 : InstrItinClass;
+def tc_1d41f8b7 : InstrItinClass;
+def tc_1fcb8495 : InstrItinClass;
+def tc_1fe4ab69 : InstrItinClass;
+def tc_20131976 : InstrItinClass;
+def tc_2237d952 : InstrItinClass;
+def tc_23708a21 : InstrItinClass;
+def tc_2471c1c8 : InstrItinClass;
+def tc_24e109c7 : InstrItinClass;
+def tc_24f426ab : InstrItinClass;
+def tc_280f7fe1 : InstrItinClass;
+def tc_28e55c6f : InstrItinClass;
+def tc_2c13e7f5 : InstrItinClass;
+def tc_2c3e17fc : InstrItinClass;
+def tc_2f573607 : InstrItinClass;
+def tc_362b0be2 : InstrItinClass;
+def tc_38382228 : InstrItinClass;
+def tc_388f9897 : InstrItinClass;
+def tc_38e0bae9 : InstrItinClass;
+def tc_3d14a17b : InstrItinClass;
+def tc_3edca78f : InstrItinClass;
+def tc_3fbf1042 : InstrItinClass;
+def tc_407e96f9 : InstrItinClass;
+def tc_40d64c94 : InstrItinClass;
+def tc_4222e6bf : InstrItinClass;
+def tc_42ff66ba : InstrItinClass;
+def tc_442395f3 : InstrItinClass;
+def tc_449acf79 : InstrItinClass;
+def tc_44d5a428 : InstrItinClass;
+def tc_44fffc58 : InstrItinClass;
+def tc_45791fb8 : InstrItinClass;
+def tc_45f9d1be : InstrItinClass;
+def tc_49fdfd4b : InstrItinClass;
+def tc_4a55d03c : InstrItinClass;
+def tc_4abdbdc6 : InstrItinClass;
+def tc_4ac61d92 : InstrItinClass;
+def tc_4bf903b0 : InstrItinClass;
+def tc_503ce0f3 : InstrItinClass;
+def tc_53c851ab : InstrItinClass;
+def tc_5502c366 : InstrItinClass;
+def tc_55255f2b : InstrItinClass;
+def tc_556f6577 : InstrItinClass;
+def tc_55a9a350 : InstrItinClass;
+def tc_55b33fda : InstrItinClass;
+def tc_56a124a7 : InstrItinClass;
+def tc_57a55b54 : InstrItinClass;
+def tc_5944960d : InstrItinClass;
+def tc_59a7822c : InstrItinClass;
+def tc_5a4b5e58 : InstrItinClass;
+def tc_5b347363 : InstrItinClass;
+def tc_5ceb2f9e : InstrItinClass;
+def tc_5da50c4b : InstrItinClass;
+def tc_5deb5e47 : InstrItinClass;
+def tc_5e4cf0e8 : InstrItinClass;
+def tc_5f2afaf7 : InstrItinClass;
+def tc_60e324ff : InstrItinClass;
+def tc_63567288 : InstrItinClass;
+def tc_64b00d8a : InstrItinClass;
+def tc_651cbe02 : InstrItinClass;
+def tc_65279839 : InstrItinClass;
+def tc_65cbd974 : InstrItinClass;
+def tc_69bfb303 : InstrItinClass;
+def tc_6ae3426b : InstrItinClass;
+def tc_6d861a95 : InstrItinClass;
+def tc_6e20402a : InstrItinClass;
+def tc_6f42bc60 : InstrItinClass;
+def tc_6fc5dbea : InstrItinClass;
+def tc_711c805f : InstrItinClass;
+def tc_713b66bf : InstrItinClass;
+def tc_7401744f : InstrItinClass;
+def tc_7476d766 : InstrItinClass;
+def tc_74a42bda : InstrItinClass;
+def tc_76bb5435 : InstrItinClass;
+def tc_77f94a5e : InstrItinClass;
+def tc_788b1d09 : InstrItinClass;
+def tc_7af3a37e : InstrItinClass;
+def tc_7b9187d3 : InstrItinClass;
+def tc_7c31e19a : InstrItinClass;
+def tc_7c6d32e4 : InstrItinClass;
+def tc_7f7f45f5 : InstrItinClass;
+def tc_7f8ae742 : InstrItinClass;
+def tc_8035e91f : InstrItinClass;
+def tc_822c3c68 : InstrItinClass;
+def tc_829d8a86 : InstrItinClass;
+def tc_838c4d7a : InstrItinClass;
+def tc_84a7500d : InstrItinClass;
+def tc_86173609 : InstrItinClass;
+def tc_887d1bb7 : InstrItinClass;
+def tc_8a6d0d94 : InstrItinClass;
+def tc_8a825db2 : InstrItinClass;
+def tc_8b5bd4f5 : InstrItinClass;
+def tc_8e82e8ca : InstrItinClass;
+def tc_9124c04f : InstrItinClass;
+def tc_92240447 : InstrItinClass;
+def tc_934753bb : InstrItinClass;
+def tc_937dd41c : InstrItinClass;
+def tc_9406230a : InstrItinClass;
+def tc_95a33176 : InstrItinClass;
+def tc_96ef76ef : InstrItinClass;
+def tc_975a4e54 : InstrItinClass;
+def tc_9783714b : InstrItinClass;
+def tc_9b34f5e0 : InstrItinClass;
+def tc_9b3c0462 : InstrItinClass;
+def tc_9bcfb2ee : InstrItinClass;
+def tc_9c52f549 : InstrItinClass;
+def tc_9e27f2f9 : InstrItinClass;
+def tc_9e72dc89 : InstrItinClass;
+def tc_9edb7c77 : InstrItinClass;
+def tc_9edefe01 : InstrItinClass;
+def tc_9f6cd987 : InstrItinClass;
+def tc_a08b630b : InstrItinClass;
+def tc_a1297125 : InstrItinClass;
+def tc_a154b476 : InstrItinClass;
+def tc_a2b365d2 : InstrItinClass;
+def tc_a3070909 : InstrItinClass;
+def tc_a32e03e7 : InstrItinClass;
+def tc_a38c45dc : InstrItinClass;
+def tc_a4e22bbd : InstrItinClass;
+def tc_a4ee89db : InstrItinClass;
+def tc_a7a13fac : InstrItinClass;
+def tc_a7bdb22c : InstrItinClass;
+def tc_a9edeffa : InstrItinClass;
+def tc_abfd9a6d : InstrItinClass;
+def tc_ac65613f : InstrItinClass;
+def tc_addc37a8 : InstrItinClass;
+def tc_ae5babd7 : InstrItinClass;
+def tc_aee6250c : InstrItinClass;
+def tc_b1ae5f67 : InstrItinClass;
+def tc_b4dc7630 : InstrItinClass;
+def tc_b7c4062a : InstrItinClass;
+def tc_b837298f : InstrItinClass;
+def tc_ba9255a6 : InstrItinClass;
+def tc_bb07f2c5 : InstrItinClass;
+def tc_bb831a7c : InstrItinClass;
+def tc_bf2ffc0f : InstrItinClass;
+def tc_c20701f0 : InstrItinClass;
+def tc_c21d7447 : InstrItinClass;
+def tc_c57d9f39 : InstrItinClass;
+def tc_c818ff7f : InstrItinClass;
+def tc_ce59038e : InstrItinClass;
+def tc_cfa0e29b : InstrItinClass;
+def tc_d03278fd : InstrItinClass;
+def tc_d33e5eee : InstrItinClass;
+def tc_d3632d88 : InstrItinClass;
+def tc_d45ba9cd : InstrItinClass;
+def tc_d57d649c : InstrItinClass;
+def tc_d61dfdc3 : InstrItinClass;
+def tc_d68dca5c : InstrItinClass;
+def tc_d7718fbe : InstrItinClass;
+def tc_db596beb : InstrItinClass;
+def tc_db96aa6b : InstrItinClass;
+def tc_dc51281d : InstrItinClass;
+def tc_decdde8a : InstrItinClass;
+def tc_df5d53f9 : InstrItinClass;
+def tc_e3d699e3 : InstrItinClass;
+def tc_e9170fb7 : InstrItinClass;
+def tc_ed03645c : InstrItinClass;
+def tc_eed07714 : InstrItinClass;
+def tc_eeda4109 : InstrItinClass;
+def tc_ef921005 : InstrItinClass;
+def tc_f098b237 : InstrItinClass;
+def tc_f0cdeccf : InstrItinClass;
+def tc_f0e8e832 : InstrItinClass;
+def tc_f34c1c21 : InstrItinClass;
+def tc_f38f92e1 : InstrItinClass;
+def tc_f529831b : InstrItinClass;
+def tc_f6e2aff9 : InstrItinClass;
+def tc_f7569068 : InstrItinClass;
+def tc_f999c66e : InstrItinClass;
+def tc_fae9dfa5 : InstrItinClass;
+def tc_fedb7e19 : InstrItinClass;
 
 class DepScalarItinV5 {
   list<InstrItinData> DepScalarItinV5_list = [
-    InstrItinData <tc_049dfb74, [InstrStage<1, [SLOT2]>]>,
-    InstrItinData <tc_0767081f, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_07ac815d, [InstrStage<1, [SLOT2]>]>,
-    InstrItinData <tc_090485bb, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_09c86199, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_09faec3b, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_0cb867f2, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_1000eb10, [InstrStage<1, [SLOT3]>]>,
-    InstrItinData <tc_128719e8, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_136c4786, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_14da557c, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_1b6011fb, [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>]>,
-    InstrItinData <tc_1b834fe7, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_1e062b18, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_1e69aa99, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_1f9668cc, [InstrStage<1, [SLOT2]>]>,
-    InstrItinData <tc_1fe8323c, [InstrStage<1, [SLOT3]>]>,
-    InstrItinData <tc_20a8e109, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_210b2456, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_251c87b2, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_261d9b78, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_28d296df, [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>]>,
-    InstrItinData <tc_29c14515, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_2aaab1e0, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_2c8fe5ae, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_2d1e6f5c, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_2e55aa16, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_30665cb0, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_336e698c, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_34e882a4, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_35fb9d13, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_37326008, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_3993c58b, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_3b4892c6, [InstrStage<1, [SLOT3]>]>,
-    InstrItinData <tc_3bea1824, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_3c10f809, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_3d905451, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_3e61d314, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_3eab77bd, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_43068634, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_45631a8d, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_47ab9233, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_47f0b7ad, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_485bb57c, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_4997da4a, [InstrStage<1, [SLOT3]>]>,
-    InstrItinData <tc_511f28f6, [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>]>,
-    InstrItinData <tc_537e2013, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_53ee6546, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_548f402d, [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>]>,
-    InstrItinData <tc_5625c6c1, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_580a779c, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_583510c7, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_5d806107, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_5fa2857c, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_5fe9fcd0, [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>]>,
-    InstrItinData <tc_6264c5e0, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_639d93ee, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_63cd9d2d, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_65dc7cc4, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_69bb508b, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_6c52d277, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_6c576d46, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_70cabf66, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_7639d4b0, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_7675c0e9, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_76c4c5ef, [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>]>,
-    InstrItinData <tc_77781686, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_78b3c689, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_7986ba30, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_7bc567a7, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_7c2dcd4d, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_7ca2ea10, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_7d01cbdc, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_7d9a56cd, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_81a23d44, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_821c4233, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_82f0f122, [InstrStage<1, [SLOT3]>]>,
-    InstrItinData <tc_84630363, [InstrStage<1, [SLOT2]>]>,
-    InstrItinData <tc_86442910, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_87601822, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_88fa2da6, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_8c8041e6, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_8cb685d9, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_8def9c57, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_8f0a6bad, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_8fab9ac3, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_92d1833c, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_94e6ffd9, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_95c54f8b, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_9a13af9d, [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>]>,
-    InstrItinData <tc_9b73d261, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_9c18c9a5, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_9c68db63, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_9ce7a5ab, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_9da3628f, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_9dafb7d3, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_9df8b0dc, [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>]>,
-    InstrItinData <tc_9e86015f, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_9f518242, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_a12a5971, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_a1fb80e1, [InstrStage<1, [SLOT2]>]>,
-    InstrItinData <tc_a333d2a9, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_a4567c39, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_a87879e8, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_a9c993d9, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_aad55963, [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>]>,
-    InstrItinData <tc_ab1b5e74, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_ae0722f7, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_ae2c2dc2, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_ae762521, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_b08b653e, [InstrStage<1, [SLOT2]>]>,
-    InstrItinData <tc_b08be45e, [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>]>,
-    InstrItinData <tc_b0f50e3c, [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>]>,
-    InstrItinData <tc_b189ad4c, [InstrStage<1, [SLOT2]>]>,
-    InstrItinData <tc_b324366f, [InstrStage<1, [SLOT3]>]>,
-    InstrItinData <tc_b5bfaa60, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_b5f5a094, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_b86c7e8b, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_baccf077, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_bc5561d8, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_bcf0e36e, [InstrStage<1, [SLOT3]>]>,
-    InstrItinData <tc_bd16579e, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_be995eaf, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_bf6fa601, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_c0cd91a8, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_c14739d5, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_c1dbc916, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_c58f771a, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_c85212ca, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_c8f9a6f6, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_ca280e8b, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_cbe45117, [InstrStage<1, [SLOT2]>]>,
-    InstrItinData <tc_cd321066, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_d108a090, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_d1b5a4b6, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_d2609065, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_d267fa19, [InstrStage<1, [SLOT2]>]>,
-    InstrItinData <tc_d2a33af5, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_d63b71d1, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_d6a805a8, [InstrStage<1, [SLOT3]>]>,
-    InstrItinData <tc_d95f4e98, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_da79106e, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_dbe218dd, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_dcfee7ae, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_e17ce9ad, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_e2480a7f, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_e2c08bb4, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_e2c31426, [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>]>,
-    InstrItinData <tc_e578178f, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_e836c161, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_e8c7a357, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_eb07ef6f, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_ecfaae86, [InstrStage<1, [SLOT2]>]>,
-    InstrItinData <tc_ef0ebaaa, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_ef2676fd, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_f027ebe9, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_f055fbb6, [InstrStage<1, [SLOT3]>]>,
-    InstrItinData <tc_f1240c08, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_f16d5b17, [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>]>,
-    InstrItinData <tc_f1aa2cdb, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_f26aa619, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_f4608adc, [InstrStage<1, [SLOT0]>]>,
-    InstrItinData <tc_faab1248, [InstrStage<1, [SLOT2, SLOT3]>]>,
-    InstrItinData <tc_fcee8723, [InstrStage<1, [SLOT0, SLOT1]>]>,
-    InstrItinData <tc_feb4974b, [InstrStage<1, [SLOT3]>]>  ];
+    InstrItinData <tc_011e0e9d, [InstrStage<1, [SLOT0]>]>,
+    InstrItinData <tc_01d44cb2, [InstrStage<1, [SLOT2, SLOT3]>]>,
+    InstrItinData <tc_01e1be3b, [InstrStage<1, [SLOT2, SLOT3]>]>,
+    InstrItinData <tc_02fe1c65, [InstrStage<1, [SLOT2, SLOT3]>]>,
+    InstrItinData <tc_0655b949, [InstrStage<1, [SLOT0, SLOT1]>]>,
+    InstrItinData <tc_075c8dd8, [InstrStage<1, [SLOT0, SLOT1]>]>,
+    InstrItinData <tc_0a195f2c, [InstrStage<1, [SLOT2, SLOT3]>]>,
+    InstrItinData <tc_0a6c20ae, [InstrStage<1, [SLOT0]>]>,
+    InstrItinData <tc_0ba0d5da, [InstrStage<1, [SLOT2]>]>,
+    InstrItinData <tc_0dfac0a7, [InstrStage<1, [SLOT2, SLOT3]>]>,
+    InstrItinData <tc_0fac1eb8, [InstrStage<1, [SLOT0]>]>,
+    InstrItinData <tc_112d30d6, [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>]>,
+    InstrItinData <tc_1242dc2a, [InstrStage<1, [SLOT0]>]>,
+    InstrItinData <tc_1248597c, [InstrStage<1, [SLOT3]>]>,
+    InstrItinData <tc_14ab4f41, [InstrStage<1, [SLOT0]>]>,
+    InstrItinData <tc_151bf368, [InstrStage<1, [SLOT2, SLOT3]>]>,
+    InstrItinData <tc_158aa3f7, [InstrStage<1, [SLOT0]>]>,
+    InstrItinData <tc_197dce51, [InstrStage<1, [SLOT3]>]>,
+    InstrItinData <tc_1981450d, [InstrStage<1, [SLOT0]>]>,
+    InstrItinData <tc_1c2c7a4a, [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>]>,
+    InstrItinData <tc_1c7522a8, [InstrStage<1, [SLOT0, SLOT1]>]>,
+    InstrItinData <tc_1d41f8b7, [InstrStage<1, [SLOT2, SLOT3]>]>,
+    InstrItinData <tc_1fcb8495, [InstrStage<1, [SLOT2, SLOT3]>]>,
+    InstrItinData <tc_1fe4ab69, [InstrStage<1, [SLOT0, SLOT1]>]>,
+    InstrItinData <tc_20131976, [InstrStage<1, [SLOT2, SLOT3]>]>,
+    InstrItinData <tc_2237d952, [InstrStage<1, [SLOT0]>]>,
+    InstrItinData <tc_23708a21, [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>]>,
+    InstrItinData <tc_2471c1c8, [InstrStage<1, [SLOT0]>]>,
+    InstrItinData <tc_24e109c7, [InstrStage<1, [SLOT0]>]>,
+    InstrItinData <tc_24f426ab, [InstrStage<1, [SLOT2, SLOT3]>]>,
+    InstrItinData <tc_280f7fe1, [InstrStage<1, [SLOT0, SLOT1]>]>,
+    InstrItinData <tc_28e55c6f, [InstrStage<1, [SLOT3]>]>,
+    InstrItinData <tc_2c13e7f5, [InstrStage<1, [SLOT2, SLOT3]>]>,
+    InstrItinData <tc_2c3e17fc, [InstrStage<1, [SLOT3]>]>,
+    InstrItinData <tc_2f573607, [InstrStage<1, [SLOT2]>]>,
+    InstrItinData <tc_362b0be2, [InstrStage<1, [SLOT2]>]>,
+    InstrItinData <tc_38382228, [InstrStage<1, [SLOT2, SLOT3]>]>,
+    InstrItinData <tc_388f9897, [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>]>,
+    InstrItinData <tc_38e0bae9, [InstrStage<1, [SLOT2, SLOT3]>]>,
+    InstrItinData <tc_3d14a17b, [InstrStage<1, [SLOT0, SLOT1]>]>,
+    InstrItinData <tc_3edca78f, [InstrStage<1, [SLOT3]>]>,
+    InstrItinData <tc_3fbf1042, [InstrStage<1, [SLOT0, SLOT1]>]>,
+    InstrItinData <tc_407e96f9, [InstrStage<1, [SLOT2, SLOT3]>]>,
+    InstrItinData <tc_40d64c94, [InstrStage<1, [SLOT0]>]>,
+    InstrItinData <tc_4222e6bf, [InstrStage<1, [SLOT0, SLOT1]>]>,
+    InstrItinData <tc_42ff66ba, [InstrStage<1, [SLOT2]>]>,
+    InstrItinData <tc_442395f3, [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>]>,
+    InstrItinData <tc_449acf79, [InstrStage<1, [SLOT0, SLOT1]>]>,
+    InstrItinData <tc_44d5a428, [InstrStage<1, [SLOT0, SLOT1]>]>,
+    InstrItinData <tc_44fffc58, [InstrStage<1, [SLOT2, SLOT3]>]>,
+    InstrItinData <tc_45791fb8, [InstrStage<1, [SLOT0, SLOT1]>]>,
+    InstrItinData <tc_45f9d1be, [InstrStage<1, [SLOT2]>]>,
+    InstrItinData <tc_49fdfd4b, [InstrStage<1, [SLOT3]>]>,
+    InstrItinData <tc_4a55d03c, [InstrStage<1, [SLOT2, SLOT3]>]>,
+    InstrItinData <tc_4abdbdc6, [InstrStage<1, [SLOT3]>]>,
+    InstrItinData <tc_4ac61d92, [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>]>,
+    InstrItinData <tc_4bf903b0, [InstrStage<1, [SLOT0]>]>,
+    InstrItinData <tc_503ce0f3, [InstrStage<1, [SLOT2, SLOT3]>]>,
+    InstrItinData <tc_53c851ab, [InstrStage<1, [SLOT2]>]>,
+    InstrItinData <tc_5502c366, [InstrStage<1, [SLOT2, SLOT3]>]>,
+    InstrItinData <tc_55255f2b, [InstrStage<1, [SLOT3]>]>,
+    InstrItinData <tc_556f6577, [InstrStage<1, [SLOT2, SLOT3]>]>,
+    InstrItinData <tc_55a9a350, [InstrStage<1, [SLOT0]>]>,
+    InstrItinData <tc_55b33fda, [InstrStage<1, [SLOT2, SLOT3]>]>,
+    InstrItinData <tc_56a124a7, [InstrStage<1, [SLOT2, SLOT3]>]>,
+    InstrItinData <tc_57a55b54, [InstrStage<1, [SLOT3]>]>,
+    InstrItinData <tc_5944960d, [InstrStage<1, [SLOT0, SLOT1]>]>,
+    InstrItinData <tc_59a7822c, [InstrStage<1, [SLOT0, SLOT1]>]>,
+    InstrItinData <tc_5a4b5e58, [InstrStage<1, [SLOT3]>]>,
+    InstrItinData <tc_5b347363, [InstrStage<1, [SLOT0, SLOT1]>]>,
+    InstrItinData <tc_5ceb2f9e, [InstrStage<1, [SLOT0, SLOT1]>]>,
+    InstrItinData <tc_5da50c4b, [InstrStage<1, [SLOT2, SLOT3]>]>,
+    InstrItinData <tc_5deb5e47, [InstrStage<1, [SLOT0]>]>,
+    InstrItinData <tc_5e4cf0e8, [InstrStage<1, [SLOT2, SLOT3]>]>,
+    InstrItinData <tc_5f2afaf7, [InstrStage<1, [SLOT0, SLOT1]>]>,
+    InstrItinData <tc_60e324ff, [InstrStage<1, [SLOT2]>]>,
+    InstrItinData <tc_63567288, [InstrStage<1, [SLOT0, SLOT1]>]>,
+    InstrItinData <tc_64b00d8a, [InstrStage<1, [SLOT0]>]>,
+    InstrItinData <tc_651cbe02, [InstrStage<1, [SLOT2, SLOT3]>]>,
+    InstrItinData <tc_65279839, [InstrStage<1, [SLOT2, SLOT3]>]>,
+    InstrItinData <tc_65cbd974, [InstrStage<1, [SLOT0, SLOT1]>]>,
+    InstrItinData <tc_69bfb303, [InstrStage<1, [SLOT2, SLOT3]>]>,
+    InstrItinData <tc_6ae3426b, [InstrStage<1, [SLOT3]>]>,
+    InstrItinData <tc_6d861a95, [InstrStage<1, [SLOT3]>]>,
+    InstrItinData <tc_6e20402a, [InstrStage<1, [SLOT0]>]>,
+    InstrItinData <tc_6f42bc60, [InstrStage<1, [SLOT0]>]>,
+    InstrItinData <tc_6fc5dbea, [InstrStage<1, [SLOT2, SLOT3]>]>,
+    InstrItinData <tc_711c805f, [InstrStage<1, [SLOT2, SLOT3]>]>,
+    InstrItinData <tc_713b66bf, [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>]>,
+    InstrItinData <tc_7401744f, [InstrStage<1, [SLOT2, SLOT3]>]>,
+    InstrItinData <tc_7476d766, [InstrStage<1, [SLOT3]>]>,
+    InstrItinData <tc_74a42bda, [InstrStage<1, [SLOT0, SLOT1]>]>,
+    InstrItinData <tc_76bb5435, [InstrStage<1, [SLOT0, SLOT1]>]>,
+    InstrItinData <tc_77f94a5e, [InstrStage<1, [SLOT0]>]>,
+    InstrItinData <tc_788b1d09, [InstrStage<1, [SLOT2, SLOT3]>]>,
+    InstrItinData <tc_7af3a37e, [InstrStage<1, [SLOT0]>]>,
+    InstrItinData <tc_7b9187d3, [InstrStage<1, [SLOT0]>]>,
+    InstrItinData <tc_7c31e19a, [InstrStage<1, [SLOT0, SLOT1]>]>,
+    InstrItinData <tc_7c6d32e4, [InstrStage<1, [SLOT0, SLOT1]>]>,
+    InstrItinData <tc_7f7f45f5, [InstrStage<1, [SLOT2, SLOT3]>]>,
+    InstrItinData <tc_7f8ae742, [InstrStage<1, [SLOT2, SLOT3]>]>,
+    InstrItinData <tc_8035e91f, [InstrStage<1, [SLOT0, SLOT1]>]>,
+    InstrItinData <tc_822c3c68, [InstrStage<1, [SLOT0, SLOT1]>]>,
+    InstrItinData <tc_829d8a86, [InstrStage<1, [SLOT0]>]>,
+    InstrItinData <tc_838c4d7a, [InstrStage<1, [SLOT0, SLOT1]>]>,
+    InstrItinData <tc_84a7500d, [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>]>,
+    InstrItinData <tc_86173609, [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>]>,
+    InstrItinData <tc_887d1bb7, [InstrStage<1, [SLOT0, SLOT1]>]>,
+    InstrItinData <tc_8a6d0d94, [InstrStage<1, [SLOT0, SLOT1]>]>,
+    InstrItinData <tc_8a825db2, [InstrStage<1, [SLOT2, SLOT3]>]>,
+    InstrItinData <tc_8b5bd4f5, [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>]>,
+    InstrItinData <tc_8e82e8ca, [InstrStage<1, [SLOT0, SLOT1]>]>,
+    InstrItinData <tc_9124c04f, [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>]>,
+    InstrItinData <tc_92240447, [InstrStage<1, [SLOT0]>]>,
+    InstrItinData <tc_934753bb, [InstrStage<1, [SLOT0]>]>,
+    InstrItinData <tc_937dd41c, [InstrStage<1, [SLOT0, SLOT1]>]>,
+    InstrItinData <tc_9406230a, [InstrStage<1, [SLOT3]>]>,
+    InstrItinData <tc_95a33176, [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>]>,
+    InstrItinData <tc_96ef76ef, [InstrStage<1, [SLOT0]>]>,
+    InstrItinData <tc_975a4e54, [InstrStage<1, [SLOT0]>]>,
+    InstrItinData <tc_9783714b, [InstrStage<1, [SLOT2, SLOT3]>]>,
+    InstrItinData <tc_9b34f5e0, [InstrStage<1, [SLOT2]>]>,
+    InstrItinData <tc_9b3c0462, [InstrStage<1, [SLOT2, SLOT3]>]>,
+    InstrItinData <tc_9bcfb2ee, [InstrStage<1, [SLOT0]>]>,
+    InstrItinData <tc_9c52f549, [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>]>,
+    InstrItinData <tc_9e27f2f9, [InstrStage<1, [SLOT2, SLOT3]>]>,
+    InstrItinData <tc_9e72dc89, [InstrStage<1, [SLOT2, SLOT3]>]>,
+    InstrItinData <tc_9edb7c77, [InstrStage<1, [SLOT2, SLOT3]>]>,
+    InstrItinData <tc_9edefe01, [InstrStage<1, [SLOT0, SLOT1]>]>,
+    InstrItinData <tc_9f6cd987, [InstrStage<1, [SLOT2, SLOT3]>]>,
+    InstrItinData <tc_a08b630b, [InstrStage<1, [SLOT2, SLOT3]>]>,
+    InstrItinData <tc_a1297125, [InstrStage<1, [SLOT2, SLOT3]>]>,
+    InstrItinData <tc_a154b476, [InstrStage<1, [SLOT2, SLOT3]>]>,
+    InstrItinData <tc_a2b365d2, [InstrStage<1, [SLOT0, SLOT1]>]>,
+    InstrItinData <tc_a3070909, [InstrStage<1, [SLOT0]>]>,
+    InstrItinData <tc_a32e03e7, [InstrStage<1, [SLOT0, SLOT1]>]>,
+    InstrItinData <tc_a38c45dc, [InstrStage<1, [SLOT2, SLOT3]>]>,
+    InstrItinData <tc_a4e22bbd, [InstrStage<1, [SLOT2, SLOT3]>]>,
+    InstrItinData <tc_a4ee89db, [InstrStage<1, [SLOT0]>]>,
+    InstrItinData <tc_a7a13fac, [InstrStage<1, [SLOT2, SLOT3]>]>,
+    InstrItinData <tc_a7bdb22c, [InstrStage<1, [SLOT2, SLOT3]>]>,
+    InstrItinData <tc_a9edeffa, [InstrStage<1, [SLOT0, SLOT1]>]>,
+    InstrItinData <tc_abfd9a6d, [InstrStage<1, [SLOT0, SLOT1]>]>,
+    InstrItinData <tc_ac65613f, [InstrStage<1, [SLOT0, SLOT1]>]>,
+    InstrItinData <tc_addc37a8, [InstrStage<1, [SLOT0]>]>,
+    InstrItinData <tc_ae5babd7, [InstrStage<1, [SLOT0, SLOT1]>]>,
+    InstrItinData <tc_aee6250c, [InstrStage<1, [SLOT0, SLOT1]>]>,
+    InstrItinData <tc_b1ae5f67, [InstrStage<1, [SLOT0]>]>,
+    InstrItinData <tc_b4dc7630, [InstrStage<1, [SLOT0, SLOT1]>]>,
+    InstrItinData <tc_b7c4062a, [InstrStage<1, [SLOT0, SLOT1]>]>,
+    InstrItinData <tc_b837298f, [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>]>,
+    InstrItinData <tc_ba9255a6, [InstrStage<1, [SLOT0, SLOT1]>]>,
+    InstrItinData <tc_bb07f2c5, [InstrStage<1, [SLOT0, SLOT1]>]>,
+    InstrItinData <tc_bb831a7c, [InstrStage<1, [SLOT2, SLOT3]>]>,
+    InstrItinData <tc_bf2ffc0f, [InstrStage<1, [SLOT0, SLOT1]>]>,
+    InstrItinData <tc_c20701f0, [InstrStage<1, [SLOT2, SLOT3]>]>,
+    InstrItinData <tc_c21d7447, [InstrStage<1, [SLOT2, SLOT3]>]>,
+    InstrItinData <tc_c57d9f39, [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>]>,
+    InstrItinData <tc_c818ff7f, [InstrStage<1, [SLOT0]>]>,
+    InstrItinData <tc_ce59038e, [InstrStage<1, [SLOT0]>]>,
+    InstrItinData <tc_cfa0e29b, [InstrStage<1, [SLOT0]>]>,
+    InstrItinData <tc_d03278fd, [InstrStage<1, [SLOT0, SLOT1]>]>,
+    InstrItinData <tc_d33e5eee, [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>]>,
+    InstrItinData <tc_d3632d88, [InstrStage<1, [SLOT2, SLOT3]>]>,
+    InstrItinData <tc_d45ba9cd, [InstrStage<1, [SLOT0]>]>,
+    InstrItinData <tc_d57d649c, [InstrStage<1, [SLOT2]>]>,
+    InstrItinData <tc_d61dfdc3, [InstrStage<1, [SLOT2, SLOT3]>]>,
+    InstrItinData <tc_d68dca5c, [InstrStage<1, [SLOT2, SLOT3]>]>,
+    InstrItinData <tc_d7718fbe, [InstrStage<1, [SLOT3]>]>,
+    InstrItinData <tc_db596beb, [InstrStage<1, [SLOT2, SLOT3]>]>,
+    InstrItinData <tc_db96aa6b, [InstrStage<1, [SLOT0]>]>,
+    InstrItinData <tc_dc51281d, [InstrStage<1, [SLOT2]>]>,
+    InstrItinData <tc_decdde8a, [InstrStage<1, [SLOT2, SLOT3]>]>,
+    InstrItinData <tc_df5d53f9, [InstrStage<1, [SLOT0]>]>,
+    InstrItinData <tc_e3d699e3, [InstrStage<1, [SLOT2, SLOT3]>]>,
+    InstrItinData <tc_e9170fb7, [InstrStage<1, [SLOT0, SLOT1]>]>,
+    InstrItinData <tc_ed03645c, [InstrStage<1, [SLOT2]>]>,
+    InstrItinData <tc_eed07714, [InstrStage<1, [SLOT0, SLOT1]>]>,
+    InstrItinData <tc_eeda4109, [InstrStage<1, [SLOT2, SLOT3]>]>,
+    InstrItinData <tc_ef921005, [InstrStage<1, [SLOT2, SLOT3]>]>,
+    InstrItinData <tc_f098b237, [InstrStage<1, [SLOT2, SLOT3]>]>,
+    InstrItinData <tc_f0cdeccf, [InstrStage<1, [SLOT2, SLOT3]>]>,
+    InstrItinData <tc_f0e8e832, [InstrStage<1, [SLOT2, SLOT3]>]>,
+    InstrItinData <tc_f34c1c21, [InstrStage<1, [SLOT2, SLOT3]>]>,
+    InstrItinData <tc_f38f92e1, [InstrStage<1, [SLOT0]>]>,
+    InstrItinData <tc_f529831b, [InstrStage<1, [SLOT0]>]>,
+    InstrItinData <tc_f6e2aff9, [InstrStage<1, [SLOT0]>]>,
+    InstrItinData <tc_f7569068, [InstrStage<1, [SLOT2, SLOT3]>]>,
+    InstrItinData <tc_f999c66e, [InstrStage<1, [SLOT2, SLOT3]>]>,
+    InstrItinData <tc_fae9dfa5, [InstrStage<1, [SLOT3]>]>,
+    InstrItinData <tc_fedb7e19, [InstrStage<1, [SLOT0, SLOT1]>]>  ];
 }
 
 class DepScalarItinV55 {
   list<InstrItinData> DepScalarItinV55_list = [
-    InstrItinData <tc_049dfb74, /*tc_2early*/
-      [InstrStage<1, [SLOT2]>], [1],
-      [Hex_FWD]>,
-
-    InstrItinData <tc_0767081f, /*tc_2early*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [2, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_07ac815d, /*tc_2early*/
-      [InstrStage<1, [SLOT2]>], [2, 1],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_090485bb, /*tc_2*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_09c86199, /*tc_3x*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 4, 1, 1],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_09faec3b, /*tc_3stall*/
-      [InstrStage<1, [SLOT0]>], [3, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_0cb867f2, /*tc_ld*/
-      [InstrStage<1, [SLOT0]>], [4, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_1000eb10, /*tc_3x*/
-      [InstrStage<1, [SLOT3]>], [2, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_128719e8, /*tc_ld*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 1, 1, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_136c4786, /*tc_ld*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [4, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_14da557c, /*tc_ld*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [4, 2, 1, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_1b6011fb, /*tc_1*/
-      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_1b834fe7, /*tc_2early*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [2, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_1e062b18, /*tc_1*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_1e69aa99, /*tc_st*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [2, 1, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_1f9668cc, /*tc_2early*/
-      [InstrStage<1, [SLOT2]>], [3, 1],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_1fe8323c, /*tc_2*/
-      [InstrStage<1, [SLOT3]>], [4, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_20a8e109, /*tc_st*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [3, 1, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_210b2456, /*tc_st*/
-      [InstrStage<1, [SLOT0]>], [1, 2, 2, 3],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_251c87b2, /*tc_st*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [3, 1, 2, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_261d9b78, /*tc_ld*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_28d296df, /*tc_1*/
-      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 3, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_29c14515, /*tc_ld*/
-      [InstrStage<1, [SLOT0]>], [4, 1],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_2aaab1e0, /*tc_3*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1, 1],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_2c8fe5ae, /*tc_st*/
-      [InstrStage<1, [SLOT0]>], [2, 2, 3],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_2d1e6f5c, /*tc_3*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1, 1],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_2e55aa16, /*tc_3*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1, 1, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_30665cb0, /*tc_st*/
-      [InstrStage<1, [SLOT0]>], [1],
-      [Hex_FWD]>,
-
-    InstrItinData <tc_336e698c, /*tc_st*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [3, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_34e882a4, /*tc_ld*/
-      [InstrStage<1, [SLOT0]>], [1],
-      [Hex_FWD]>,
-
-    InstrItinData <tc_35fb9d13, /*tc_2early*/
-      [InstrStage<1, [SLOT0]>], [],
-      []>,
-
-    InstrItinData <tc_37326008, /*tc_2*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_3993c58b, /*tc_3stall*/
-      [InstrStage<1, [SLOT0]>], [4, 3, 1],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_3b4892c6, /*tc_3x*/
-      [InstrStage<1, [SLOT3]>], [4, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_3bea1824, /*tc_3x*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_3c10f809, /*tc_1*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_3d905451, /*tc_st*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [2, 1, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_3e61d314, /*tc_3stall*/
-      [InstrStage<1, [SLOT0]>], [1, 3, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_3eab77bd, /*tc_ld*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 1, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_43068634, /*tc_2early*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_45631a8d, /*tc_st*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [1, 1, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_47ab9233, /*tc_2*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_47f0b7ad, /*tc_2early*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [3, 1],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_485bb57c, /*tc_3x*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_4997da4a, /*tc_3x*/
-      [InstrStage<1, [SLOT3]>], [1],
-      [Hex_FWD]>,
-
-    InstrItinData <tc_511f28f6, /*tc_1*/
-      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_537e2013, /*tc_2early*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_53ee6546, /*tc_st*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [1, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_548f402d, /*tc_1*/
-      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_5625c6c1, /*tc_ld*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [4, 1, 1, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_580a779c, /*tc_3stall*/
-      [InstrStage<1, [SLOT0]>], [3, 1, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_583510c7, /*tc_2*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 4, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_5d806107, /*tc_3stall*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_5fa2857c, /*tc_2early*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [3, 1, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_5fe9fcd0, /*tc_2early*/
-      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 1, 1],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_6264c5e0, /*tc_3x*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_639d93ee, /*tc_2early*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [2],
-      [Hex_FWD]>,
-
-    InstrItinData <tc_63cd9d2d, /*tc_2*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_65dc7cc4, /*tc_ld*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 1, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_69bb508b, /*tc_3x*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2, 1],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_6c52d277, /*tc_st*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [1, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_6c576d46, /*tc_st*/
-      [InstrStage<1, [SLOT0]>], [1, 2, 3],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_70cabf66, /*tc_ld*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [4, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_7639d4b0, /*tc_st*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [3, 1, 1, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_7675c0e9, /*tc_st*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [3, 3, 1, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_76c4c5ef, /*tc_2*/
-      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [4, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_77781686, /*tc_st*/
-      [InstrStage<1, [SLOT0]>], [2, 1, 1, 2, 3],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_78b3c689, /*tc_1*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_7986ba30, /*tc_st*/
-      [InstrStage<1, [SLOT0]>], [3, 2, 3],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_7bc567a7, /*tc_st*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [2, 1, 1, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_7c2dcd4d, /*tc_1*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [3],
-      [Hex_FWD]>,
-
-    InstrItinData <tc_7ca2ea10, /*tc_1*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_7d01cbdc, /*tc_3stall*/
-      [InstrStage<1, [SLOT0]>], [4, 1, 1],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_7d9a56cd, /*tc_ld*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [4, 1, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_81a23d44, /*tc_2early*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_821c4233, /*tc_1*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [3, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_82f0f122, /*tc_3x*/
-      [InstrStage<1, [SLOT3]>], [4, 1],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_84630363, /*tc_2early*/
-      [InstrStage<1, [SLOT2]>], [2, 1],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_86442910, /*tc_ld*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [],
-      []>,
-
-    InstrItinData <tc_87601822, /*tc_2*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_88fa2da6, /*tc_1*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_8c8041e6, /*tc_3x*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_8cb685d9, /*tc_3x*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 1, 1],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_8def9c57, /*tc_st*/
-      [InstrStage<1, [SLOT0]>], [3, 1, 1, 2, 3],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_8f0a6bad, /*tc_st*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [3, 1, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_8fab9ac3, /*tc_st*/
-      [InstrStage<1, [SLOT0]>], [3, 3, 1, 2, 3],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_92d1833c, /*tc_2early*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [1, 1, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_94e6ffd9, /*tc_2*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_95c54f8b, /*tc_3stall*/
-      [InstrStage<1, [SLOT0]>], [],
-      []>,
-
-    InstrItinData <tc_9a13af9d, /*tc_1*/
-      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [2],
-      [Hex_FWD]>,
-
-    InstrItinData <tc_9b73d261, /*tc_st*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [3, 2, 1, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_9c18c9a5, /*tc_1*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_9c68db63, /*tc_st*/
-      [InstrStage<1, [SLOT0]>], [3, 1, 2, 2, 3],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_9ce7a5ab, /*tc_3stall*/
-      [InstrStage<1, [SLOT0]>], [4, 2, 1],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_9da3628f, /*tc_st*/
+    InstrItinData <tc_011e0e9d, /*tc_st*/
       [InstrStage<1, [SLOT0]>], [2, 1, 2, 3],
       [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
 
-    InstrItinData <tc_9dafb7d3, /*tc_ld*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [4, 2, 1, 1, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_9df8b0dc, /*tc_2early*/
-      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 1, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_9e86015f, /*tc_st*/
-      [InstrStage<1, [SLOT0]>], [2, 3],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_9f518242, /*tc_1*/
+    InstrItinData <tc_01d44cb2, /*tc_1*/
       [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
       [Hex_FWD, Hex_FWD, Hex_FWD]>,
 
-    InstrItinData <tc_a12a5971, /*tc_3x*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 1, 2],
+    InstrItinData <tc_01e1be3b, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 1, 1],
       [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
 
-    InstrItinData <tc_a1fb80e1, /*tc_2early*/
-      [InstrStage<1, [SLOT2]>], [2, 1],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_a333d2a9, /*tc_2early*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [2],
-      [Hex_FWD]>,
-
-    InstrItinData <tc_a4567c39, /*tc_st*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [1, 2, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_a87879e8, /*tc_3stall*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 4, 1, 1, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_a9c993d9, /*tc_st*/
-      [InstrStage<1, [SLOT0]>], [1, 2, 2],
+    InstrItinData <tc_02fe1c65, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1],
       [Hex_FWD, Hex_FWD, Hex_FWD]>,
 
-    InstrItinData <tc_aad55963, /*tc_2early*/
-      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [],
-      []>,
-
-    InstrItinData <tc_ab1b5e74, /*tc_1*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_ae0722f7, /*tc_3*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 4, 1, 1, 1],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_ae2c2dc2, /*tc_3x*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_ae762521, /*tc_ld*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 2, 1, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_b08b653e, /*tc_2early*/
-      [InstrStage<1, [SLOT2]>], [1],
-      [Hex_FWD]>,
-
-    InstrItinData <tc_b08be45e, /*tc_1*/
-      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 3, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_b0f50e3c, /*tc_2*/
-      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [4, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_b189ad4c, /*tc_2early*/
-      [InstrStage<1, [SLOT2]>], [2],
-      [Hex_FWD]>,
-
-    InstrItinData <tc_b324366f, /*tc_2early*/
-      [InstrStage<1, [SLOT3]>], [1, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_b5bfaa60, /*tc_2early*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [2, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_b5f5a094, /*tc_ld*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_b86c7e8b, /*tc_1*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_baccf077, /*tc_ld*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [4, 2, 1, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_bc5561d8, /*tc_3x*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 1, 1, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_bcf0e36e, /*tc_3x*/
-      [InstrStage<1, [SLOT3]>], [],
-      []>,
-
-    InstrItinData <tc_bd16579e, /*tc_1*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_be995eaf, /*tc_st*/
-      [InstrStage<1, [SLOT0]>], [1, 1, 2, 3],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_bf6fa601, /*tc_ld*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [4, 1, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_c0cd91a8, /*tc_2*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_c14739d5, /*tc_st*/
+    InstrItinData <tc_0655b949, /*tc_st*/
       [InstrStage<1, [SLOT0, SLOT1]>], [2, 2],
       [Hex_FWD, Hex_FWD]>,
 
-    InstrItinData <tc_c1dbc916, /*tc_ld*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [4, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_c58f771a, /*tc_2early*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [3, 1, 1],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_c85212ca, /*tc_st*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [2, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_c8f9a6f6, /*tc_st*/
-      [InstrStage<1, [SLOT0]>], [3, 1, 2, 3],
+    InstrItinData <tc_075c8dd8, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 1, 2],
       [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
 
-    InstrItinData <tc_ca280e8b, /*tc_2*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_cbe45117, /*tc_2early*/
-      [InstrStage<1, [SLOT2]>], [2],
-      [Hex_FWD]>,
-
-    InstrItinData <tc_cd321066, /*tc_1*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_d108a090, /*tc_2early*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [1, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_d1b5a4b6, /*tc_1*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2, 2],
+    InstrItinData <tc_0a195f2c, /*tc_4x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [5, 2, 1, 1],
       [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
 
-    InstrItinData <tc_d2609065, /*tc_1*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [3, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_d267fa19, /*tc_2early*/
-      [InstrStage<1, [SLOT2]>], [],
-      []>,
-
-    InstrItinData <tc_d2a33af5, /*tc_ld*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 2, 1, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_d63b71d1, /*tc_2early*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_d6a805a8, /*tc_3x*/
-      [InstrStage<1, [SLOT3]>], [2, 1],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_d95f4e98, /*tc_1*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2, 2, 2],
+    InstrItinData <tc_0a6c20ae, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [2, 1, 1, 2, 3],
       [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
 
-    InstrItinData <tc_da79106e, /*tc_st*/
-      [InstrStage<1, [SLOT0]>], [1, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_dbe218dd, /*tc_3stall*/
-      [InstrStage<1, [SLOT0]>], [3, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_dcfee7ae, /*tc_3stall*/
-      [InstrStage<1, [SLOT0]>], [4, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_e17ce9ad, /*tc_2*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_e2480a7f, /*tc_st*/
-      [InstrStage<1, [SLOT0]>], [3, 2, 1, 2, 3],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_e2c08bb4, /*tc_2early*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_e2c31426, /*tc_1*/
-      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [],
-      []>,
-
-    InstrItinData <tc_e578178f, /*tc_ld*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 3, 1, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_e836c161, /*tc_3x*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_e8c7a357, /*tc_2early*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [1, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_eb07ef6f, /*tc_2early*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [1, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_ecfaae86, /*tc_2early*/
+    InstrItinData <tc_0ba0d5da, /*tc_2early*/
       [InstrStage<1, [SLOT2]>], [1],
       [Hex_FWD]>,
 
-    InstrItinData <tc_ef0ebaaa, /*tc_ld*/
-      [InstrStage<1, [SLOT0]>], [1, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_ef2676fd, /*tc_st*/
-      [InstrStage<1, [SLOT0]>], [],
-      []>,
-
-    InstrItinData <tc_f027ebe9, /*tc_ld*/
-      [InstrStage<1, [SLOT0]>], [2],
-      [Hex_FWD]>,
-
-    InstrItinData <tc_f055fbb6, /*tc_3x*/
-      [InstrStage<1, [SLOT3]>], [2, 1],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_f1240c08, /*tc_3x*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_f16d5b17, /*tc_1*/
-      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_f1aa2cdb, /*tc_3x*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 4, 1],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_f26aa619, /*tc_1*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [3],
-      [Hex_FWD]>,
-
-    InstrItinData <tc_f4608adc, /*tc_3stall*/
-      [InstrStage<1, [SLOT0]>], [1, 1],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_faab1248, /*tc_2*/
+    InstrItinData <tc_0dfac0a7, /*tc_2*/
       [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
       [Hex_FWD, Hex_FWD, Hex_FWD]>,
 
-    InstrItinData <tc_fcee8723, /*tc_st*/
+    InstrItinData <tc_0fac1eb8, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_112d30d6, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_1242dc2a, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_1248597c, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_14ab4f41, /*tc_3stall*/
+      [InstrStage<1, [SLOT0]>], [4, 3, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_151bf368, /*tc_2early*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_158aa3f7, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_197dce51, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [4, 2, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_1981450d, /*tc_3stall*/
+      [InstrStage<1, [SLOT0]>], [3],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_1c2c7a4a, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_1c7522a8, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 2, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_1d41f8b7, /*tc_3stall*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 4, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_1fcb8495, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_1fe4ab69, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [2, 1, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_20131976, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_2237d952, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [1, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_23708a21, /*tc_2early*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [],
+      []>,
+
+    InstrItinData <tc_2471c1c8, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [4, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_24e109c7, /*tc_3stall*/
+      [InstrStage<1, [SLOT0]>], [3, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_24f426ab, /*tc_2early*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_280f7fe1, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_28e55c6f, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [1, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_2c13e7f5, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_2c3e17fc, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_2f573607, /*tc_2early*/
+      [InstrStage<1, [SLOT2]>], [2, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_362b0be2, /*tc_2early*/
+      [InstrStage<1, [SLOT2]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_38382228, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_388f9897, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_38e0bae9, /*tc_3*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 4, 1, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_3d14a17b, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_3edca78f, /*tc_2*/
+      [InstrStage<1, [SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_3fbf1042, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_407e96f9, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_40d64c94, /*tc_3stall*/
+      [InstrStage<1, [SLOT0]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_4222e6bf, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_42ff66ba, /*tc_2early*/
+      [InstrStage<1, [SLOT2]>], [2, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_442395f3, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_449acf79, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 3, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_44d5a428, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_44fffc58, /*tc_2early*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_45791fb8, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 2, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_45f9d1be, /*tc_2early*/
+      [InstrStage<1, [SLOT2]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_49fdfd4b, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [4, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_4a55d03c, /*tc_2early*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_4abdbdc6, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_4ac61d92, /*tc_2latepred*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [4, 3, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_4bf903b0, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_503ce0f3, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_53c851ab, /*tc_2early*/
+      [InstrStage<1, [SLOT2]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5502c366, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_55255f2b, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [],
+      []>,
+
+    InstrItinData <tc_556f6577, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_55a9a350, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1, 2, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_55b33fda, /*tc_2early*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_56a124a7, /*tc_2early*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_57a55b54, /*tc_2early*/
+      [InstrStage<1, [SLOT3]>], [1, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5944960d, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_59a7822c, /*tc_2early*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5a4b5e58, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [4, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5b347363, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5ceb2f9e, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5da50c4b, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5deb5e47, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5e4cf0e8, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5f2afaf7, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 3, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_60e324ff, /*tc_2early*/
+      [InstrStage<1, [SLOT2]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_63567288, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_64b00d8a, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [4, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_651cbe02, /*tc_2early*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_65279839, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_65cbd974, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_69bfb303, /*tc_2early*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_6ae3426b, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [4, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_6d861a95, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [2, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_6e20402a, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [2, 3],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_6f42bc60, /*tc_3stall*/
+      [InstrStage<1, [SLOT0]>], [4, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_6fc5dbea, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_711c805f, /*tc_2early*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_713b66bf, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7401744f, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7476d766, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_74a42bda, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_76bb5435, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 2, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_77f94a5e, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [],
+      []>,
+
+    InstrItinData <tc_788b1d09, /*tc_3*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7af3a37e, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1, 3],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7b9187d3, /*tc_3stall*/
+      [InstrStage<1, [SLOT0]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7c31e19a, /*tc_st*/
       [InstrStage<1, [SLOT0, SLOT1]>], [1, 2, 2],
       [Hex_FWD, Hex_FWD, Hex_FWD]>,
 
-    InstrItinData <tc_feb4974b, /*tc_3x*/
-      [InstrStage<1, [SLOT3]>], [2, 2],
-      [Hex_FWD, Hex_FWD]>
+    InstrItinData <tc_7c6d32e4, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7f7f45f5, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 4, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7f8ae742, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_8035e91f, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [2, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_822c3c68, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_829d8a86, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3, 1, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_838c4d7a, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_84a7500d, /*tc_2*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_86173609, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 3, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_887d1bb7, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_8a6d0d94, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_8a825db2, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_8b5bd4f5, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_8e82e8ca, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 1, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9124c04f, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_92240447, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_934753bb, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_937dd41c, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [],
+      []>,
+
+    InstrItinData <tc_9406230a, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [2, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_95a33176, /*tc_2*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_96ef76ef, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_975a4e54, /*tc_3stall*/
+      [InstrStage<1, [SLOT0]>], [1, 3, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9783714b, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9b34f5e0, /*tc_2early*/
+      [InstrStage<1, [SLOT2]>], [],
+      []>,
+
+    InstrItinData <tc_9b3c0462, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9bcfb2ee, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9c52f549, /*tc_2early*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9e27f2f9, /*tc_2early*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9e72dc89, /*tc_3*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9edb7c77, /*tc_3*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9edefe01, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 2, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9f6cd987, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a08b630b, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a1297125, /*tc_2early*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a154b476, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a2b365d2, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a3070909, /*tc_3stall*/
+      [InstrStage<1, [SLOT0]>], [1, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a32e03e7, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 2, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a38c45dc, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a4e22bbd, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a4ee89db, /*tc_2early*/
+      [InstrStage<1, [SLOT0]>], [],
+      []>,
+
+    InstrItinData <tc_a7a13fac, /*tc_2early*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a7bdb22c, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a9edeffa, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_abfd9a6d, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_ac65613f, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_addc37a8, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3, 1, 2, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_ae5babd7, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_aee6250c, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_b1ae5f67, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_b4dc7630, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 1, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_b7c4062a, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_b837298f, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [],
+      []>,
+
+    InstrItinData <tc_ba9255a6, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_bb07f2c5, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_bb831a7c, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_bf2ffc0f, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_c20701f0, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_c21d7447, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_c57d9f39, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_c818ff7f, /*tc_3stall*/
+      [InstrStage<1, [SLOT0]>], [],
+      []>,
+
+    InstrItinData <tc_ce59038e, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3, 2, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_cfa0e29b, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [2, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_d03278fd, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [2, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_d33e5eee, /*tc_2early*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_d3632d88, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_d45ba9cd, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_d57d649c, /*tc_2early*/
+      [InstrStage<1, [SLOT2]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_d61dfdc3, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_d68dca5c, /*tc_2early*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_d7718fbe, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_db596beb, /*tc_3stall*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_db96aa6b, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_dc51281d, /*tc_2early*/
+      [InstrStage<1, [SLOT2]>], [2, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_decdde8a, /*tc_2early*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_df5d53f9, /*tc_3stall*/
+      [InstrStage<1, [SLOT0]>], [4, 2, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_e3d699e3, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_e9170fb7, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_ed03645c, /*tc_2early*/
+      [InstrStage<1, [SLOT2]>], [3, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_eed07714, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_eeda4109, /*tc_2early*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_ef921005, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f098b237, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f0cdeccf, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f0e8e832, /*tc_4x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [5, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f34c1c21, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f38f92e1, /*tc_3stall*/
+      [InstrStage<1, [SLOT0]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_f529831b, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3, 3, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f6e2aff9, /*tc_3stall*/
+      [InstrStage<1, [SLOT0]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f7569068, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 4, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f999c66e, /*tc_2early*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [1, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_fae9dfa5, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_fedb7e19, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 2, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>
   ];
 }
 
 class DepScalarItinV60 {
   list<InstrItinData> DepScalarItinV60_list = [
-    InstrItinData <tc_049dfb74, /*tc_2early*/
-      [InstrStage<1, [SLOT2]>], [1],
-      [Hex_FWD]>,
-
-    InstrItinData <tc_0767081f, /*tc_2early*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [2, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_07ac815d, /*tc_2early*/
-      [InstrStage<1, [SLOT2]>], [2, 1],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_090485bb, /*tc_2*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_09c86199, /*tc_4x*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [5, 5, 1, 1],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_09faec3b, /*tc_newvjump*/
-      [InstrStage<1, [SLOT0]>], [3, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_0cb867f2, /*tc_ld*/
-      [InstrStage<1, [SLOT0]>], [4, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_1000eb10, /*tc_3x*/
-      [InstrStage<1, [SLOT3]>], [2, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_128719e8, /*tc_ld*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 1, 1, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_136c4786, /*tc_ld*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [4, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_14da557c, /*tc_ld*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [4, 2, 1, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_1b6011fb, /*tc_1*/
-      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_1b834fe7, /*tc_2early*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [2, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_1e062b18, /*tc_1*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_1e69aa99, /*tc_st*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [2, 1, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_1f9668cc, /*tc_2early*/
-      [InstrStage<1, [SLOT2]>], [3, 1],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_1fe8323c, /*tc_2*/
-      [InstrStage<1, [SLOT3]>], [4, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_20a8e109, /*tc_st*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [3, 1, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_210b2456, /*tc_st*/
-      [InstrStage<1, [SLOT0]>], [1, 2, 2, 3],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_251c87b2, /*tc_st*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [3, 1, 2, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_261d9b78, /*tc_ld*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_28d296df, /*tc_1*/
-      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 3, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_29c14515, /*tc_ld*/
-      [InstrStage<1, [SLOT0]>], [4, 1],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_2aaab1e0, /*tc_3x*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_2c8fe5ae, /*tc_st*/
-      [InstrStage<1, [SLOT0]>], [2, 2, 3],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_2d1e6f5c, /*tc_4x*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [5, 2, 1, 1],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_2e55aa16, /*tc_4x*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [5, 2, 1, 1, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_30665cb0, /*tc_st*/
-      [InstrStage<1, [SLOT0]>], [1],
-      [Hex_FWD]>,
-
-    InstrItinData <tc_336e698c, /*tc_st*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [3, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_34e882a4, /*tc_ld*/
-      [InstrStage<1, [SLOT0]>], [1],
-      [Hex_FWD]>,
-
-    InstrItinData <tc_35fb9d13, /*tc_2early*/
-      [InstrStage<1, [SLOT0]>], [],
-      []>,
-
-    InstrItinData <tc_37326008, /*tc_1*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_3993c58b, /*tc_newvjump*/
-      [InstrStage<1, [SLOT0]>], [3, 3, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_3b4892c6, /*tc_3x*/
-      [InstrStage<1, [SLOT3]>], [4, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_3bea1824, /*tc_4x*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [5, 1, 1],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_3c10f809, /*tc_2*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_3d905451, /*tc_st*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [2, 1, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_3e61d314, /*tc_newvjump*/
-      [InstrStage<1, [SLOT0]>], [2, 3, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_3eab77bd, /*tc_ld*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 1, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_43068634, /*tc_2early*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_45631a8d, /*tc_st*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [1, 1, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_47ab9233, /*tc_2*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_47f0b7ad, /*tc_2early*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [3, 1],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_485bb57c, /*tc_2*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_4997da4a, /*tc_3x*/
-      [InstrStage<1, [SLOT3]>], [1],
-      [Hex_FWD]>,
-
-    InstrItinData <tc_511f28f6, /*tc_1*/
-      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_537e2013, /*tc_2early*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_53ee6546, /*tc_st*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [1, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_548f402d, /*tc_1*/
-      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_5625c6c1, /*tc_ld*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [4, 1, 1, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_580a779c, /*tc_newvjump*/
-      [InstrStage<1, [SLOT0]>], [3, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_583510c7, /*tc_2*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 4, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_5d806107, /*tc_3stall*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_5fa2857c, /*tc_2early*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [3, 1, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_5fe9fcd0, /*tc_2early*/
-      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 1, 1],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_6264c5e0, /*tc_3x*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_639d93ee, /*tc_2early*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [2],
-      [Hex_FWD]>,
-
-    InstrItinData <tc_63cd9d2d, /*tc_2*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_65dc7cc4, /*tc_ld*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 1, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_69bb508b, /*tc_3x*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2, 1],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_6c52d277, /*tc_st*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [1, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_6c576d46, /*tc_st*/
-      [InstrStage<1, [SLOT0]>], [1, 2, 3],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_70cabf66, /*tc_ld*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [4, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_7639d4b0, /*tc_st*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [3, 1, 1, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_7675c0e9, /*tc_st*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [3, 3, 1, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_76c4c5ef, /*tc_1*/
-      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_77781686, /*tc_st*/
-      [InstrStage<1, [SLOT0]>], [2, 1, 1, 2, 3],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_78b3c689, /*tc_1*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_7986ba30, /*tc_st*/
-      [InstrStage<1, [SLOT0]>], [3, 2, 3],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_7bc567a7, /*tc_st*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [2, 1, 1, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_7c2dcd4d, /*tc_1*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [3],
-      [Hex_FWD]>,
-
-    InstrItinData <tc_7ca2ea10, /*tc_2*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_7d01cbdc, /*tc_3stall*/
-      [InstrStage<1, [SLOT0]>], [4, 1, 1],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_7d9a56cd, /*tc_ld*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [4, 1, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_81a23d44, /*tc_2early*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_821c4233, /*tc_1*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [3, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_82f0f122, /*tc_3x*/
-      [InstrStage<1, [SLOT3]>], [4, 1],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_84630363, /*tc_2early*/
-      [InstrStage<1, [SLOT2]>], [2, 1],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_86442910, /*tc_ld*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [],
-      []>,
-
-    InstrItinData <tc_87601822, /*tc_2*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_88fa2da6, /*tc_2*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_8c8041e6, /*tc_3x*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_8cb685d9, /*tc_3x*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 1, 1],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_8def9c57, /*tc_st*/
-      [InstrStage<1, [SLOT0]>], [3, 1, 1, 2, 3],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_8f0a6bad, /*tc_st*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [3, 1, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_8fab9ac3, /*tc_st*/
-      [InstrStage<1, [SLOT0]>], [3, 3, 1, 2, 3],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_92d1833c, /*tc_2early*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [1, 1, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_94e6ffd9, /*tc_2*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_95c54f8b, /*tc_newvjump*/
-      [InstrStage<1, [SLOT0]>], [],
-      []>,
-
-    InstrItinData <tc_9a13af9d, /*tc_1*/
-      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [2],
-      [Hex_FWD]>,
-
-    InstrItinData <tc_9b73d261, /*tc_st*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [3, 2, 1, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_9c18c9a5, /*tc_1*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_9c68db63, /*tc_st*/
-      [InstrStage<1, [SLOT0]>], [3, 1, 2, 2, 3],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_9ce7a5ab, /*tc_newvjump*/
-      [InstrStage<1, [SLOT0]>], [3, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_9da3628f, /*tc_st*/
+    InstrItinData <tc_011e0e9d, /*tc_st*/
       [InstrStage<1, [SLOT0]>], [2, 1, 2, 3],
       [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
 
-    InstrItinData <tc_9dafb7d3, /*tc_ld*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [4, 2, 1, 1, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_9df8b0dc, /*tc_2early*/
-      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 1, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_9e86015f, /*tc_st*/
-      [InstrStage<1, [SLOT0]>], [2, 3],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_9f518242, /*tc_1*/
+    InstrItinData <tc_01d44cb2, /*tc_1*/
       [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
       [Hex_FWD, Hex_FWD, Hex_FWD]>,
 
-    InstrItinData <tc_a12a5971, /*tc_3x*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 1, 2],
+    InstrItinData <tc_01e1be3b, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 1, 1],
       [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
 
-    InstrItinData <tc_a1fb80e1, /*tc_2early*/
-      [InstrStage<1, [SLOT2]>], [2, 1],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_a333d2a9, /*tc_2early*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [2],
-      [Hex_FWD]>,
-
-    InstrItinData <tc_a4567c39, /*tc_st*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [1, 2, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_a87879e8, /*tc_3stall*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 4, 1, 1, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_a9c993d9, /*tc_st*/
-      [InstrStage<1, [SLOT0]>], [1, 2, 2],
+    InstrItinData <tc_02fe1c65, /*tc_4x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [5, 1, 1],
       [Hex_FWD, Hex_FWD, Hex_FWD]>,
 
-    InstrItinData <tc_aad55963, /*tc_2early*/
-      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [],
-      []>,
-
-    InstrItinData <tc_ab1b5e74, /*tc_2*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_ae0722f7, /*tc_3stall*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 4, 1, 1, 1],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_ae2c2dc2, /*tc_3x*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_ae762521, /*tc_ld*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 2, 1, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_b08b653e, /*tc_2early*/
-      [InstrStage<1, [SLOT2]>], [1],
-      [Hex_FWD]>,
-
-    InstrItinData <tc_b08be45e, /*tc_1*/
-      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 3, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_b0f50e3c, /*tc_2*/
-      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [4, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_b189ad4c, /*tc_3stall*/
-      [InstrStage<1, [SLOT2]>], [2],
-      [Hex_FWD]>,
-
-    InstrItinData <tc_b324366f, /*tc_2early*/
-      [InstrStage<1, [SLOT3]>], [1, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_b5bfaa60, /*tc_2early*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [2, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_b5f5a094, /*tc_ld*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_b86c7e8b, /*tc_1*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_baccf077, /*tc_ld*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [4, 2, 1, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_bc5561d8, /*tc_3x*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 1, 1, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_bcf0e36e, /*tc_3stall*/
-      [InstrStage<1, [SLOT3]>], [],
-      []>,
-
-    InstrItinData <tc_bd16579e, /*tc_1*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_be995eaf, /*tc_st*/
-      [InstrStage<1, [SLOT0]>], [1, 1, 2, 3],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_bf6fa601, /*tc_ld*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [4, 1, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_c0cd91a8, /*tc_2*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_c14739d5, /*tc_st*/
+    InstrItinData <tc_0655b949, /*tc_st*/
       [InstrStage<1, [SLOT0, SLOT1]>], [2, 2],
       [Hex_FWD, Hex_FWD]>,
 
-    InstrItinData <tc_c1dbc916, /*tc_ld*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [4, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_c58f771a, /*tc_2early*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [3, 1, 1],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_c85212ca, /*tc_st*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [2, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_c8f9a6f6, /*tc_st*/
-      [InstrStage<1, [SLOT0]>], [3, 1, 2, 3],
+    InstrItinData <tc_075c8dd8, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 1, 2],
       [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
 
-    InstrItinData <tc_ca280e8b, /*tc_2*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_cbe45117, /*tc_2early*/
-      [InstrStage<1, [SLOT2]>], [2],
-      [Hex_FWD]>,
-
-    InstrItinData <tc_cd321066, /*tc_1*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_d108a090, /*tc_2early*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [1, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_d1b5a4b6, /*tc_1*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2, 2],
+    InstrItinData <tc_0a195f2c, /*tc_4x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [5, 2, 1, 1],
       [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
 
-    InstrItinData <tc_d2609065, /*tc_1*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [3, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_d267fa19, /*tc_2early*/
-      [InstrStage<1, [SLOT2]>], [],
-      []>,
-
-    InstrItinData <tc_d2a33af5, /*tc_ld*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 2, 1, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_d63b71d1, /*tc_2early*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_d6a805a8, /*tc_3stall*/
-      [InstrStage<1, [SLOT3]>], [2, 1],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_d95f4e98, /*tc_2*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2, 2, 2],
+    InstrItinData <tc_0a6c20ae, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [2, 1, 1, 2, 3],
       [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
 
-    InstrItinData <tc_da79106e, /*tc_st*/
-      [InstrStage<1, [SLOT0]>], [1, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_dbe218dd, /*tc_newvjump*/
-      [InstrStage<1, [SLOT0]>], [3, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_dcfee7ae, /*tc_newvjump*/
-      [InstrStage<1, [SLOT0]>], [3, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_e17ce9ad, /*tc_2*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_e2480a7f, /*tc_st*/
-      [InstrStage<1, [SLOT0]>], [3, 2, 1, 2, 3],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_e2c08bb4, /*tc_3stall*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_e2c31426, /*tc_1*/
-      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [],
-      []>,
-
-    InstrItinData <tc_e578178f, /*tc_ld*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 3, 1, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_e836c161, /*tc_4x*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [5, 1],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_e8c7a357, /*tc_2early*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [1, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_eb07ef6f, /*tc_2early*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [1, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_ecfaae86, /*tc_2early*/
+    InstrItinData <tc_0ba0d5da, /*tc_2early*/
       [InstrStage<1, [SLOT2]>], [1],
       [Hex_FWD]>,
 
-    InstrItinData <tc_ef0ebaaa, /*tc_ld*/
-      [InstrStage<1, [SLOT0]>], [1, 2],
-      [Hex_FWD, Hex_FWD]>,
+    InstrItinData <tc_0dfac0a7, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
 
-    InstrItinData <tc_ef2676fd, /*tc_st*/
-      [InstrStage<1, [SLOT0]>], [],
-      []>,
+    InstrItinData <tc_0fac1eb8, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
 
-    InstrItinData <tc_f027ebe9, /*tc_ld*/
+    InstrItinData <tc_112d30d6, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_1242dc2a, /*tc_ld*/
       [InstrStage<1, [SLOT0]>], [2],
       [Hex_FWD]>,
 
-    InstrItinData <tc_f055fbb6, /*tc_3x*/
-      [InstrStage<1, [SLOT3]>], [2, 1],
+    InstrItinData <tc_1248597c, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [2, 2],
       [Hex_FWD, Hex_FWD]>,
 
-    InstrItinData <tc_f1240c08, /*tc_2*/
+    InstrItinData <tc_14ab4f41, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [3, 3, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_151bf368, /*tc_2early*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_158aa3f7, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_197dce51, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [4, 2, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_1981450d, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [3],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_1c2c7a4a, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_1c7522a8, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 2, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_1d41f8b7, /*tc_3stall*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 4, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_1fcb8495, /*tc_2*/
       [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
       [Hex_FWD, Hex_FWD, Hex_FWD]>,
 
-    InstrItinData <tc_f16d5b17, /*tc_1*/
-      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2],
-      [Hex_FWD, Hex_FWD]>,
+    InstrItinData <tc_1fe4ab69, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [2, 1, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
 
-    InstrItinData <tc_f1aa2cdb, /*tc_4x*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [5, 5, 1],
+    InstrItinData <tc_20131976, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
       [Hex_FWD, Hex_FWD, Hex_FWD]>,
 
-    InstrItinData <tc_f26aa619, /*tc_1*/
+    InstrItinData <tc_2237d952, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [1, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_23708a21, /*tc_2early*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [],
+      []>,
+
+    InstrItinData <tc_2471c1c8, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [4, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_24e109c7, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_24f426ab, /*tc_2early*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_280f7fe1, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_28e55c6f, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [1, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_2c13e7f5, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_2c3e17fc, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_2f573607, /*tc_2early*/
+      [InstrStage<1, [SLOT2]>], [2, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_362b0be2, /*tc_2early*/
+      [InstrStage<1, [SLOT2]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_38382228, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_388f9897, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_38e0bae9, /*tc_3stall*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 4, 1, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_3d14a17b, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_3edca78f, /*tc_2*/
+      [InstrStage<1, [SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_3fbf1042, /*tc_1*/
       [InstrStage<1, [SLOT0, SLOT1]>], [3],
       [Hex_FWD]>,
 
-    InstrItinData <tc_f4608adc, /*tc_3stall*/
-      [InstrStage<1, [SLOT0]>], [1, 1],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_faab1248, /*tc_2*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+    InstrItinData <tc_407e96f9, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
       [Hex_FWD, Hex_FWD, Hex_FWD]>,
 
-    InstrItinData <tc_fcee8723, /*tc_st*/
+    InstrItinData <tc_40d64c94, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_4222e6bf, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_42ff66ba, /*tc_2early*/
+      [InstrStage<1, [SLOT2]>], [2, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_442395f3, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_449acf79, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 3, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_44d5a428, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_44fffc58, /*tc_2early*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_45791fb8, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 2, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_45f9d1be, /*tc_2early*/
+      [InstrStage<1, [SLOT2]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_49fdfd4b, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [4, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_4a55d03c, /*tc_2early*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_4abdbdc6, /*tc_3stall*/
+      [InstrStage<1, [SLOT3]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_4ac61d92, /*tc_2latepred*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [4, 3, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_4bf903b0, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_503ce0f3, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_53c851ab, /*tc_2early*/
+      [InstrStage<1, [SLOT2]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5502c366, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_55255f2b, /*tc_3stall*/
+      [InstrStage<1, [SLOT3]>], [],
+      []>,
+
+    InstrItinData <tc_556f6577, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_55a9a350, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1, 2, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_55b33fda, /*tc_2early*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_56a124a7, /*tc_2early*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_57a55b54, /*tc_2early*/
+      [InstrStage<1, [SLOT3]>], [1, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5944960d, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_59a7822c, /*tc_2early*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5a4b5e58, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [4, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5b347363, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5ceb2f9e, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5da50c4b, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5deb5e47, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5e4cf0e8, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5f2afaf7, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 3, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_60e324ff, /*tc_2early*/
+      [InstrStage<1, [SLOT2]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_63567288, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_64b00d8a, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [4, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_651cbe02, /*tc_2early*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_65279839, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_65cbd974, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_69bfb303, /*tc_2early*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_6ae3426b, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [4, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_6d861a95, /*tc_3stall*/
+      [InstrStage<1, [SLOT3]>], [2, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_6e20402a, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [2, 3],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_6f42bc60, /*tc_3stall*/
+      [InstrStage<1, [SLOT0]>], [4, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_6fc5dbea, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_711c805f, /*tc_2early*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_713b66bf, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7401744f, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7476d766, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_74a42bda, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_76bb5435, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 2, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_77f94a5e, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [],
+      []>,
+
+    InstrItinData <tc_788b1d09, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7af3a37e, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1, 3],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7b9187d3, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7c31e19a, /*tc_st*/
       [InstrStage<1, [SLOT0, SLOT1]>], [1, 2, 2],
       [Hex_FWD, Hex_FWD, Hex_FWD]>,
 
-    InstrItinData <tc_feb4974b, /*tc_3stall*/
+    InstrItinData <tc_7c6d32e4, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7f7f45f5, /*tc_4x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [5, 5, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7f8ae742, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_8035e91f, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [2, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_822c3c68, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_829d8a86, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3, 1, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_838c4d7a, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_84a7500d, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_86173609, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 3, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_887d1bb7, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_8a6d0d94, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_8a825db2, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_8b5bd4f5, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_8e82e8ca, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 1, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9124c04f, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_92240447, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_934753bb, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_937dd41c, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [],
+      []>,
+
+    InstrItinData <tc_9406230a, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [2, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_95a33176, /*tc_2*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_96ef76ef, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_975a4e54, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [2, 3, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9783714b, /*tc_4x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [5, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9b34f5e0, /*tc_2early*/
+      [InstrStage<1, [SLOT2]>], [],
+      []>,
+
+    InstrItinData <tc_9b3c0462, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9bcfb2ee, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9c52f549, /*tc_2early*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9e27f2f9, /*tc_2early*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9e72dc89, /*tc_4x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [5, 2, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9edb7c77, /*tc_4x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [5, 2, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9edefe01, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 2, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9f6cd987, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a08b630b, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a1297125, /*tc_2early*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a154b476, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a2b365d2, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a3070909, /*tc_3stall*/
+      [InstrStage<1, [SLOT0]>], [1, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a32e03e7, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 2, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a38c45dc, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a4e22bbd, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a4ee89db, /*tc_2early*/
+      [InstrStage<1, [SLOT0]>], [],
+      []>,
+
+    InstrItinData <tc_a7a13fac, /*tc_2early*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a7bdb22c, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a9edeffa, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_abfd9a6d, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_ac65613f, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_addc37a8, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3, 1, 2, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_ae5babd7, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_aee6250c, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_b1ae5f67, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_b4dc7630, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 1, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_b7c4062a, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_b837298f, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [],
+      []>,
+
+    InstrItinData <tc_ba9255a6, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_bb07f2c5, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_bb831a7c, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_bf2ffc0f, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_c20701f0, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_c21d7447, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_c57d9f39, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_c818ff7f, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [],
+      []>,
+
+    InstrItinData <tc_ce59038e, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3, 2, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_cfa0e29b, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [2, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_d03278fd, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [2, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_d33e5eee, /*tc_2early*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_d3632d88, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_d45ba9cd, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_d57d649c, /*tc_3stall*/
+      [InstrStage<1, [SLOT2]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_d61dfdc3, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_d68dca5c, /*tc_3stall*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_d7718fbe, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_db596beb, /*tc_3stall*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_db96aa6b, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_dc51281d, /*tc_2early*/
+      [InstrStage<1, [SLOT2]>], [2, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_decdde8a, /*tc_2early*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_df5d53f9, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_e3d699e3, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_e9170fb7, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_ed03645c, /*tc_2early*/
+      [InstrStage<1, [SLOT2]>], [3, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_eed07714, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_eeda4109, /*tc_2early*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_ef921005, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f098b237, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f0cdeccf, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f0e8e832, /*tc_4x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [5, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f34c1c21, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f38f92e1, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_f529831b, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3, 3, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f6e2aff9, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f7569068, /*tc_4x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [5, 5, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f999c66e, /*tc_2early*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [1, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_fae9dfa5, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_fedb7e19, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 2, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>
+  ];
+}
+
+class DepScalarItinV60se {
+  list<InstrItinData> DepScalarItinV60se_list = [
+    InstrItinData <tc_011e0e9d, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [2, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_01d44cb2, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_01e1be3b, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_02fe1c65, /*tc_4x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [5, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_0655b949, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_075c8dd8, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_0a195f2c, /*tc_4x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [5, 2, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_0a6c20ae, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [2, 1, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_0ba0d5da, /*tc_2early*/
+      [InstrStage<1, [SLOT2]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_0dfac0a7, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_0fac1eb8, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_112d30d6, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_1242dc2a, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_1248597c, /*tc_3x*/
       [InstrStage<1, [SLOT3]>], [2, 2],
-      [Hex_FWD, Hex_FWD]>
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_14ab4f41, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0], 0>,
+       InstrStage<1, [CVI_ST]>], [3, 3, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_151bf368, /*tc_2early*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_158aa3f7, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_197dce51, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [4, 2, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_1981450d, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0], 0>,
+       InstrStage<1, [CVI_ST]>], [3],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_1c2c7a4a, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_1c7522a8, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 2, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_1d41f8b7, /*tc_3stall*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 4, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_1fcb8495, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_1fe4ab69, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [2, 1, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_20131976, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_2237d952, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [1, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_23708a21, /*tc_2early*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3], 0>,
+       InstrStage<1, [CVI_ST]>], [],
+      []>,
+
+    InstrItinData <tc_2471c1c8, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [4, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_24e109c7, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0], 0>,
+       InstrStage<1, [CVI_ST]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_24f426ab, /*tc_2early*/
+      [InstrStage<1, [SLOT2, SLOT3], 0>,
+       InstrStage<1, [CVI_ST]>], [1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_280f7fe1, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_28e55c6f, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [1, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_2c13e7f5, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_2c3e17fc, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_2f573607, /*tc_2early*/
+      [InstrStage<1, [SLOT2], 0>,
+       InstrStage<1, [CVI_ST]>], [2, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_362b0be2, /*tc_2early*/
+      [InstrStage<1, [SLOT2], 0>,
+       InstrStage<1, [CVI_ST]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_38382228, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_388f9897, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_38e0bae9, /*tc_3stall*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 4, 1, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_3d14a17b, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_3edca78f, /*tc_2*/
+      [InstrStage<1, [SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_3fbf1042, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_407e96f9, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_40d64c94, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0], 0>,
+       InstrStage<1, [CVI_ST]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_4222e6bf, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_42ff66ba, /*tc_2early*/
+      [InstrStage<1, [SLOT2], 0>,
+       InstrStage<1, [CVI_ST]>], [2, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_442395f3, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_449acf79, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 3, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_44d5a428, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_44fffc58, /*tc_2early*/
+      [InstrStage<1, [SLOT2, SLOT3], 0>,
+       InstrStage<1, [CVI_ST]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_45791fb8, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 2, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_45f9d1be, /*tc_2early*/
+      [InstrStage<1, [SLOT2], 0>,
+       InstrStage<1, [CVI_ST]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_49fdfd4b, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [4, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_4a55d03c, /*tc_2early*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_4abdbdc6, /*tc_3stall*/
+      [InstrStage<1, [SLOT3]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_4ac61d92, /*tc_2latepred*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [4, 3, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_4bf903b0, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_503ce0f3, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_53c851ab, /*tc_2early*/
+      [InstrStage<1, [SLOT2], 0>,
+       InstrStage<1, [CVI_ST]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5502c366, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3], 0>,
+       InstrStage<1, [CVI_ST]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_55255f2b, /*tc_3stall*/
+      [InstrStage<1, [SLOT3]>], [],
+      []>,
+
+    InstrItinData <tc_556f6577, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_55a9a350, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1, 2, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_55b33fda, /*tc_2early*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_56a124a7, /*tc_2early*/
+      [InstrStage<1, [SLOT2, SLOT3], 0>,
+       InstrStage<1, [CVI_ST]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_57a55b54, /*tc_2early*/
+      [InstrStage<1, [SLOT3], 0>,
+       InstrStage<1, [CVI_ST]>], [1, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5944960d, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_59a7822c, /*tc_2early*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5a4b5e58, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [4, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5b347363, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5ceb2f9e, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5da50c4b, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5deb5e47, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5e4cf0e8, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5f2afaf7, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 3, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_60e324ff, /*tc_2early*/
+      [InstrStage<1, [SLOT2], 0>,
+       InstrStage<1, [CVI_ST]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_63567288, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_64b00d8a, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [4, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_651cbe02, /*tc_2early*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_65279839, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_65cbd974, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_69bfb303, /*tc_2early*/
+      [InstrStage<1, [SLOT2, SLOT3], 0>,
+       InstrStage<1, [CVI_ST]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_6ae3426b, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [4, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_6d861a95, /*tc_3stall*/
+      [InstrStage<1, [SLOT3]>], [2, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_6e20402a, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [2, 3],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_6f42bc60, /*tc_3stall*/
+      [InstrStage<1, [SLOT0]>], [4, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_6fc5dbea, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_711c805f, /*tc_2early*/
+      [InstrStage<1, [SLOT2, SLOT3], 0>,
+       InstrStage<1, [CVI_ST]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_713b66bf, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7401744f, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7476d766, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_74a42bda, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_76bb5435, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 2, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_77f94a5e, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [],
+      []>,
+
+    InstrItinData <tc_788b1d09, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7af3a37e, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1, 3],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7b9187d3, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0], 0>,
+       InstrStage<1, [CVI_ST]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7c31e19a, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7c6d32e4, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7f7f45f5, /*tc_4x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [5, 5, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7f8ae742, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_8035e91f, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [2, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_822c3c68, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_829d8a86, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3, 1, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_838c4d7a, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_84a7500d, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_86173609, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 3, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_887d1bb7, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_8a6d0d94, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_8a825db2, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_8b5bd4f5, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_8e82e8ca, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 1, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9124c04f, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_92240447, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_934753bb, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_937dd41c, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [],
+      []>,
+
+    InstrItinData <tc_9406230a, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [2, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_95a33176, /*tc_2*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_96ef76ef, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_975a4e54, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0], 0>,
+       InstrStage<1, [CVI_ST]>], [2, 3, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9783714b, /*tc_4x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [5, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9b34f5e0, /*tc_2early*/
+      [InstrStage<1, [SLOT2]>], [],
+      []>,
+
+    InstrItinData <tc_9b3c0462, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9bcfb2ee, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9c52f549, /*tc_2early*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9e27f2f9, /*tc_2early*/
+      [InstrStage<1, [SLOT2, SLOT3], 0>,
+       InstrStage<1, [CVI_ST]>], [1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9e72dc89, /*tc_4x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [5, 2, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9edb7c77, /*tc_4x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [5, 2, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9edefe01, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 2, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9f6cd987, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a08b630b, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a1297125, /*tc_2early*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a154b476, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a2b365d2, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a3070909, /*tc_3stall*/
+      [InstrStage<1, [SLOT0]>], [1, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a32e03e7, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 2, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a38c45dc, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a4e22bbd, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a4ee89db, /*tc_2early*/
+      [InstrStage<1, [SLOT0], 0>,
+       InstrStage<1, [CVI_ST]>], [],
+      []>,
+
+    InstrItinData <tc_a7a13fac, /*tc_2early*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a7bdb22c, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a9edeffa, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_abfd9a6d, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_ac65613f, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_addc37a8, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3, 1, 2, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_ae5babd7, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_aee6250c, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_b1ae5f67, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_b4dc7630, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 1, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_b7c4062a, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_b837298f, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [],
+      []>,
+
+    InstrItinData <tc_ba9255a6, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_bb07f2c5, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_bb831a7c, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_bf2ffc0f, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_c20701f0, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_c21d7447, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_c57d9f39, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_c818ff7f, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0], 0>,
+       InstrStage<1, [CVI_ST]>], [],
+      []>,
+
+    InstrItinData <tc_ce59038e, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3, 2, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_cfa0e29b, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [2, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_d03278fd, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [2, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_d33e5eee, /*tc_2early*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_d3632d88, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_d45ba9cd, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_d57d649c, /*tc_3stall*/
+      [InstrStage<1, [SLOT2], 0>,
+       InstrStage<1, [CVI_ST]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_d61dfdc3, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_d68dca5c, /*tc_3stall*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_d7718fbe, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_db596beb, /*tc_3stall*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_db96aa6b, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_dc51281d, /*tc_2early*/
+      [InstrStage<1, [SLOT2], 0>,
+       InstrStage<1, [CVI_ST]>], [2, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_decdde8a, /*tc_2early*/
+      [InstrStage<1, [SLOT2, SLOT3], 0>,
+       InstrStage<1, [CVI_ST]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_df5d53f9, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0], 0>,
+       InstrStage<1, [CVI_ST]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_e3d699e3, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_e9170fb7, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_ed03645c, /*tc_2early*/
+      [InstrStage<1, [SLOT2], 0>,
+       InstrStage<1, [CVI_ST]>], [3, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_eed07714, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_eeda4109, /*tc_2early*/
+      [InstrStage<1, [SLOT2, SLOT3], 0>,
+       InstrStage<1, [CVI_ST]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_ef921005, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f098b237, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f0cdeccf, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f0e8e832, /*tc_4x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [5, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f34c1c21, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f38f92e1, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0], 0>,
+       InstrStage<1, [CVI_ST]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_f529831b, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3, 3, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f6e2aff9, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0], 0>,
+       InstrStage<1, [CVI_ST]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f7569068, /*tc_4x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [5, 5, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f999c66e, /*tc_2early*/
+      [InstrStage<1, [SLOT2, SLOT3], 0>,
+       InstrStage<1, [CVI_ST]>], [1, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_fae9dfa5, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_fedb7e19, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 2, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>
   ];
 }
 
 class DepScalarItinV62 {
   list<InstrItinData> DepScalarItinV62_list = [
-    InstrItinData <tc_049dfb74, /*tc_2early*/
-      [InstrStage<1, [SLOT2]>], [1],
-      [Hex_FWD]>,
-
-    InstrItinData <tc_0767081f, /*tc_3*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [2, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_07ac815d, /*tc_2early*/
-      [InstrStage<1, [SLOT2]>], [2, 1],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_090485bb, /*tc_2*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_09c86199, /*tc_4x*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [5, 5, 1, 1],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_09faec3b, /*tc_newvjump*/
-      [InstrStage<1, [SLOT0]>], [3, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_0cb867f2, /*tc_ld*/
-      [InstrStage<1, [SLOT0]>], [4, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_1000eb10, /*tc_3x*/
-      [InstrStage<1, [SLOT3]>], [2, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_128719e8, /*tc_ld*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 1, 1, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_136c4786, /*tc_ld*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [4, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_14da557c, /*tc_ld*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [4, 2, 1, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_1b6011fb, /*tc_1*/
-      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_1b834fe7, /*tc_2early*/
-      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [2, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_1e062b18, /*tc_1*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_1e69aa99, /*tc_st*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [2, 1, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_1f9668cc, /*tc_2early*/
-      [InstrStage<1, [SLOT2]>], [3, 1],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_1fe8323c, /*tc_2*/
-      [InstrStage<1, [SLOT3]>], [4, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_20a8e109, /*tc_st*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [3, 1, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_210b2456, /*tc_st*/
-      [InstrStage<1, [SLOT0]>], [1, 2, 2, 3],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_251c87b2, /*tc_st*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [3, 1, 2, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_261d9b78, /*tc_ld*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_28d296df, /*tc_1*/
-      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 3, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_29c14515, /*tc_ld*/
-      [InstrStage<1, [SLOT0]>], [4, 1],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_2aaab1e0, /*tc_3x*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_2c8fe5ae, /*tc_st*/
-      [InstrStage<1, [SLOT0]>], [2, 2, 3],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_2d1e6f5c, /*tc_4x*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [5, 2, 1, 1],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_2e55aa16, /*tc_4x*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [5, 2, 1, 1, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_30665cb0, /*tc_st*/
-      [InstrStage<1, [SLOT0]>], [1],
-      [Hex_FWD]>,
-
-    InstrItinData <tc_336e698c, /*tc_st*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [3, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_34e882a4, /*tc_ld*/
-      [InstrStage<1, [SLOT0]>], [1],
-      [Hex_FWD]>,
-
-    InstrItinData <tc_35fb9d13, /*tc_2early*/
-      [InstrStage<1, [SLOT0]>], [],
-      []>,
-
-    InstrItinData <tc_37326008, /*tc_1*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_3993c58b, /*tc_newvjump*/
-      [InstrStage<1, [SLOT0]>], [3, 3, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_3b4892c6, /*tc_3x*/
-      [InstrStage<1, [SLOT3]>], [4, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_3bea1824, /*tc_4x*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [5, 1, 1],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_3c10f809, /*tc_2*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_3d905451, /*tc_st*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [2, 1, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_3e61d314, /*tc_newvjump*/
-      [InstrStage<1, [SLOT0]>], [2, 3, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_3eab77bd, /*tc_ld*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 1, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_43068634, /*tc_2early*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_45631a8d, /*tc_st*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [1, 1, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_47ab9233, /*tc_2*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_47f0b7ad, /*tc_2early*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [3, 1],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_485bb57c, /*tc_2*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_4997da4a, /*tc_3x*/
-      [InstrStage<1, [SLOT3]>], [1],
-      [Hex_FWD]>,
-
-    InstrItinData <tc_511f28f6, /*tc_1*/
-      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_537e2013, /*tc_2early*/
-      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_53ee6546, /*tc_st*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [1, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_548f402d, /*tc_1*/
-      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_5625c6c1, /*tc_ld*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [4, 1, 1, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_580a779c, /*tc_newvjump*/
-      [InstrStage<1, [SLOT0]>], [3, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_583510c7, /*tc_2*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 4, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_5d806107, /*tc_3x*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_5fa2857c, /*tc_2early*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [3, 1, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_5fe9fcd0, /*tc_2early*/
-      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 1, 1],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_6264c5e0, /*tc_3x*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_639d93ee, /*tc_3*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [2],
-      [Hex_FWD]>,
-
-    InstrItinData <tc_63cd9d2d, /*tc_2*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_65dc7cc4, /*tc_ld*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 1, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_69bb508b, /*tc_3x*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2, 1],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_6c52d277, /*tc_st*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [1, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_6c576d46, /*tc_st*/
-      [InstrStage<1, [SLOT0]>], [1, 2, 3],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_70cabf66, /*tc_ld*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [4, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_7639d4b0, /*tc_st*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [3, 1, 1, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_7675c0e9, /*tc_st*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [3, 3, 1, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_76c4c5ef, /*tc_1*/
-      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_77781686, /*tc_st*/
-      [InstrStage<1, [SLOT0]>], [2, 1, 1, 2, 3],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_78b3c689, /*tc_1*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_7986ba30, /*tc_st*/
-      [InstrStage<1, [SLOT0]>], [3, 2, 3],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_7bc567a7, /*tc_st*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [2, 1, 1, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_7c2dcd4d, /*tc_1*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [3],
-      [Hex_FWD]>,
-
-    InstrItinData <tc_7ca2ea10, /*tc_2*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_7d01cbdc, /*tc_3stall*/
-      [InstrStage<1, [SLOT0]>], [4, 1, 1],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_7d9a56cd, /*tc_ld*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [4, 1, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_81a23d44, /*tc_2early*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_821c4233, /*tc_1*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [3, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_82f0f122, /*tc_3x*/
-      [InstrStage<1, [SLOT3]>], [4, 1],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_84630363, /*tc_3*/
-      [InstrStage<1, [SLOT2]>], [2, 1],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_86442910, /*tc_ld*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [],
-      []>,
-
-    InstrItinData <tc_87601822, /*tc_2*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_88fa2da6, /*tc_2*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_8c8041e6, /*tc_3x*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_8cb685d9, /*tc_3x*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 1, 1],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_8def9c57, /*tc_st*/
-      [InstrStage<1, [SLOT0]>], [3, 1, 1, 2, 3],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_8f0a6bad, /*tc_st*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [3, 1, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_8fab9ac3, /*tc_st*/
-      [InstrStage<1, [SLOT0]>], [3, 3, 1, 2, 3],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_92d1833c, /*tc_2early*/
-      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [1, 1, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_94e6ffd9, /*tc_2*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_95c54f8b, /*tc_newvjump*/
-      [InstrStage<1, [SLOT0]>], [],
-      []>,
-
-    InstrItinData <tc_9a13af9d, /*tc_1*/
-      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [2],
-      [Hex_FWD]>,
-
-    InstrItinData <tc_9b73d261, /*tc_st*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [3, 2, 1, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_9c18c9a5, /*tc_1*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_9c68db63, /*tc_st*/
-      [InstrStage<1, [SLOT0]>], [3, 1, 2, 2, 3],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_9ce7a5ab, /*tc_newvjump*/
-      [InstrStage<1, [SLOT0]>], [3, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_9da3628f, /*tc_st*/
+    InstrItinData <tc_011e0e9d, /*tc_st*/
       [InstrStage<1, [SLOT0]>], [2, 1, 2, 3],
       [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
 
-    InstrItinData <tc_9dafb7d3, /*tc_ld*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [4, 2, 1, 1, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_9df8b0dc, /*tc_2early*/
-      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 1, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_9e86015f, /*tc_st*/
-      [InstrStage<1, [SLOT0]>], [2, 3],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_9f518242, /*tc_1*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_a12a5971, /*tc_3x*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 1, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_a1fb80e1, /*tc_2early*/
-      [InstrStage<1, [SLOT2]>], [2, 1],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_a333d2a9, /*tc_2early*/
-      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [2],
-      [Hex_FWD]>,
-
-    InstrItinData <tc_a4567c39, /*tc_st*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [1, 2, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_a87879e8, /*tc_1*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [3, 4, 2, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_a9c993d9, /*tc_st*/
-      [InstrStage<1, [SLOT0]>], [1, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_aad55963, /*tc_2early*/
-      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [],
-      []>,
-
-    InstrItinData <tc_ab1b5e74, /*tc_2*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_ae0722f7, /*tc_3x*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 4, 2, 1, 1],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_ae2c2dc2, /*tc_3x*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_ae762521, /*tc_ld*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 2, 1, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_b08b653e, /*tc_2early*/
-      [InstrStage<1, [SLOT2]>], [1],
-      [Hex_FWD]>,
-
-    InstrItinData <tc_b08be45e, /*tc_1*/
-      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 3, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_b0f50e3c, /*tc_2*/
-      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [4, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_b189ad4c, /*tc_3stall*/
-      [InstrStage<1, [SLOT2]>], [2],
-      [Hex_FWD]>,
-
-    InstrItinData <tc_b324366f, /*tc_2early*/
-      [InstrStage<1, [SLOT3]>], [1, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_b5bfaa60, /*tc_2early*/
-      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [2, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_b5f5a094, /*tc_ld*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_b86c7e8b, /*tc_1*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_baccf077, /*tc_ld*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [4, 2, 1, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_bc5561d8, /*tc_3x*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 1, 1, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_bcf0e36e, /*tc_3stall*/
-      [InstrStage<1, [SLOT3]>], [],
-      []>,
-
-    InstrItinData <tc_bd16579e, /*tc_2*/
+    InstrItinData <tc_01d44cb2, /*tc_2*/
       [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
       [Hex_FWD, Hex_FWD, Hex_FWD]>,
 
-    InstrItinData <tc_be995eaf, /*tc_st*/
-      [InstrStage<1, [SLOT0]>], [1, 1, 2, 3],
+    InstrItinData <tc_01e1be3b, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 1, 1],
       [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
 
-    InstrItinData <tc_bf6fa601, /*tc_ld*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [4, 1, 2],
+    InstrItinData <tc_02fe1c65, /*tc_4x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [5, 1, 1],
       [Hex_FWD, Hex_FWD, Hex_FWD]>,
 
-    InstrItinData <tc_c0cd91a8, /*tc_2*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_c14739d5, /*tc_st*/
+    InstrItinData <tc_0655b949, /*tc_st*/
       [InstrStage<1, [SLOT0, SLOT1]>], [2, 2],
       [Hex_FWD, Hex_FWD]>,
 
-    InstrItinData <tc_c1dbc916, /*tc_ld*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [4, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_c58f771a, /*tc_2early*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [3, 1, 1],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_c85212ca, /*tc_st*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [2, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_c8f9a6f6, /*tc_st*/
-      [InstrStage<1, [SLOT0]>], [3, 1, 2, 3],
+    InstrItinData <tc_075c8dd8, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 1, 2],
       [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
 
-    InstrItinData <tc_ca280e8b, /*tc_2*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_cbe45117, /*tc_2early*/
-      [InstrStage<1, [SLOT2]>], [2],
-      [Hex_FWD]>,
-
-    InstrItinData <tc_cd321066, /*tc_1*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_d108a090, /*tc_2early*/
-      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [1, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_d1b5a4b6, /*tc_1*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2, 2],
+    InstrItinData <tc_0a195f2c, /*tc_4x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [5, 2, 1, 1],
       [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
 
-    InstrItinData <tc_d2609065, /*tc_1*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [3, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_d267fa19, /*tc_2early*/
-      [InstrStage<1, [SLOT2]>], [],
-      []>,
-
-    InstrItinData <tc_d2a33af5, /*tc_ld*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 2, 1, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_d63b71d1, /*tc_2early*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_d6a805a8, /*tc_3stall*/
-      [InstrStage<1, [SLOT3]>], [2, 1],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_d95f4e98, /*tc_2*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2, 2, 2],
+    InstrItinData <tc_0a6c20ae, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [2, 1, 1, 2, 3],
       [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
 
-    InstrItinData <tc_da79106e, /*tc_st*/
-      [InstrStage<1, [SLOT0]>], [1, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_dbe218dd, /*tc_newvjump*/
-      [InstrStage<1, [SLOT0]>], [3, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_dcfee7ae, /*tc_newvjump*/
-      [InstrStage<1, [SLOT0]>], [3, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_e17ce9ad, /*tc_2*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_e2480a7f, /*tc_st*/
-      [InstrStage<1, [SLOT0]>], [3, 2, 1, 2, 3],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_e2c08bb4, /*tc_3stall*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1],
-      [Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_e2c31426, /*tc_1*/
-      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [],
-      []>,
-
-    InstrItinData <tc_e578178f, /*tc_ld*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 3, 1, 2],
-      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_e836c161, /*tc_4x*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [5, 1],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_e8c7a357, /*tc_2early*/
-      [InstrStage<1, [SLOT0, SLOT1]>], [1, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_eb07ef6f, /*tc_2early*/
-      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [1, 2],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_ecfaae86, /*tc_3*/
+    InstrItinData <tc_0ba0d5da, /*tc_2early*/
       [InstrStage<1, [SLOT2]>], [1],
       [Hex_FWD]>,
 
-    InstrItinData <tc_ef0ebaaa, /*tc_ld*/
-      [InstrStage<1, [SLOT0]>], [1, 2],
-      [Hex_FWD, Hex_FWD]>,
+    InstrItinData <tc_0dfac0a7, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
 
-    InstrItinData <tc_ef2676fd, /*tc_st*/
-      [InstrStage<1, [SLOT0]>], [],
-      []>,
+    InstrItinData <tc_0fac1eb8, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
 
-    InstrItinData <tc_f027ebe9, /*tc_ld*/
+    InstrItinData <tc_112d30d6, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_1242dc2a, /*tc_ld*/
       [InstrStage<1, [SLOT0]>], [2],
       [Hex_FWD]>,
 
-    InstrItinData <tc_f055fbb6, /*tc_3x*/
-      [InstrStage<1, [SLOT3]>], [2, 1],
+    InstrItinData <tc_1248597c, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [2, 2],
       [Hex_FWD, Hex_FWD]>,
 
-    InstrItinData <tc_f1240c08, /*tc_2*/
+    InstrItinData <tc_14ab4f41, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [3, 3, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_151bf368, /*tc_2early*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_158aa3f7, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_197dce51, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [4, 2, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_1981450d, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [3],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_1c2c7a4a, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_1c7522a8, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 2, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_1d41f8b7, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 4, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_1fcb8495, /*tc_2*/
       [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
       [Hex_FWD, Hex_FWD, Hex_FWD]>,
 
-    InstrItinData <tc_f16d5b17, /*tc_1*/
-      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2],
-      [Hex_FWD, Hex_FWD]>,
+    InstrItinData <tc_1fe4ab69, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [2, 1, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
 
-    InstrItinData <tc_f1aa2cdb, /*tc_4x*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [5, 5, 1],
+    InstrItinData <tc_20131976, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
       [Hex_FWD, Hex_FWD, Hex_FWD]>,
 
-    InstrItinData <tc_f26aa619, /*tc_1*/
+    InstrItinData <tc_2237d952, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [1, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_23708a21, /*tc_2early*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [],
+      []>,
+
+    InstrItinData <tc_2471c1c8, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [4, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_24e109c7, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_24f426ab, /*tc_2early*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_280f7fe1, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_28e55c6f, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [1, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_2c13e7f5, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_2c3e17fc, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_2f573607, /*tc_2early*/
+      [InstrStage<1, [SLOT2]>], [2, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_362b0be2, /*tc_3*/
+      [InstrStage<1, [SLOT2]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_38382228, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_388f9897, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_38e0bae9, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 4, 2, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_3d14a17b, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_3edca78f, /*tc_2*/
+      [InstrStage<1, [SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_3fbf1042, /*tc_1*/
       [InstrStage<1, [SLOT0, SLOT1]>], [3],
       [Hex_FWD]>,
 
-    InstrItinData <tc_f4608adc, /*tc_3stall*/
-      [InstrStage<1, [SLOT0]>], [1, 1],
-      [Hex_FWD, Hex_FWD]>,
-
-    InstrItinData <tc_faab1248, /*tc_2*/
-      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+    InstrItinData <tc_407e96f9, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
       [Hex_FWD, Hex_FWD, Hex_FWD]>,
 
-    InstrItinData <tc_fcee8723, /*tc_st*/
+    InstrItinData <tc_40d64c94, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_4222e6bf, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_42ff66ba, /*tc_2early*/
+      [InstrStage<1, [SLOT2]>], [2, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_442395f3, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_449acf79, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 3, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_44d5a428, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_44fffc58, /*tc_3*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_45791fb8, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 2, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_45f9d1be, /*tc_2early*/
+      [InstrStage<1, [SLOT2]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_49fdfd4b, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [4, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_4a55d03c, /*tc_2early*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_4abdbdc6, /*tc_3stall*/
+      [InstrStage<1, [SLOT3]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_4ac61d92, /*tc_2latepred*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [4, 3, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_4bf903b0, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_503ce0f3, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_53c851ab, /*tc_2early*/
+      [InstrStage<1, [SLOT2]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5502c366, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_55255f2b, /*tc_3stall*/
+      [InstrStage<1, [SLOT3]>], [],
+      []>,
+
+    InstrItinData <tc_556f6577, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_55a9a350, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1, 2, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_55b33fda, /*tc_2early*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_56a124a7, /*tc_2early*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_57a55b54, /*tc_2early*/
+      [InstrStage<1, [SLOT3]>], [1, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5944960d, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_59a7822c, /*tc_2early*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5a4b5e58, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [4, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5b347363, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5ceb2f9e, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5da50c4b, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5deb5e47, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5e4cf0e8, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5f2afaf7, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 3, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_60e324ff, /*tc_2early*/
+      [InstrStage<1, [SLOT2]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_63567288, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_64b00d8a, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [4, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_651cbe02, /*tc_2early*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_65279839, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_65cbd974, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_69bfb303, /*tc_3*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_6ae3426b, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [4, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_6d861a95, /*tc_3stall*/
+      [InstrStage<1, [SLOT3]>], [2, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_6e20402a, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [2, 3],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_6f42bc60, /*tc_3stall*/
+      [InstrStage<1, [SLOT0]>], [4, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_6fc5dbea, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_711c805f, /*tc_2early*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_713b66bf, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7401744f, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7476d766, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_74a42bda, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_76bb5435, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 2, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_77f94a5e, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [],
+      []>,
+
+    InstrItinData <tc_788b1d09, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7af3a37e, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1, 3],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7b9187d3, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7c31e19a, /*tc_st*/
       [InstrStage<1, [SLOT0, SLOT1]>], [1, 2, 2],
       [Hex_FWD, Hex_FWD, Hex_FWD]>,
 
-    InstrItinData <tc_feb4974b, /*tc_3stall*/
+    InstrItinData <tc_7c6d32e4, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7f7f45f5, /*tc_4x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [5, 5, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7f8ae742, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_8035e91f, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [2, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_822c3c68, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_829d8a86, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3, 1, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_838c4d7a, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_84a7500d, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_86173609, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 3, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_887d1bb7, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_8a6d0d94, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_8a825db2, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_8b5bd4f5, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_8e82e8ca, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 1, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9124c04f, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_92240447, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_934753bb, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_937dd41c, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [],
+      []>,
+
+    InstrItinData <tc_9406230a, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [2, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_95a33176, /*tc_2*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_96ef76ef, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_975a4e54, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [2, 3, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9783714b, /*tc_4x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [5, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9b34f5e0, /*tc_2early*/
+      [InstrStage<1, [SLOT2]>], [],
+      []>,
+
+    InstrItinData <tc_9b3c0462, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9bcfb2ee, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9c52f549, /*tc_2early*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9e27f2f9, /*tc_2early*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9e72dc89, /*tc_4x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [5, 2, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9edb7c77, /*tc_4x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [5, 2, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9edefe01, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 2, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9f6cd987, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a08b630b, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a1297125, /*tc_2early*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a154b476, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a2b365d2, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a3070909, /*tc_3stall*/
+      [InstrStage<1, [SLOT0]>], [1, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a32e03e7, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 2, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a38c45dc, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a4e22bbd, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a4ee89db, /*tc_2early*/
+      [InstrStage<1, [SLOT0]>], [],
+      []>,
+
+    InstrItinData <tc_a7a13fac, /*tc_2early*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a7bdb22c, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a9edeffa, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_abfd9a6d, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_ac65613f, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_addc37a8, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3, 1, 2, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_ae5babd7, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_aee6250c, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_b1ae5f67, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_b4dc7630, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 1, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_b7c4062a, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_b837298f, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [],
+      []>,
+
+    InstrItinData <tc_ba9255a6, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_bb07f2c5, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_bb831a7c, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_bf2ffc0f, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_c20701f0, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_c21d7447, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_c57d9f39, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_c818ff7f, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [],
+      []>,
+
+    InstrItinData <tc_ce59038e, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3, 2, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_cfa0e29b, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [2, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_d03278fd, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [2, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_d33e5eee, /*tc_2early*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_d3632d88, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_d45ba9cd, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_d57d649c, /*tc_3stall*/
+      [InstrStage<1, [SLOT2]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_d61dfdc3, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_d68dca5c, /*tc_3stall*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_d7718fbe, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_db596beb, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_db96aa6b, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_dc51281d, /*tc_3*/
+      [InstrStage<1, [SLOT2]>], [2, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_decdde8a, /*tc_2early*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_df5d53f9, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_e3d699e3, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_e9170fb7, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_ed03645c, /*tc_2early*/
+      [InstrStage<1, [SLOT2]>], [3, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_eed07714, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_eeda4109, /*tc_2early*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_ef921005, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f098b237, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f0cdeccf, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f0e8e832, /*tc_4x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [5, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f34c1c21, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f38f92e1, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_f529831b, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3, 3, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f6e2aff9, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f7569068, /*tc_4x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [5, 5, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f999c66e, /*tc_2early*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [1, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_fae9dfa5, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_fedb7e19, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 2, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>
+  ];
+}
+
+class DepScalarItinV65 {
+  list<InstrItinData> DepScalarItinV65_list = [
+    InstrItinData <tc_011e0e9d, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [2, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_01d44cb2, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_01e1be3b, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_02fe1c65, /*tc_4x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [5, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_0655b949, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_075c8dd8, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_0a195f2c, /*tc_4x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [5, 2, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_0a6c20ae, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [2, 1, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_0ba0d5da, /*tc_3stall*/
+      [InstrStage<1, [SLOT2]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_0dfac0a7, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_0fac1eb8, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_112d30d6, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_1242dc2a, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_1248597c, /*tc_3x*/
       [InstrStage<1, [SLOT3]>], [2, 2],
-      [Hex_FWD, Hex_FWD]>
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_14ab4f41, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [3, 3, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_151bf368, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_158aa3f7, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_197dce51, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [4, 2, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_1981450d, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [3],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_1c2c7a4a, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_1c7522a8, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 2, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_1d41f8b7, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 4, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_1fcb8495, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_1fe4ab69, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [2, 1, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_20131976, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_2237d952, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [1, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_23708a21, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [],
+      []>,
+
+    InstrItinData <tc_2471c1c8, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [4, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_24e109c7, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_24f426ab, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_280f7fe1, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_28e55c6f, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [1, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_2c13e7f5, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_2c3e17fc, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_2f573607, /*tc_1*/
+      [InstrStage<1, [SLOT2]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_362b0be2, /*tc_3*/
+      [InstrStage<1, [SLOT2]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_38382228, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_388f9897, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_38e0bae9, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 4, 2, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_3d14a17b, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_3edca78f, /*tc_2*/
+      [InstrStage<1, [SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_3fbf1042, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_407e96f9, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_40d64c94, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [3, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_4222e6bf, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_42ff66ba, /*tc_1*/
+      [InstrStage<1, [SLOT2]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_442395f3, /*tc_2latepred*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [4, 3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_449acf79, /*tc_latepredstaia*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 1, 2, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_44d5a428, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_44fffc58, /*tc_3*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_45791fb8, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 2, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_45f9d1be, /*tc_2early*/
+      [InstrStage<1, [SLOT2]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_49fdfd4b, /*tc_3stall*/
+      [InstrStage<1, [SLOT3]>], [4, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_4a55d03c, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_4abdbdc6, /*tc_3stall*/
+      [InstrStage<1, [SLOT3]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_4ac61d92, /*tc_2latepred*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [4, 3, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_4bf903b0, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_503ce0f3, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_53c851ab, /*tc_3stall*/
+      [InstrStage<1, [SLOT2]>], [4, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5502c366, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_55255f2b, /*tc_3stall*/
+      [InstrStage<1, [SLOT3]>], [],
+      []>,
+
+    InstrItinData <tc_556f6577, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_55a9a350, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1, 2, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_55b33fda, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_56a124a7, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_57a55b54, /*tc_1*/
+      [InstrStage<1, [SLOT3]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5944960d, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_59a7822c, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5a4b5e58, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [4, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5b347363, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5ceb2f9e, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5da50c4b, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5deb5e47, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5e4cf0e8, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5f2afaf7, /*tc_latepredldaia*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 4, 3, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_60e324ff, /*tc_1*/
+      [InstrStage<1, [SLOT2]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_63567288, /*tc_2latepred*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_64b00d8a, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [4, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_651cbe02, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_65279839, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_65cbd974, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_69bfb303, /*tc_3*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_6ae3426b, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [4, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_6d861a95, /*tc_3stall*/
+      [InstrStage<1, [SLOT3]>], [2, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_6e20402a, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [2, 3],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_6f42bc60, /*tc_3stall*/
+      [InstrStage<1, [SLOT0]>], [4, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_6fc5dbea, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_711c805f, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_713b66bf, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7401744f, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7476d766, /*tc_3stall*/
+      [InstrStage<1, [SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_74a42bda, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_76bb5435, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 2, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_77f94a5e, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [],
+      []>,
+
+    InstrItinData <tc_788b1d09, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7af3a37e, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1, 3],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7b9187d3, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7c31e19a, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7c6d32e4, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7f7f45f5, /*tc_4x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [5, 5, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7f8ae742, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_8035e91f, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [2, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_822c3c68, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_829d8a86, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3, 1, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_838c4d7a, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_84a7500d, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_86173609, /*tc_2latepred*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [4, 3, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_887d1bb7, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_8a6d0d94, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_8a825db2, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_8b5bd4f5, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_8e82e8ca, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 1, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9124c04f, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_92240447, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_934753bb, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [3, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_937dd41c, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [],
+      []>,
+
+    InstrItinData <tc_9406230a, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [2, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_95a33176, /*tc_2*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_96ef76ef, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_975a4e54, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [2, 3, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9783714b, /*tc_4x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [5, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9b34f5e0, /*tc_3stall*/
+      [InstrStage<1, [SLOT2]>], [],
+      []>,
+
+    InstrItinData <tc_9b3c0462, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9bcfb2ee, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9c52f549, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9e27f2f9, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9e72dc89, /*tc_4x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [5, 2, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9edb7c77, /*tc_4x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [5, 2, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9edefe01, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 2, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9f6cd987, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a08b630b, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a1297125, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a154b476, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a2b365d2, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a3070909, /*tc_3stall*/
+      [InstrStage<1, [SLOT0]>], [1, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a32e03e7, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 2, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a38c45dc, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a4e22bbd, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a4ee89db, /*tc_2early*/
+      [InstrStage<1, [SLOT0]>], [],
+      []>,
+
+    InstrItinData <tc_a7a13fac, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a7bdb22c, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a9edeffa, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_abfd9a6d, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_ac65613f, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_addc37a8, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3, 1, 2, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_ae5babd7, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_aee6250c, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_b1ae5f67, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_b4dc7630, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 1, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_b7c4062a, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_b837298f, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [],
+      []>,
+
+    InstrItinData <tc_ba9255a6, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_bb07f2c5, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_bb831a7c, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_bf2ffc0f, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_c20701f0, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_c21d7447, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_c57d9f39, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_c818ff7f, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [],
+      []>,
+
+    InstrItinData <tc_ce59038e, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3, 2, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_cfa0e29b, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [2, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_d03278fd, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [2, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_d33e5eee, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_d3632d88, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_d45ba9cd, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_d57d649c, /*tc_3stall*/
+      [InstrStage<1, [SLOT2]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_d61dfdc3, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_d68dca5c, /*tc_3stall*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_d7718fbe, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_db596beb, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_db96aa6b, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_dc51281d, /*tc_3*/
+      [InstrStage<1, [SLOT2]>], [2, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_decdde8a, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_df5d53f9, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [3, 2, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_e3d699e3, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_e9170fb7, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_ed03645c, /*tc_1*/
+      [InstrStage<1, [SLOT2]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_eed07714, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_eeda4109, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_ef921005, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f098b237, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f0cdeccf, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f0e8e832, /*tc_4x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [5, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f34c1c21, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f38f92e1, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_f529831b, /*tc_latepredstaia*/
+      [InstrStage<1, [SLOT0]>], [4, 3, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f6e2aff9, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f7569068, /*tc_4x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [5, 5, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f999c66e, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_fae9dfa5, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_fedb7e19, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 2, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>
+  ];
+}
+
+class DepScalarItinV66 {
+  list<InstrItinData> DepScalarItinV66_list = [
+    InstrItinData <tc_011e0e9d, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [2, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_01d44cb2, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_01e1be3b, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_02fe1c65, /*tc_4x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [5, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_0655b949, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [2, 3],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_075c8dd8, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_0a195f2c, /*tc_4x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [5, 2, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_0a6c20ae, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [2, 1, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_0ba0d5da, /*tc_3stall*/
+      [InstrStage<1, [SLOT2]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_0dfac0a7, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_0fac1eb8, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_112d30d6, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_1242dc2a, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_1248597c, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_14ab4f41, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [3, 3, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_151bf368, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_158aa3f7, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_197dce51, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [4, 2, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_1981450d, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [3],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_1c2c7a4a, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_1c7522a8, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 2, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_1d41f8b7, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 4, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_1fcb8495, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_1fe4ab69, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [2, 1, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_20131976, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_2237d952, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [1, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_23708a21, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [],
+      []>,
+
+    InstrItinData <tc_2471c1c8, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [4, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_24e109c7, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [3, 3, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_24f426ab, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_280f7fe1, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_28e55c6f, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [1, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_2c13e7f5, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_2c3e17fc, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_2f573607, /*tc_1*/
+      [InstrStage<1, [SLOT2]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_362b0be2, /*tc_3*/
+      [InstrStage<1, [SLOT2]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_38382228, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_388f9897, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_38e0bae9, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 4, 2, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_3d14a17b, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_3edca78f, /*tc_2*/
+      [InstrStage<1, [SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_3fbf1042, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_407e96f9, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_40d64c94, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [3, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_4222e6bf, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_42ff66ba, /*tc_1*/
+      [InstrStage<1, [SLOT2]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_442395f3, /*tc_2latepred*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [4, 3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_449acf79, /*tc_latepredstaia*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 1, 2, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_44d5a428, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_44fffc58, /*tc_3*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_45791fb8, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 2, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_45f9d1be, /*tc_2early*/
+      [InstrStage<1, [SLOT2]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_49fdfd4b, /*tc_3stall*/
+      [InstrStage<1, [SLOT3]>], [4, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_4a55d03c, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_4abdbdc6, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_4ac61d92, /*tc_2latepred*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [4, 3, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_4bf903b0, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_503ce0f3, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_53c851ab, /*tc_3stall*/
+      [InstrStage<1, [SLOT2]>], [4, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5502c366, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_55255f2b, /*tc_3stall*/
+      [InstrStage<1, [SLOT3]>], [],
+      []>,
+
+    InstrItinData <tc_556f6577, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_55a9a350, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1, 2, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_55b33fda, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_56a124a7, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_57a55b54, /*tc_1*/
+      [InstrStage<1, [SLOT3]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5944960d, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_59a7822c, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5a4b5e58, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [4, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5b347363, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5ceb2f9e, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5da50c4b, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5deb5e47, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5e4cf0e8, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5f2afaf7, /*tc_latepredldaia*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 4, 3, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_60e324ff, /*tc_1*/
+      [InstrStage<1, [SLOT2]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_63567288, /*tc_2latepred*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_64b00d8a, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [4, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_651cbe02, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_65279839, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_65cbd974, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_69bfb303, /*tc_3*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_6ae3426b, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [4, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_6d861a95, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [2, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_6e20402a, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [2, 3],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_6f42bc60, /*tc_3stall*/
+      [InstrStage<1, [SLOT0]>], [4, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_6fc5dbea, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_711c805f, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_713b66bf, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7401744f, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7476d766, /*tc_3stall*/
+      [InstrStage<1, [SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_74a42bda, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_76bb5435, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 2, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_77f94a5e, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [],
+      []>,
+
+    InstrItinData <tc_788b1d09, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7af3a37e, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1, 3],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7b9187d3, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7c31e19a, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7c6d32e4, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7f7f45f5, /*tc_4x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [5, 5, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7f8ae742, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_8035e91f, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [2, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_822c3c68, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_829d8a86, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3, 1, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_838c4d7a, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_84a7500d, /*tc_2*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_86173609, /*tc_2latepred*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [4, 3, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_887d1bb7, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 2, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_8a6d0d94, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_8a825db2, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_8b5bd4f5, /*tc_2*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_8e82e8ca, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 1, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9124c04f, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_92240447, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_934753bb, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [3, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_937dd41c, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [],
+      []>,
+
+    InstrItinData <tc_9406230a, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [2, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_95a33176, /*tc_2*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_96ef76ef, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_975a4e54, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [3, 3, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9783714b, /*tc_4x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [5, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9b34f5e0, /*tc_3stall*/
+      [InstrStage<1, [SLOT2]>], [],
+      []>,
+
+    InstrItinData <tc_9b3c0462, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9bcfb2ee, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9c52f549, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9e27f2f9, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9e72dc89, /*tc_4x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [5, 2, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9edb7c77, /*tc_4x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [5, 2, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9edefe01, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 2, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9f6cd987, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a08b630b, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a1297125, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a154b476, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a2b365d2, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a3070909, /*tc_3stall*/
+      [InstrStage<1, [SLOT0]>], [1, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a32e03e7, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 2, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a38c45dc, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a4e22bbd, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a4ee89db, /*tc_2early*/
+      [InstrStage<1, [SLOT0]>], [],
+      []>,
+
+    InstrItinData <tc_a7a13fac, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a7bdb22c, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a9edeffa, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_abfd9a6d, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_ac65613f, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_addc37a8, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3, 1, 2, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_ae5babd7, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_aee6250c, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_b1ae5f67, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_b4dc7630, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 1, 2, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_b7c4062a, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_b837298f, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [],
+      []>,
+
+    InstrItinData <tc_ba9255a6, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [2, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_bb07f2c5, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_bb831a7c, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_bf2ffc0f, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_c20701f0, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_c21d7447, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_c57d9f39, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_c818ff7f, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [],
+      []>,
+
+    InstrItinData <tc_ce59038e, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3, 2, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_cfa0e29b, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [2, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_d03278fd, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [2, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_d33e5eee, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_d3632d88, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_d45ba9cd, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_d57d649c, /*tc_3stall*/
+      [InstrStage<1, [SLOT2]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_d61dfdc3, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_d68dca5c, /*tc_3stall*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_d7718fbe, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_db596beb, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_db96aa6b, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_dc51281d, /*tc_3*/
+      [InstrStage<1, [SLOT2]>], [2, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_decdde8a, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_df5d53f9, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [3, 2, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_e3d699e3, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_e9170fb7, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_ed03645c, /*tc_1*/
+      [InstrStage<1, [SLOT2]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_eed07714, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_eeda4109, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_ef921005, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f098b237, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f0cdeccf, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f0e8e832, /*tc_4x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [5, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f34c1c21, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f38f92e1, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_f529831b, /*tc_latepredstaia*/
+      [InstrStage<1, [SLOT0]>], [4, 3, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f6e2aff9, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f7569068, /*tc_4x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [5, 5, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f999c66e, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_fae9dfa5, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_fedb7e19, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 2, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>
+  ];
+}
+
+class DepScalarItinV67 {
+  list<InstrItinData> DepScalarItinV67_list = [
+    InstrItinData <tc_011e0e9d, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [2, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_01d44cb2, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_01e1be3b, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_02fe1c65, /*tc_4x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [5, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_0655b949, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [2, 3],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_075c8dd8, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_0a195f2c, /*tc_4x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [5, 2, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_0a6c20ae, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [2, 1, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_0ba0d5da, /*tc_3stall*/
+      [InstrStage<1, [SLOT2]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_0dfac0a7, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_0fac1eb8, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_112d30d6, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_1242dc2a, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_1248597c, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_14ab4f41, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [3, 3, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_151bf368, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_158aa3f7, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_197dce51, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [4, 2, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_1981450d, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [3],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_1c2c7a4a, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_1c7522a8, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 2, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_1d41f8b7, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 4, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_1fcb8495, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_1fe4ab69, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [2, 1, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_20131976, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_2237d952, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [1, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_23708a21, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [],
+      []>,
+
+    InstrItinData <tc_2471c1c8, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [4, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_24e109c7, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [3, 3, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_24f426ab, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_280f7fe1, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_28e55c6f, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [1, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_2c13e7f5, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_2c3e17fc, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_2f573607, /*tc_1*/
+      [InstrStage<1, [SLOT2]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_362b0be2, /*tc_3*/
+      [InstrStage<1, [SLOT2]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_38382228, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_388f9897, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_38e0bae9, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 4, 2, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_3d14a17b, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_3edca78f, /*tc_2*/
+      [InstrStage<1, [SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_3fbf1042, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_407e96f9, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_40d64c94, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [3, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_4222e6bf, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_42ff66ba, /*tc_1*/
+      [InstrStage<1, [SLOT2]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_442395f3, /*tc_2latepred*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [4, 3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_449acf79, /*tc_latepredstaia*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 1, 2, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_44d5a428, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_44fffc58, /*tc_3*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_45791fb8, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 2, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_45f9d1be, /*tc_2early*/
+      [InstrStage<1, [SLOT2]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_49fdfd4b, /*tc_3stall*/
+      [InstrStage<1, [SLOT3]>], [4, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_4a55d03c, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_4abdbdc6, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_4ac61d92, /*tc_2latepred*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [4, 3, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_4bf903b0, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_503ce0f3, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_53c851ab, /*tc_3stall*/
+      [InstrStage<1, [SLOT2]>], [4, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5502c366, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_55255f2b, /*tc_3stall*/
+      [InstrStage<1, [SLOT3]>], [],
+      []>,
+
+    InstrItinData <tc_556f6577, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_55a9a350, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1, 2, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_55b33fda, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_56a124a7, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_57a55b54, /*tc_1*/
+      [InstrStage<1, [SLOT3]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5944960d, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_59a7822c, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5a4b5e58, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [4, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5b347363, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5ceb2f9e, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5da50c4b, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5deb5e47, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5e4cf0e8, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5f2afaf7, /*tc_latepredldaia*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 4, 3, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_60e324ff, /*tc_1*/
+      [InstrStage<1, [SLOT2]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_63567288, /*tc_2latepred*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_64b00d8a, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [4, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_651cbe02, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_65279839, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_65cbd974, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_69bfb303, /*tc_3*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_6ae3426b, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [4, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_6d861a95, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [2, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_6e20402a, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [2, 3],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_6f42bc60, /*tc_3stall*/
+      [InstrStage<1, [SLOT0]>], [4, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_6fc5dbea, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_711c805f, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_713b66bf, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7401744f, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7476d766, /*tc_3stall*/
+      [InstrStage<1, [SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_74a42bda, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_76bb5435, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 2, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_77f94a5e, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [],
+      []>,
+
+    InstrItinData <tc_788b1d09, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7af3a37e, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1, 3],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7b9187d3, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7c31e19a, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7c6d32e4, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7f7f45f5, /*tc_4x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [5, 5, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7f8ae742, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_8035e91f, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [2, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_822c3c68, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_829d8a86, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3, 1, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_838c4d7a, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_84a7500d, /*tc_2*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_86173609, /*tc_2latepred*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [4, 3, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_887d1bb7, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 2, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_8a6d0d94, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_8a825db2, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_8b5bd4f5, /*tc_2*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_8e82e8ca, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 1, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9124c04f, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_92240447, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_934753bb, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [3, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_937dd41c, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [],
+      []>,
+
+    InstrItinData <tc_9406230a, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [2, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_95a33176, /*tc_2*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_96ef76ef, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_975a4e54, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [3, 3, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9783714b, /*tc_4x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [5, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9b34f5e0, /*tc_3stall*/
+      [InstrStage<1, [SLOT2]>], [],
+      []>,
+
+    InstrItinData <tc_9b3c0462, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9bcfb2ee, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9c52f549, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9e27f2f9, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9e72dc89, /*tc_4x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [5, 2, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9edb7c77, /*tc_4x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [5, 2, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9edefe01, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 2, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9f6cd987, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a08b630b, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a1297125, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a154b476, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a2b365d2, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a3070909, /*tc_3stall*/
+      [InstrStage<1, [SLOT0]>], [1, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a32e03e7, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 2, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a38c45dc, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a4e22bbd, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a4ee89db, /*tc_2early*/
+      [InstrStage<1, [SLOT0]>], [],
+      []>,
+
+    InstrItinData <tc_a7a13fac, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a7bdb22c, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a9edeffa, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_abfd9a6d, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_ac65613f, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_addc37a8, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3, 1, 2, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_ae5babd7, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_aee6250c, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_b1ae5f67, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_b4dc7630, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 1, 2, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_b7c4062a, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_b837298f, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [],
+      []>,
+
+    InstrItinData <tc_ba9255a6, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [2, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_bb07f2c5, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_bb831a7c, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_bf2ffc0f, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_c20701f0, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_c21d7447, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_c57d9f39, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_c818ff7f, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [],
+      []>,
+
+    InstrItinData <tc_ce59038e, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3, 2, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_cfa0e29b, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [2, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_d03278fd, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [2, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_d33e5eee, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_d3632d88, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_d45ba9cd, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_d57d649c, /*tc_3stall*/
+      [InstrStage<1, [SLOT2]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_d61dfdc3, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_d68dca5c, /*tc_3stall*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_d7718fbe, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_db596beb, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_db96aa6b, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_dc51281d, /*tc_3*/
+      [InstrStage<1, [SLOT2]>], [2, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_decdde8a, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_df5d53f9, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [3, 2, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_e3d699e3, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_e9170fb7, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_ed03645c, /*tc_1*/
+      [InstrStage<1, [SLOT2]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_eed07714, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_eeda4109, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_ef921005, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f098b237, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f0cdeccf, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f0e8e832, /*tc_4x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [5, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f34c1c21, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f38f92e1, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_f529831b, /*tc_latepredstaia*/
+      [InstrStage<1, [SLOT0]>], [4, 3, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f6e2aff9, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f7569068, /*tc_4x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [5, 5, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f999c66e, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_fae9dfa5, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_fedb7e19, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 2, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>
+  ];
+}
+
+class DepScalarItinV67T {
+  list<InstrItinData> DepScalarItinV67T_list = [
+    InstrItinData <tc_011e0e9d, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [2, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_01d44cb2, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_01e1be3b, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [4, 2, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_02fe1c65, /*tc_4x*/
+      [InstrStage<1, [SLOT3]>], [5, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_0655b949, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [2, 3],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_075c8dd8, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [4, 3, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_0a195f2c, /*tc_4x*/
+      [InstrStage<1, [SLOT3]>], [5, 2, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_0a6c20ae, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [2, 1, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_0ba0d5da, /*tc_3stall*/
+      [InstrStage<1, [SLOT2]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_0dfac0a7, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_0fac1eb8, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_112d30d6, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT2, SLOT3]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_1242dc2a, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_1248597c, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_14ab4f41, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [3, 3, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_151bf368, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_158aa3f7, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_197dce51, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [4, 2, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_1981450d, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [3],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_1c2c7a4a, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT2, SLOT3]>], [3, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_1c7522a8, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [4, 3, 2, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_1d41f8b7, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 4, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_1fcb8495, /*tc_2*/
+      [InstrStage<1, [SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_1fe4ab69, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [2, 1, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_20131976, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_2237d952, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [1, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_23708a21, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT2, SLOT3]>], [],
+      []>,
+
+    InstrItinData <tc_2471c1c8, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [4, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_24e109c7, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [3, 3, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_24f426ab, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT2, SLOT3]>], [2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_280f7fe1, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_28e55c6f, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [1, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_2c13e7f5, /*tc_2*/
+      [InstrStage<1, [SLOT3]>], [4, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_2c3e17fc, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_2f573607, /*tc_1*/
+      [InstrStage<1, [SLOT2]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_362b0be2, /*tc_3*/
+      [InstrStage<1, [SLOT2]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_38382228, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [4, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_388f9897, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_38e0bae9, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [4, 4, 2, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_3d14a17b, /*tc_1*/
+      [InstrStage<1, [SLOT0]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_3edca78f, /*tc_2*/
+      [InstrStage<1, [SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_3fbf1042, /*tc_1*/
+      [InstrStage<1, [SLOT0]>], [3],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_407e96f9, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_40d64c94, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [3, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_4222e6bf, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [4, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_42ff66ba, /*tc_1*/
+      [InstrStage<1, [SLOT2]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_442395f3, /*tc_2latepred*/
+      [InstrStage<1, [SLOT0, SLOT2, SLOT3]>], [4, 3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_449acf79, /*tc_latepredstaia*/
+      [InstrStage<1, [SLOT0]>], [4, 3, 1, 2, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_44d5a428, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_44fffc58, /*tc_3*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_45791fb8, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [4, 2, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_45f9d1be, /*tc_2early*/
+      [InstrStage<1, [SLOT2]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_49fdfd4b, /*tc_3stall*/
+      [InstrStage<1, [SLOT3]>], [4, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_4a55d03c, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_4abdbdc6, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_4ac61d92, /*tc_2latepred*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [4, 3, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_4bf903b0, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_503ce0f3, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [4, 2, 2, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_53c851ab, /*tc_3stall*/
+      [InstrStage<1, [SLOT2]>], [4, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5502c366, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_55255f2b, /*tc_3stall*/
+      [InstrStage<1, [SLOT3]>], [],
+      []>,
+
+    InstrItinData <tc_556f6577, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [4, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_55a9a350, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1, 2, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_55b33fda, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_56a124a7, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT2, SLOT3]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_57a55b54, /*tc_1*/
+      [InstrStage<1, [SLOT3]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5944960d, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_59a7822c, /*tc_1*/
+      [InstrStage<1, [SLOT0]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5a4b5e58, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [4, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5b347363, /*tc_1*/
+      [InstrStage<1, [SLOT0]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5ceb2f9e, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [4, 3, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5da50c4b, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5deb5e47, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5e4cf0e8, /*tc_2*/
+      [InstrStage<1, [SLOT3]>], [4, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5f2afaf7, /*tc_latepredldaia*/
+      [InstrStage<1, [SLOT0]>], [4, 4, 3, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_60e324ff, /*tc_1*/
+      [InstrStage<1, [SLOT2]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_63567288, /*tc_2latepred*/
+      [InstrStage<1, [SLOT0]>], [4],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_64b00d8a, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [4, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_651cbe02, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_65279839, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_65cbd974, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_69bfb303, /*tc_3*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_6ae3426b, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [4, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_6d861a95, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [2, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_6e20402a, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [2, 3],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_6f42bc60, /*tc_3stall*/
+      [InstrStage<1, [SLOT0]>], [4, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_6fc5dbea, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_711c805f, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT2, SLOT3]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_713b66bf, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7401744f, /*tc_2*/
+      [InstrStage<1, [SLOT3]>], [4, 4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7476d766, /*tc_3stall*/
+      [InstrStage<1, [SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_74a42bda, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_76bb5435, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [4, 3, 2, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_77f94a5e, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [],
+      []>,
+
+    InstrItinData <tc_788b1d09, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [4, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7af3a37e, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1, 3],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7b9187d3, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7c31e19a, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7c6d32e4, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7f7f45f5, /*tc_4x*/
+      [InstrStage<1, [SLOT3]>], [5, 5, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7f8ae742, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [4, 2, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_8035e91f, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [2, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_822c3c68, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [4, 3, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_829d8a86, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3, 1, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_838c4d7a, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_84a7500d, /*tc_2*/
+      [InstrStage<1, [SLOT0, SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_86173609, /*tc_2latepred*/
+      [InstrStage<1, [SLOT0, SLOT2, SLOT3]>], [4, 3, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_887d1bb7, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1, 2, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_8a6d0d94, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_8a825db2, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_8b5bd4f5, /*tc_2*/
+      [InstrStage<1, [SLOT0, SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_8e82e8ca, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3, 1, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9124c04f, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_92240447, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_934753bb, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [3, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_937dd41c, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [],
+      []>,
+
+    InstrItinData <tc_9406230a, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [2, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_95a33176, /*tc_2*/
+      [InstrStage<1, [SLOT0, SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_96ef76ef, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_975a4e54, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [3, 3, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9783714b, /*tc_4x*/
+      [InstrStage<1, [SLOT3]>], [5, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9b34f5e0, /*tc_3stall*/
+      [InstrStage<1, [SLOT2]>], [],
+      []>,
+
+    InstrItinData <tc_9b3c0462, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9bcfb2ee, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9c52f549, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9e27f2f9, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT2, SLOT3]>], [2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9e72dc89, /*tc_4x*/
+      [InstrStage<1, [SLOT3]>], [5, 2, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9edb7c77, /*tc_4x*/
+      [InstrStage<1, [SLOT3]>], [5, 2, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9edefe01, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3, 2, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9f6cd987, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a08b630b, /*tc_2*/
+      [InstrStage<1, [SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a1297125, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a154b476, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [4, 2, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a2b365d2, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a3070909, /*tc_3stall*/
+      [InstrStage<1, [SLOT0]>], [1, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a32e03e7, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [4, 2, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a38c45dc, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [4, 2, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a4e22bbd, /*tc_2*/
+      [InstrStage<1, [SLOT3]>], [4, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a4ee89db, /*tc_2early*/
+      [InstrStage<1, [SLOT0]>], [],
+      []>,
+
+    InstrItinData <tc_a7a13fac, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a7bdb22c, /*tc_2*/
+      [InstrStage<1, [SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a9edeffa, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_abfd9a6d, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [4, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_ac65613f, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [4, 3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_addc37a8, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3, 1, 2, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_ae5babd7, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_aee6250c, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_b1ae5f67, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_b4dc7630, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3, 1, 2, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_b7c4062a, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [4, 3, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_b837298f, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT2, SLOT3]>], [],
+      []>,
+
+    InstrItinData <tc_ba9255a6, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [2, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_bb07f2c5, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_bb831a7c, /*tc_2*/
+      [InstrStage<1, [SLOT3]>], [4, 2, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_bf2ffc0f, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [4, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_c20701f0, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_c21d7447, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [4, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_c57d9f39, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT2, SLOT3]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_c818ff7f, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [],
+      []>,
+
+    InstrItinData <tc_ce59038e, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3, 2, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_cfa0e29b, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [2, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_d03278fd, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [2, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_d33e5eee, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_d3632d88, /*tc_2*/
+      [InstrStage<1, [SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_d45ba9cd, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_d57d649c, /*tc_3stall*/
+      [InstrStage<1, [SLOT2]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_d61dfdc3, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_d68dca5c, /*tc_3stall*/
+      [InstrStage<1, [SLOT3]>], [4, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_d7718fbe, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_db596beb, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [4, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_db96aa6b, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_dc51281d, /*tc_3*/
+      [InstrStage<1, [SLOT2]>], [2, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_decdde8a, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT2, SLOT3]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_df5d53f9, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [3, 2, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_e3d699e3, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_e9170fb7, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [4, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_ed03645c, /*tc_1*/
+      [InstrStage<1, [SLOT2]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_eed07714, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_eeda4109, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT2, SLOT3]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_ef921005, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f098b237, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f0cdeccf, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [4, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f0e8e832, /*tc_4x*/
+      [InstrStage<1, [SLOT3]>], [5, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f34c1c21, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f38f92e1, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_f529831b, /*tc_latepredstaia*/
+      [InstrStage<1, [SLOT0]>], [4, 3, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f6e2aff9, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f7569068, /*tc_4x*/
+      [InstrStage<1, [SLOT3]>], [5, 5, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f999c66e, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT2, SLOT3]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_fae9dfa5, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_fedb7e19, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [4, 2, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>
+  ];
+}
+
+class DepScalarItinV68 {
+  list<InstrItinData> DepScalarItinV68_list = [
+    InstrItinData <tc_011e0e9d, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [2, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_01d44cb2, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_01e1be3b, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_02fe1c65, /*tc_4x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [5, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_0655b949, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [2, 3],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_075c8dd8, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_0a195f2c, /*tc_4x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [5, 2, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_0a6c20ae, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [2, 1, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_0ba0d5da, /*tc_3stall*/
+      [InstrStage<1, [SLOT2]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_0dfac0a7, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_0fac1eb8, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_112d30d6, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_1242dc2a, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_1248597c, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_14ab4f41, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [3, 3, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_151bf368, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_158aa3f7, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_197dce51, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [4, 2, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_1981450d, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [3],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_1c2c7a4a, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_1c7522a8, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 2, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_1d41f8b7, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 4, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_1fcb8495, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_1fe4ab69, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [2, 1, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_20131976, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_2237d952, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [1, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_23708a21, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [],
+      []>,
+
+    InstrItinData <tc_2471c1c8, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [4, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_24e109c7, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [3, 3, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_24f426ab, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_280f7fe1, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_28e55c6f, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [1, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_2c13e7f5, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_2c3e17fc, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_2f573607, /*tc_1*/
+      [InstrStage<1, [SLOT2]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_362b0be2, /*tc_3*/
+      [InstrStage<1, [SLOT2]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_38382228, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_388f9897, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_38e0bae9, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 4, 2, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_3d14a17b, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_3edca78f, /*tc_2*/
+      [InstrStage<1, [SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_3fbf1042, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_407e96f9, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_40d64c94, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [3, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_4222e6bf, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_42ff66ba, /*tc_1*/
+      [InstrStage<1, [SLOT2]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_442395f3, /*tc_2latepred*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [4, 3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_449acf79, /*tc_latepredstaia*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 1, 2, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_44d5a428, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_44fffc58, /*tc_3*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_45791fb8, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 2, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_45f9d1be, /*tc_2early*/
+      [InstrStage<1, [SLOT2]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_49fdfd4b, /*tc_3stall*/
+      [InstrStage<1, [SLOT3]>], [4, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_4a55d03c, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_4abdbdc6, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_4ac61d92, /*tc_2latepred*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [4, 3, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_4bf903b0, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_503ce0f3, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_53c851ab, /*tc_3stall*/
+      [InstrStage<1, [SLOT2]>], [4, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5502c366, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_55255f2b, /*tc_3stall*/
+      [InstrStage<1, [SLOT3]>], [],
+      []>,
+
+    InstrItinData <tc_556f6577, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_55a9a350, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1, 2, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_55b33fda, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_56a124a7, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_57a55b54, /*tc_1*/
+      [InstrStage<1, [SLOT3]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5944960d, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_59a7822c, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5a4b5e58, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [4, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5b347363, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5ceb2f9e, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5da50c4b, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5deb5e47, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5e4cf0e8, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_5f2afaf7, /*tc_latepredldaia*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 4, 3, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_60e324ff, /*tc_1*/
+      [InstrStage<1, [SLOT2]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_63567288, /*tc_2latepred*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_64b00d8a, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [4, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_651cbe02, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_65279839, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_65cbd974, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_69bfb303, /*tc_3*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_6ae3426b, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [4, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_6d861a95, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [2, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_6e20402a, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [2, 3],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_6f42bc60, /*tc_3stall*/
+      [InstrStage<1, [SLOT0]>], [4, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_6fc5dbea, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_711c805f, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_713b66bf, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7401744f, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7476d766, /*tc_3stall*/
+      [InstrStage<1, [SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_74a42bda, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_76bb5435, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 2, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_77f94a5e, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [],
+      []>,
+
+    InstrItinData <tc_788b1d09, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7af3a37e, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1, 3],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7b9187d3, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7c31e19a, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7c6d32e4, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7f7f45f5, /*tc_4x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [5, 5, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_7f8ae742, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_8035e91f, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [2, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_822c3c68, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_829d8a86, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3, 1, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_838c4d7a, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_84a7500d, /*tc_2*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_86173609, /*tc_2latepred*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [4, 3, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_887d1bb7, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 2, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_8a6d0d94, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_8a825db2, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_8b5bd4f5, /*tc_2*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_8e82e8ca, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 1, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9124c04f, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_92240447, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_934753bb, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [3, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_937dd41c, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [],
+      []>,
+
+    InstrItinData <tc_9406230a, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [2, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_95a33176, /*tc_2*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_96ef76ef, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_975a4e54, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [3, 3, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9783714b, /*tc_4x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [5, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9b34f5e0, /*tc_3stall*/
+      [InstrStage<1, [SLOT2]>], [],
+      []>,
+
+    InstrItinData <tc_9b3c0462, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9bcfb2ee, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9c52f549, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9e27f2f9, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9e72dc89, /*tc_4x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [5, 2, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9edb7c77, /*tc_4x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [5, 2, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9edefe01, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 2, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_9f6cd987, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a08b630b, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a1297125, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a154b476, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a2b365d2, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a3070909, /*tc_3stall*/
+      [InstrStage<1, [SLOT0]>], [1, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a32e03e7, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 2, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a38c45dc, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a4e22bbd, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a4ee89db, /*tc_2early*/
+      [InstrStage<1, [SLOT0]>], [],
+      []>,
+
+    InstrItinData <tc_a7a13fac, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a7bdb22c, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_a9edeffa, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_abfd9a6d, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_ac65613f, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_addc37a8, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3, 1, 2, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_ae5babd7, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_aee6250c, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_b1ae5f67, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_b4dc7630, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 1, 2, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_b7c4062a, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 3, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_b837298f, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [],
+      []>,
+
+    InstrItinData <tc_ba9255a6, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [2, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_bb07f2c5, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [3, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_bb831a7c, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_bf2ffc0f, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_c20701f0, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_c21d7447, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_c57d9f39, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_c818ff7f, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [],
+      []>,
+
+    InstrItinData <tc_ce59038e, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [3, 2, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_cfa0e29b, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [2, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_d03278fd, /*tc_st*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [2, 1, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_d33e5eee, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_d3632d88, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_d45ba9cd, /*tc_ld*/
+      [InstrStage<1, [SLOT0]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_d57d649c, /*tc_3stall*/
+      [InstrStage<1, [SLOT2]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_d61dfdc3, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_d68dca5c, /*tc_3stall*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_d7718fbe, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_db596beb, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_db96aa6b, /*tc_st*/
+      [InstrStage<1, [SLOT0]>], [1],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_dc51281d, /*tc_3*/
+      [InstrStage<1, [SLOT2]>], [2, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_decdde8a, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_df5d53f9, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [3, 2, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_e3d699e3, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_e9170fb7, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 1],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_ed03645c, /*tc_1*/
+      [InstrStage<1, [SLOT2]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_eed07714, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_eeda4109, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_ef921005, /*tc_1*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [3, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f098b237, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f0cdeccf, /*tc_3x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 1, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f0e8e832, /*tc_4x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [5, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f34c1c21, /*tc_2*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [4, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f38f92e1, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [2],
+      [Hex_FWD]>,
+
+    InstrItinData <tc_f529831b, /*tc_latepredstaia*/
+      [InstrStage<1, [SLOT0]>], [4, 3, 1, 2, 3],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f6e2aff9, /*tc_newvjump*/
+      [InstrStage<1, [SLOT0]>], [3, 2, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f7569068, /*tc_4x*/
+      [InstrStage<1, [SLOT2, SLOT3]>], [5, 5, 1, 1],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_f999c66e, /*tc_1*/
+      [InstrStage<1, [SLOT0, SLOT1, SLOT2, SLOT3]>], [2, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_fae9dfa5, /*tc_3x*/
+      [InstrStage<1, [SLOT3]>], [4, 2],
+      [Hex_FWD, Hex_FWD]>,
+
+    InstrItinData <tc_fedb7e19, /*tc_ld*/
+      [InstrStage<1, [SLOT0, SLOT1]>], [4, 2, 1, 2],
+      [Hex_FWD, Hex_FWD, Hex_FWD, Hex_FWD]>
   ];
 }

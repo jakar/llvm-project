@@ -1,9 +1,8 @@
 //===--- Diagnostic.td - C Language Family Diagnostic Handling ------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -38,6 +37,16 @@ def SFINAE_SubstitutionFailure : SFINAEResponse;
 def SFINAE_Suppress            : SFINAEResponse;
 def SFINAE_Report              : SFINAEResponse;
 def SFINAE_AccessControl       : SFINAEResponse;
+
+// Textual substitutions which may be performed on the text of diagnostics
+class TextSubstitution<string Text> {
+  string Substitution = Text;
+  // TODO: These are only here to allow substitutions to be declared inline with
+  // diagnostics
+  string Component = "";
+  string CategoryName = "";
+  bit Deferrable = 0;
+}
 
 // Diagnostic Categories.  These can be applied to groups or individual
 // diagnostics to specify a category.
@@ -75,6 +84,7 @@ class Diagnostic<string text, DiagClass DC, Severity defaultmapping> {
   bit            AccessControl = 0;
   bit            WarningNoWerror = 0;
   bit            ShowInSystemHeader = 0;
+  bit            Deferrable = 0;
   Severity       DefaultSeverity = defaultmapping;
   DiagGroup      Group;
   string         CategoryName = "";
@@ -96,6 +106,14 @@ class ShowInSystemHeader {
 
 class SuppressInSystemHeader {
   bit ShowInSystemHeader = 0;
+}
+
+class Deferrable {
+  bit Deferrable = 1;
+}
+
+class NonDeferrable {
+  bit Deferrable = 0;
 }
 
 // FIXME: ExtWarn and Extension should also be SFINAEFailure by default.
@@ -133,10 +151,12 @@ include "DiagnosticASTKinds.td"
 include "DiagnosticAnalysisKinds.td"
 include "DiagnosticCommentKinds.td"
 include "DiagnosticCommonKinds.td"
+include "DiagnosticCrossTUKinds.td"
 include "DiagnosticDriverKinds.td"
 include "DiagnosticFrontendKinds.td"
 include "DiagnosticLexKinds.td"
 include "DiagnosticParseKinds.td"
+include "DiagnosticRefactoringKinds.td"
 include "DiagnosticSemaKinds.td"
 include "DiagnosticSerializationKinds.td"
 

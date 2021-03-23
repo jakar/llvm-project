@@ -1,23 +1,17 @@
-//===-- StackFrame.cpp ------------------------------------------*- C++ -*-===//
+//===-- StackFrame.cpp ----------------------------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
-// C Includes
-// C++ Includes
-// Other libraries and framework includes
-// Project includes
 #include "lldb/Target/StackFrame.h"
 #include "lldb/Core/Debugger.h"
 #include "lldb/Core/Disassembler.h"
 #include "lldb/Core/FormatEntity.h"
 #include "lldb/Core/Mangled.h"
 #include "lldb/Core/Module.h"
-#include "lldb/Core/RegisterValue.h"
 #include "lldb/Core/Value.h"
 #include "lldb/Core/ValueObjectConstResult.h"
 #include "lldb/Core/ValueObjectMemory.h"
@@ -32,8 +26,15 @@
 #include "lldb/Target/ExecutionContext.h"
 #include "lldb/Target/Process.h"
 #include "lldb/Target/RegisterContext.h"
+#include "lldb/Target/StackFrameRecognizer.h"
 #include "lldb/Target/Target.h"
 #include "lldb/Target/Thread.h"
+#include "lldb/Utility/Log.h"
+#include "lldb/Utility/RegisterValue.h"
+
+#include "lldb/lldb-enumerations.h"
+
+#include <memory>
 
 using namespace lldb;
 using namespace lldb_private;
@@ -49,20 +50,21 @@ using namespace lldb_private;
 
 StackFrame::StackFrame(const ThreadSP &thread_sp, user_id_t frame_idx,
                        user_id_t unwind_frame_index, addr_t cfa,
-                       bool cfa_is_valid, addr_t pc, uint32_t stop_id,
-                       bool stop_id_is_valid, bool is_history_frame,
+                       bool cfa_is_valid, addr_t pc, StackFrame::Kind kind,
+                       bool behaves_like_zeroth_frame,
                        const SymbolContext *sc_ptr)
     : m_thread_wp(thread_sp), m_frame_index(frame_idx),
       m_concrete_frame_index(unwind_frame_index), m_reg_context_sp(),
       m_id(pc, cfa, nullptr), m_frame_code_addr(pc), m_sc(), m_flags(),
       m_frame_base(), m_frame_base_error(), m_cfa_is_valid(cfa_is_valid),
-      m_stop_id(stop_id), m_stop_id_is_valid(stop_id_is_valid),
-      m_is_history_frame(is_history_frame), m_variable_list_sp(),
-      m_variable_list_value_objects(), m_disassembly(), m_mutex() {
+      m_stack_frame_kind(kind),
+      m_behaves_like_zeroth_frame(behaves_like_zeroth_frame),
+      m_variable_list_sp(), m_variable_list_value_objects(),
+      m_recognized_frame_sp(), m_disassembly(), m_mutex() {
   // If we don't have a CFA value, use the frame index for our StackID so that
-  // recursive
-  // functions properly aren't confused with one another on a history stack.
-  if (m_is_history_frame && !m_cfa_is_valid) {
+  // recursive functions properly aren't confused with one another on a history
+  // stack.
+  if (IsHistorical() && !m_cfa_is_valid) {
     m_id.SetCFA(m_frame_index);
   }
 
@@ -75,15 +77,17 @@ StackFrame::StackFrame(const ThreadSP &thread_sp, user_id_t frame_idx,
 StackFrame::StackFrame(const ThreadSP &thread_sp, user_id_t frame_idx,
                        user_id_t unwind_frame_index,
                        const RegisterContextSP &reg_context_sp, addr_t cfa,
-                       addr_t pc, const SymbolContext *sc_ptr)
+                       addr_t pc, bool behaves_like_zeroth_frame,
+                       const SymbolContext *sc_ptr)
     : m_thread_wp(thread_sp), m_frame_index(frame_idx),
       m_concrete_frame_index(unwind_frame_index),
       m_reg_context_sp(reg_context_sp), m_id(pc, cfa, nullptr),
       m_frame_code_addr(pc), m_sc(), m_flags(), m_frame_base(),
-      m_frame_base_error(), m_cfa_is_valid(true), m_stop_id(0),
-      m_stop_id_is_valid(false), m_is_history_frame(false),
-      m_variable_list_sp(), m_variable_list_value_objects(), m_disassembly(),
-      m_mutex() {
+      m_frame_base_error(), m_cfa_is_valid(true),
+      m_stack_frame_kind(StackFrame::Kind::Regular),
+      m_behaves_like_zeroth_frame(behaves_like_zeroth_frame),
+      m_variable_list_sp(), m_variable_list_value_objects(),
+      m_recognized_frame_sp(), m_disassembly(), m_mutex() {
   if (sc_ptr != nullptr) {
     m_sc = *sc_ptr;
     m_flags.Set(m_sc.GetResolvedMask());
@@ -99,17 +103,19 @@ StackFrame::StackFrame(const ThreadSP &thread_sp, user_id_t frame_idx,
 StackFrame::StackFrame(const ThreadSP &thread_sp, user_id_t frame_idx,
                        user_id_t unwind_frame_index,
                        const RegisterContextSP &reg_context_sp, addr_t cfa,
-                       const Address &pc_addr, const SymbolContext *sc_ptr)
+                       const Address &pc_addr, bool behaves_like_zeroth_frame,
+                       const SymbolContext *sc_ptr)
     : m_thread_wp(thread_sp), m_frame_index(frame_idx),
       m_concrete_frame_index(unwind_frame_index),
       m_reg_context_sp(reg_context_sp),
       m_id(pc_addr.GetLoadAddress(thread_sp->CalculateTarget().get()), cfa,
            nullptr),
       m_frame_code_addr(pc_addr), m_sc(), m_flags(), m_frame_base(),
-      m_frame_base_error(), m_cfa_is_valid(true), m_stop_id(0),
-      m_stop_id_is_valid(false), m_is_history_frame(false),
-      m_variable_list_sp(), m_variable_list_value_objects(), m_disassembly(),
-      m_mutex() {
+      m_frame_base_error(), m_cfa_is_valid(true),
+      m_stack_frame_kind(StackFrame::Kind::Regular),
+      m_behaves_like_zeroth_frame(behaves_like_zeroth_frame),
+      m_variable_list_sp(), m_variable_list_value_objects(),
+      m_recognized_frame_sp(), m_disassembly(), m_mutex() {
   if (sc_ptr != nullptr) {
     m_sc = *sc_ptr;
     m_flags.Set(m_sc.GetResolvedMask());
@@ -136,17 +142,17 @@ StackFrame::~StackFrame() = default;
 
 StackID &StackFrame::GetStackID() {
   std::lock_guard<std::recursive_mutex> guard(m_mutex);
-  // Make sure we have resolved the StackID object's symbol context scope if
-  // we already haven't looked it up.
+  // Make sure we have resolved the StackID object's symbol context scope if we
+  // already haven't looked it up.
 
   if (m_flags.IsClear(RESOLVED_FRAME_ID_SYMBOL_SCOPE)) {
     if (m_id.GetSymbolContextScope()) {
-      // We already have a symbol context scope, we just don't have our
-      // flag bit set.
+      // We already have a symbol context scope, we just don't have our flag
+      // bit set.
       m_flags.Set(RESOLVED_FRAME_ID_SYMBOL_SCOPE);
     } else {
-      // Calculate the frame block and use this for the stack ID symbol
-      // context scope if we have one.
+      // Calculate the frame block and use this for the stack ID symbol context
+      // scope if we have one.
       SymbolContextScope *scope = GetFrameBlock();
       if (scope == nullptr) {
         // We don't have a block, so use the symbol
@@ -191,9 +197,10 @@ const Address &StackFrame::GetFrameCodeAddress() {
     if (thread_sp) {
       TargetSP target_sp(thread_sp->CalculateTarget());
       if (target_sp) {
+        const bool allow_section_end = true;
         if (m_frame_code_addr.SetOpcodeLoadAddress(
                 m_frame_code_addr.GetOffset(), target_sp.get(),
-                eAddressClassCode)) {
+                AddressClass::eCode, allow_section_end)) {
           ModuleSP module_sp(m_frame_code_addr.GetModule());
           if (module_sp) {
             m_sc.module_sp = module_sp;
@@ -206,10 +213,39 @@ const Address &StackFrame::GetFrameCodeAddress() {
   return m_frame_code_addr;
 }
 
+// This can't be rewritten into a call to
+// RegisterContext::GetPCForSymbolication because this
+// StackFrame may have been constructed with a special pc,
+// e.g. tail-call artificial frames.
+Address StackFrame::GetFrameCodeAddressForSymbolication() {
+  Address lookup_addr(GetFrameCodeAddress());
+  if (!lookup_addr.IsValid())
+    return lookup_addr;
+  if (m_behaves_like_zeroth_frame)
+    return lookup_addr;
+
+  addr_t offset = lookup_addr.GetOffset();
+  if (offset > 0) {
+    lookup_addr.SetOffset(offset - 1);
+  } else {
+    // lookup_addr is the start of a section.  We need do the math on the
+    // actual load address and re-compute the section.  We're working with
+    // a 'noreturn' function at the end of a section.
+    TargetSP target_sp = CalculateTarget();
+    if (target_sp) {
+      addr_t addr_minus_one = lookup_addr.GetOpcodeLoadAddress(
+                                  target_sp.get(), AddressClass::eCode) -
+                              1;
+      lookup_addr.SetOpcodeLoadAddress(addr_minus_one, target_sp.get());
+    }
+  }
+  return lookup_addr;
+}
+
 bool StackFrame::ChangePC(addr_t pc) {
   std::lock_guard<std::recursive_mutex> guard(m_mutex);
   // We can't change the pc value of a history stack frame - it is immutable.
-  if (m_is_history_frame)
+  if (IsHistorical())
     return false;
   m_frame_code_addr.SetRawAddress(pc);
   m_sc.Clear(false);
@@ -222,21 +258,16 @@ bool StackFrame::ChangePC(addr_t pc) {
 
 const char *StackFrame::Disassemble() {
   std::lock_guard<std::recursive_mutex> guard(m_mutex);
-  if (m_disassembly.Empty()) {
-    ExecutionContext exe_ctx(shared_from_this());
-    Target *target = exe_ctx.GetTargetPtr();
-    if (target) {
-      const char *plugin_name = nullptr;
-      const char *flavor = nullptr;
-      Disassembler::Disassemble(target->GetDebugger(),
-                                target->GetArchitecture(), plugin_name, flavor,
-                                exe_ctx, 0, false, 0, 0, m_disassembly);
-    }
-    if (m_disassembly.Empty())
-      return nullptr;
+  if (!m_disassembly.Empty())
+    return m_disassembly.GetData();
+
+  ExecutionContext exe_ctx(shared_from_this());
+  if (Target *target = exe_ctx.GetTargetPtr()) {
+    Disassembler::Disassemble(target->GetDebugger(), target->GetArchitecture(),
+                              *this, m_disassembly);
   }
 
-  return m_disassembly.GetData();
+  return m_disassembly.Empty() ? nullptr : m_disassembly.GetData();
 }
 
 Block *StackFrame::GetFrameBlock() {
@@ -246,26 +277,25 @@ Block *StackFrame::GetFrameBlock() {
   if (m_sc.block) {
     Block *inline_block = m_sc.block->GetContainingInlinedBlock();
     if (inline_block) {
-      // Use the block with the inlined function info
-      // as the frame block we want this frame to have only the variables
-      // for the inlined function and its non-inlined block child blocks.
+      // Use the block with the inlined function info as the frame block we
+      // want this frame to have only the variables for the inlined function
+      // and its non-inlined block child blocks.
       return inline_block;
     } else {
-      // This block is not contained within any inlined function blocks
-      // with so we want to use the top most function block.
+      // This block is not contained within any inlined function blocks with so
+      // we want to use the top most function block.
       return &m_sc.function->GetBlock(false);
     }
   }
   return nullptr;
 }
 
-//----------------------------------------------------------------------
 // Get the symbol context if we already haven't done so by resolving the
 // PC address as much as possible. This way when we pass around a
-// StackFrame object, everyone will have as much information as
-// possible and no one will ever have to look things up manually.
-//----------------------------------------------------------------------
-const SymbolContext &StackFrame::GetSymbolContext(uint32_t resolve_scope) {
+// StackFrame object, everyone will have as much information as possible and no
+// one will ever have to look things up manually.
+const SymbolContext &
+StackFrame::GetSymbolContext(SymbolContextItem resolve_scope) {
   std::lock_guard<std::recursive_mutex> guard(m_mutex);
   // Copy our internal symbol context into "sc".
   if ((m_flags.Get() & resolve_scope) != resolve_scope) {
@@ -278,47 +308,23 @@ const SymbolContext &StackFrame::GetSymbolContext(uint32_t resolve_scope) {
         resolved |= eSymbolContextTarget;
     }
 
-    // Resolve our PC to section offset if we haven't already done so
-    // and if we don't have a module. The resolved address section will
-    // contain the module to which it belongs
+    // Resolve our PC to section offset if we haven't already done so and if we
+    // don't have a module. The resolved address section will contain the
+    // module to which it belongs
     if (!m_sc.module_sp && m_flags.IsClear(RESOLVED_FRAME_CODE_ADDR))
       GetFrameCodeAddress();
 
-    // If this is not frame zero, then we need to subtract 1 from the PC
-    // value when doing address lookups since the PC will be on the
-    // instruction following the function call instruction...
-
-    Address lookup_addr(GetFrameCodeAddress());
-    if (m_frame_index > 0 && lookup_addr.IsValid()) {
-      addr_t offset = lookup_addr.GetOffset();
-      if (offset > 0) {
-        lookup_addr.SetOffset(offset - 1);
-
-      } else {
-        // lookup_addr is the start of a section.  We need
-        // do the math on the actual load address and re-compute
-        // the section.  We're working with a 'noreturn' function
-        // at the end of a section.
-        ThreadSP thread_sp(GetThread());
-        if (thread_sp) {
-          TargetSP target_sp(thread_sp->CalculateTarget());
-          if (target_sp) {
-            addr_t addr_minus_one =
-                lookup_addr.GetLoadAddress(target_sp.get()) - 1;
-            lookup_addr.SetLoadAddress(addr_minus_one, target_sp.get());
-          } else {
-            lookup_addr.SetOffset(offset - 1);
-          }
-        }
-      }
-    }
+    // If this is not frame zero, then we need to subtract 1 from the PC value
+    // when doing address lookups since the PC will be on the instruction
+    // following the function call instruction...
+    Address lookup_addr(GetFrameCodeAddressForSymbolication());
 
     if (m_sc.module_sp) {
-      // We have something in our stack frame symbol context, lets check
-      // if we haven't already tried to lookup one of those things. If we
-      // haven't then we will do the query.
+      // We have something in our stack frame symbol context, lets check if we
+      // haven't already tried to lookup one of those things. If we haven't
+      // then we will do the query.
 
-      uint32_t actual_resolve_scope = 0;
+      SymbolContextItem actual_resolve_scope = SymbolContextItem(0);
 
       if (resolve_scope & eSymbolContextCompUnit) {
         if (m_flags.IsClear(eSymbolContextCompUnit)) {
@@ -366,17 +372,16 @@ const SymbolContext &StackFrame::GetSymbolContext(uint32_t resolve_scope) {
       }
 
       if (actual_resolve_scope) {
-        // We might be resolving less information than what is already
-        // in our current symbol context so resolve into a temporary
-        // symbol context "sc" so we don't clear out data we have
-        // already found in "m_sc"
+        // We might be resolving less information than what is already in our
+        // current symbol context so resolve into a temporary symbol context
+        // "sc" so we don't clear out data we have already found in "m_sc"
         SymbolContext sc;
         // Set flags that indicate what we have tried to resolve
         resolved |= m_sc.module_sp->ResolveSymbolContextForAddress(
             lookup_addr, actual_resolve_scope, sc);
-        // Only replace what we didn't already have as we may have
-        // information for an inlined function scope that won't match
-        // what a standard lookup by address would match
+        // Only replace what we didn't already have as we may have information
+        // for an inlined function scope that won't match what a standard
+        // lookup by address would match
         if ((resolved & eSymbolContextCompUnit) && m_sc.comp_unit == nullptr)
           m_sc.comp_unit = sc.comp_unit;
         if ((resolved & eSymbolContextFunction) && m_sc.function == nullptr)
@@ -403,9 +408,9 @@ const SymbolContext &StackFrame::GetSymbolContext(uint32_t resolve_scope) {
 
     // Update our internal flags so we remember what we have tried to locate so
     // we don't have to keep trying when more calls to this function are made.
-    // We might have dug up more information that was requested (for example
-    // if we were asked to only get the block, we will have gotten the
-    // compile unit, and function) so set any additional bits that we resolved
+    // We might have dug up more information that was requested (for example if
+    // we were asked to only get the block, we will have gotten the compile
+    // unit, and function) so set any additional bits that we resolved
     m_flags.Set(resolve_scope | resolved);
   }
 
@@ -425,7 +430,7 @@ VariableList *StackFrame::GetVariableList(bool get_file_globals) {
       const bool get_child_variables = true;
       const bool can_create = true;
       const bool stop_if_child_block_is_inlined_function = true;
-      m_variable_list_sp.reset(new VariableList());
+      m_variable_list_sp = std::make_shared<VariableList>();
       frame_block->AppendBlockVariables(can_create, get_child_variables,
                                         stop_if_child_block_is_inlined_function,
                                         [](Variable *v) { return true; },
@@ -457,7 +462,7 @@ StackFrame::GetInScopeVariableList(bool get_file_globals,
                                    bool must_have_valid_location) {
   std::lock_guard<std::recursive_mutex> guard(m_mutex);
   // We can't fetch variable information for a history stack frame.
-  if (m_is_history_frame)
+  if (IsHistorical())
     return VariableListSP();
 
   VariableListSP var_list_sp(new VariableList);
@@ -488,10 +493,10 @@ StackFrame::GetInScopeVariableList(bool get_file_globals,
 
 ValueObjectSP StackFrame::GetValueForVariableExpressionPath(
     llvm::StringRef var_expr, DynamicValueType use_dynamic, uint32_t options,
-    VariableSP &var_sp, Error &error) {
+    VariableSP &var_sp, Status &error) {
   llvm::StringRef original_var_expr = var_expr;
   // We can't fetch variable information for a history stack frame.
-  if (m_is_history_frame)
+  if (IsHistorical())
     return ValueObjectSP();
 
   if (var_expr.empty()) {
@@ -545,8 +550,8 @@ ValueObjectSP StackFrame::GetValueForVariableExpressionPath(
   }
 
   if (!var_sp && (options & eExpressionPathOptionsAllowDirectIVarAccess)) {
-    // Check for direct ivars access which helps us with implicit
-    // access to ivars with the "this->" or "self->"
+    // Check for direct ivars access which helps us with implicit access to
+    // ivars with the "this->" or "self->"
     GetSymbolContext(eSymbolContextFunction | eSymbolContextBlock);
     lldb::LanguageType method_language = eLanguageTypeUnknown;
     bool is_instance_method = false;
@@ -569,8 +574,7 @@ ValueObjectSP StackFrame::GetValueForVariableExpressionPath(
   if (!var_sp && (options & eExpressionPathOptionsInspectAnonymousUnions)) {
     // Check if any anonymous unions are there which contain a variable with
     // the name we need
-    for (size_t i = 0; i < variable_list->GetSize(); i++) {
-      VariableSP variable_sp = variable_list->GetVariableAtIndex(i);
+    for (const VariableSP &variable_sp : *variable_list) {
       if (!variable_sp)
         continue;
       if (!variable_sp->GetName().IsEmpty())
@@ -603,7 +607,7 @@ ValueObjectSP StackFrame::GetValueForVariableExpressionPath(
   }
 
   // We are dumping at least one child
-  while (separator_idx != std::string::npos) {
+  while (!var_expr.empty()) {
     // Calculate the next separator index ahead of time
     ValueObjectSP child_valobj_sp;
     const char separator_type = var_expr[0];
@@ -621,9 +625,8 @@ ValueObjectSP StackFrame::GetValueForVariableExpressionPath(
             valobj_sp->GetCompilerType().GetTypeInfo(nullptr);
         if ((pointer_type_flags & eTypeIsObjC) &&
             (pointer_type_flags & eTypeIsPointer)) {
-          // This was an objective C object pointer and
-          // it was requested we skip any fragile ivars
-          // so return nothing here
+          // This was an objective C object pointer and it was requested we
+          // skip any fragile ivars so return nothing here
           return ValueObjectSP();
         }
       }
@@ -631,7 +634,7 @@ ValueObjectSP StackFrame::GetValueForVariableExpressionPath(
       // If we have a non pointer type with a sythetic value then lets check if
       // we have an sythetic dereference specified.
       if (!valobj_sp->IsPointerType() && valobj_sp->HasSyntheticValue()) {
-        Error deref_error;
+        Status deref_error;
         if (valobj_sp->GetCompilerType().IsReferenceType()) {
           valobj_sp = valobj_sp->GetSyntheticValue()->Dereference(deref_error);
           if (error.Fail()) {
@@ -644,7 +647,12 @@ ValueObjectSP StackFrame::GetValueForVariableExpressionPath(
         valobj_sp = valobj_sp->Dereference(deref_error);
         if (error.Fail()) {
           error.SetErrorStringWithFormatv(
-              "Failed to dereference sythetic value: %s", deref_error);
+              "Failed to dereference sythetic value: {0}", deref_error);
+          return ValueObjectSP();
+        }
+        // Some synthetic plug-ins fail to set the error in Dereference
+        if (!valobj_sp) {
+          error.SetErrorString("Failed to dereference sythetic value");
           return ValueObjectSP();
         }
         expr_is_ptr = false;
@@ -658,16 +666,15 @@ ValueObjectSP StackFrame::GetValueForVariableExpressionPath(
       ConstString child_name(var_expr.substr(0, var_expr.find_first_of(".-[")));
 
       if (check_ptr_vs_member) {
-        // We either have a pointer type and need to verify
-        // valobj_sp is a pointer, or we have a member of a
-        // class/union/struct being accessed with the . syntax
-        // and need to verify we don't have a pointer.
+        // We either have a pointer type and need to verify valobj_sp is a
+        // pointer, or we have a member of a class/union/struct being accessed
+        // with the . syntax and need to verify we don't have a pointer.
         const bool actual_is_ptr = valobj_sp->IsPointerType();
 
         if (actual_is_ptr != expr_is_ptr) {
-          // Incorrect use of "." with a pointer, or "->" with
-          // a class/union/struct instance or reference.
-          valobj_sp->GetExpressionPath(var_expr_path_strm, false);
+          // Incorrect use of "." with a pointer, or "->" with a
+          // class/union/struct instance or reference.
+          valobj_sp->GetExpressionPath(var_expr_path_strm);
           if (actual_is_ptr)
             error.SetErrorStringWithFormat(
                 "\"%s\" is a pointer and . was used to attempt to access "
@@ -696,16 +703,14 @@ ValueObjectSP StackFrame::GetValueForVariableExpressionPath(
           // No child member with name "child_name"
           if (synthetically_added_instance_object) {
             // We added a "this->" or "self->" to the beginning of the
-            // expression
-            // and this is the first pointer ivar access, so just return
-            // the normal
-            // error
+            // expression and this is the first pointer ivar access, so just
+            // return the normal error
             error.SetErrorStringWithFormat(
                 "no variable or instance variable named '%s' found in "
                 "this frame",
                 name_const_string.GetCString());
           } else {
-            valobj_sp->GetExpressionPath(var_expr_path_strm, false);
+            valobj_sp->GetExpressionPath(var_expr_path_strm);
             if (child_name) {
               error.SetErrorStringWithFormat(
                   "\"%s\" is not a member of \"(%s) %s\"",
@@ -734,8 +739,8 @@ ValueObjectSP StackFrame::GetValueForVariableExpressionPath(
     } break;
 
     case '[': {
-      // Array member access, or treating pointer as an array
-      // Need at least two brackets and a number
+      // Array member access, or treating pointer as an array Need at least two
+      // brackets and a number
       if (var_expr.size() <= 2) {
         error.SetErrorStringWithFormat(
             "invalid square bracket encountered after \"%s\" in \"%s\"",
@@ -775,10 +780,10 @@ ValueObjectSP StackFrame::GetValueForVariableExpressionPath(
           // what we have is *ptr[low]. the most similar C++ syntax is to deref
           // ptr and extract bit low out of it. reading array item low would be
           // done by saying ptr[low], without a deref * sign
-          Error error;
+          Status error;
           ValueObjectSP temp(valobj_sp->Dereference(error));
           if (error.Fail()) {
-            valobj_sp->GetExpressionPath(var_expr_path_strm, false);
+            valobj_sp->GetExpressionPath(var_expr_path_strm);
             error.SetErrorStringWithFormat(
                 "could not dereference \"(%s) %s\"",
                 valobj_sp->GetTypeName().AsCString("<invalid type>"),
@@ -789,15 +794,14 @@ ValueObjectSP StackFrame::GetValueForVariableExpressionPath(
           deref = false;
         } else if (valobj_sp->GetCompilerType().IsArrayOfScalarType() &&
                    deref) {
-          // what we have is *arr[low]. the most similar C++ syntax is
-          // to get arr[0]
-          // (an operation that is equivalent to deref-ing arr)
-          // and extract bit low out of it. reading array item low
-          // would be done by saying arr[low], without a deref * sign
-          Error error;
+          // what we have is *arr[low]. the most similar C++ syntax is to get
+          // arr[0] (an operation that is equivalent to deref-ing arr) and
+          // extract bit low out of it. reading array item low would be done by
+          // saying arr[low], without a deref * sign
+          Status error;
           ValueObjectSP temp(valobj_sp->GetChildAtIndex(0, true));
           if (error.Fail()) {
-            valobj_sp->GetExpressionPath(var_expr_path_strm, false);
+            valobj_sp->GetExpressionPath(var_expr_path_strm);
             error.SetErrorStringWithFormat(
                 "could not get item 0 for \"(%s) %s\"",
                 valobj_sp->GetTypeName().AsCString("<invalid type>"),
@@ -827,14 +831,14 @@ ValueObjectSP StackFrame::GetValueForVariableExpressionPath(
 
             return ValueObjectSP();
           } else if (is_objc_pointer) {
-            // dereferencing ObjC variables is not valid.. so let's try
-            // and recur to synthetic children
+            // dereferencing ObjC variables is not valid.. so let's try and
+            // recur to synthetic children
             ValueObjectSP synthetic = valobj_sp->GetSyntheticValue();
             if (!synthetic                 /* no synthetic */
                 || synthetic == valobj_sp) /* synthetic is the same as
                                               the original object */
             {
-              valobj_sp->GetExpressionPath(var_expr_path_strm, false);
+              valobj_sp->GetExpressionPath(var_expr_path_strm);
               error.SetErrorStringWithFormat(
                   "\"(%s) %s\" is not an array type",
                   valobj_sp->GetTypeName().AsCString("<invalid type>"),
@@ -843,7 +847,7 @@ ValueObjectSP StackFrame::GetValueForVariableExpressionPath(
                 static_cast<uint32_t>(child_index) >=
                 synthetic
                     ->GetNumChildren() /* synthetic does not have that many values */) {
-              valobj_sp->GetExpressionPath(var_expr_path_strm, false);
+              valobj_sp->GetExpressionPath(var_expr_path_strm);
               error.SetErrorStringWithFormat(
                   "array index %ld is not valid for \"(%s) %s\"", child_index,
                   valobj_sp->GetTypeName().AsCString("<invalid type>"),
@@ -851,7 +855,7 @@ ValueObjectSP StackFrame::GetValueForVariableExpressionPath(
             } else {
               child_valobj_sp = synthetic->GetChildAtIndex(child_index, true);
               if (!child_valobj_sp) {
-                valobj_sp->GetExpressionPath(var_expr_path_strm, false);
+                valobj_sp->GetExpressionPath(var_expr_path_strm);
                 error.SetErrorStringWithFormat(
                     "array index %ld is not valid for \"(%s) %s\"", child_index,
                     valobj_sp->GetTypeName().AsCString("<invalid type>"),
@@ -862,7 +866,7 @@ ValueObjectSP StackFrame::GetValueForVariableExpressionPath(
             child_valobj_sp =
                 valobj_sp->GetSyntheticArrayMember(child_index, true);
             if (!child_valobj_sp) {
-              valobj_sp->GetExpressionPath(var_expr_path_strm, false);
+              valobj_sp->GetExpressionPath(var_expr_path_strm);
               error.SetErrorStringWithFormat(
                   "failed to use pointer as array for index %ld for "
                   "\"(%s) %s\"",
@@ -873,16 +877,15 @@ ValueObjectSP StackFrame::GetValueForVariableExpressionPath(
           }
         } else if (valobj_sp->GetCompilerType().IsArrayType(
                        nullptr, nullptr, &is_incomplete_array)) {
-          // Pass false to dynamic_value here so we can tell the
-          // difference between
-          // no dynamic value and no member of this type...
+          // Pass false to dynamic_value here so we can tell the difference
+          // between no dynamic value and no member of this type...
           child_valobj_sp = valobj_sp->GetChildAtIndex(child_index, true);
           if (!child_valobj_sp && (is_incomplete_array || !no_synth_child))
             child_valobj_sp =
                 valobj_sp->GetSyntheticArrayMember(child_index, true);
 
           if (!child_valobj_sp) {
-            valobj_sp->GetExpressionPath(var_expr_path_strm, false);
+            valobj_sp->GetExpressionPath(var_expr_path_strm);
             error.SetErrorStringWithFormat(
                 "array index %ld is not valid for \"(%s) %s\"", child_index,
                 valobj_sp->GetTypeName().AsCString("<invalid type>"),
@@ -893,7 +896,7 @@ ValueObjectSP StackFrame::GetValueForVariableExpressionPath(
           child_valobj_sp = valobj_sp->GetSyntheticBitFieldChild(
               child_index, child_index, true);
           if (!child_valobj_sp) {
-            valobj_sp->GetExpressionPath(var_expr_path_strm, false);
+            valobj_sp->GetExpressionPath(var_expr_path_strm);
             error.SetErrorStringWithFormat(
                 "bitfield range %ld-%ld is not valid for \"(%s) %s\"",
                 child_index, child_index,
@@ -907,7 +910,7 @@ ValueObjectSP StackFrame::GetValueForVariableExpressionPath(
               || synthetic == valobj_sp) /* synthetic is the same as the
                                             original object */
           {
-            valobj_sp->GetExpressionPath(var_expr_path_strm, false);
+            valobj_sp->GetExpressionPath(var_expr_path_strm);
             error.SetErrorStringWithFormat(
                 "\"(%s) %s\" is not an array type",
                 valobj_sp->GetTypeName().AsCString("<invalid type>"),
@@ -916,7 +919,7 @@ ValueObjectSP StackFrame::GetValueForVariableExpressionPath(
               static_cast<uint32_t>(child_index) >=
               synthetic
                   ->GetNumChildren() /* synthetic does not have that many values */) {
-            valobj_sp->GetExpressionPath(var_expr_path_strm, false);
+            valobj_sp->GetExpressionPath(var_expr_path_strm);
             error.SetErrorStringWithFormat(
                 "array index %ld is not valid for \"(%s) %s\"", child_index,
                 valobj_sp->GetTypeName().AsCString("<invalid type>"),
@@ -924,7 +927,7 @@ ValueObjectSP StackFrame::GetValueForVariableExpressionPath(
           } else {
             child_valobj_sp = synthetic->GetChildAtIndex(child_index, true);
             if (!child_valobj_sp) {
-              valobj_sp->GetExpressionPath(var_expr_path_strm, false);
+              valobj_sp->GetExpressionPath(var_expr_path_strm);
               error.SetErrorStringWithFormat(
                   "array index %ld is not valid for \"(%s) %s\"", child_index,
                   valobj_sp->GetTypeName().AsCString("<invalid type>"),
@@ -938,7 +941,6 @@ ValueObjectSP StackFrame::GetValueForVariableExpressionPath(
           return ValueObjectSP();
         }
 
-        separator_idx = var_expr.find_first_of(".-[");
         if (use_dynamic != eNoDynamicValues) {
           ValueObjectSP dynamic_value_sp(
               child_valobj_sp->GetDynamicValue(use_dynamic));
@@ -975,12 +977,12 @@ ValueObjectSP StackFrame::GetValueForVariableExpressionPath(
       if (valobj_sp->GetCompilerType().IsPointerToScalarType() && deref) {
         // what we have is *ptr[low-high]. the most similar C++ syntax is to
         // deref ptr and extract bits low thru high out of it. reading array
-        // items low thru high would be done by saying ptr[low-high], without
-        // a deref * sign
-        Error error;
+        // items low thru high would be done by saying ptr[low-high], without a
+        // deref * sign
+        Status error;
         ValueObjectSP temp(valobj_sp->Dereference(error));
         if (error.Fail()) {
-          valobj_sp->GetExpressionPath(var_expr_path_strm, false);
+          valobj_sp->GetExpressionPath(var_expr_path_strm);
           error.SetErrorStringWithFormat(
               "could not dereference \"(%s) %s\"",
               valobj_sp->GetTypeName().AsCString("<invalid type>"),
@@ -990,14 +992,14 @@ ValueObjectSP StackFrame::GetValueForVariableExpressionPath(
         valobj_sp = temp;
         deref = false;
       } else if (valobj_sp->GetCompilerType().IsArrayOfScalarType() && deref) {
-        // what we have is *arr[low-high]. the most similar C++ syntax is to get
-        // arr[0] (an operation that is equivalent to deref-ing arr) and extract
-        // bits low thru high out of it. reading array items low thru high would
-        // be done by saying arr[low-high], without a deref * sign
-        Error error;
+        // what we have is *arr[low-high]. the most similar C++ syntax is to
+        // get arr[0] (an operation that is equivalent to deref-ing arr) and
+        // extract bits low thru high out of it. reading array items low thru
+        // high would be done by saying arr[low-high], without a deref * sign
+        Status error;
         ValueObjectSP temp(valobj_sp->GetChildAtIndex(0, true));
         if (error.Fail()) {
-          valobj_sp->GetExpressionPath(var_expr_path_strm, false);
+          valobj_sp->GetExpressionPath(var_expr_path_strm);
           error.SetErrorStringWithFormat(
               "could not get item 0 for \"(%s) %s\"",
               valobj_sp->GetTypeName().AsCString("<invalid type>"),
@@ -1011,7 +1013,7 @@ ValueObjectSP StackFrame::GetValueForVariableExpressionPath(
       child_valobj_sp =
           valobj_sp->GetSyntheticBitFieldChild(child_index, final_index, true);
       if (!child_valobj_sp) {
-        valobj_sp->GetExpressionPath(var_expr_path_strm, false);
+        valobj_sp->GetExpressionPath(var_expr_path_strm);
         error.SetErrorStringWithFormat(
             "bitfield range %ld-%ld is not valid for \"(%s) %s\"", child_index,
             final_index, valobj_sp->GetTypeName().AsCString("<invalid type>"),
@@ -1023,7 +1025,6 @@ ValueObjectSP StackFrame::GetValueForVariableExpressionPath(
         return ValueObjectSP();
       }
 
-      separator_idx = var_expr.find_first_of(".-[");
       if (use_dynamic != eNoDynamicValues) {
         ValueObjectSP dynamic_value_sp(
             child_valobj_sp->GetDynamicValue(use_dynamic));
@@ -1037,7 +1038,7 @@ ValueObjectSP StackFrame::GetValueForVariableExpressionPath(
     default:
       // Failure...
       {
-        valobj_sp->GetExpressionPath(var_expr_path_strm, false);
+        valobj_sp->GetExpressionPath(var_expr_path_strm);
         error.SetErrorStringWithFormat(
             "unexpected char '%c' encountered after \"%s\" in \"%s\"",
             separator_type, var_expr_path_strm.GetData(),
@@ -1049,9 +1050,6 @@ ValueObjectSP StackFrame::GetValueForVariableExpressionPath(
 
     if (child_valobj_sp)
       valobj_sp = child_valobj_sp;
-
-    if (var_expr.empty())
-      break;
   }
   if (valobj_sp) {
     if (deref) {
@@ -1065,7 +1063,7 @@ ValueObjectSP StackFrame::GetValueForVariableExpressionPath(
   return valobj_sp;
 }
 
-bool StackFrame::GetFrameBaseValue(Scalar &frame_base, Error *error_ptr) {
+bool StackFrame::GetFrameBaseValue(Scalar &frame_base, Status *error_ptr) {
   std::lock_guard<std::recursive_mutex> guard(m_mutex);
   if (!m_cfa_is_valid) {
     m_frame_base_error.SetErrorString(
@@ -1087,11 +1085,11 @@ bool StackFrame::GetFrameBaseValue(Scalar &frame_base, Error *error_ptr) {
             m_sc.function->GetAddressRange().GetBaseAddress().GetLoadAddress(
                 exe_ctx.GetTargetPtr());
 
-      if (m_sc.function->GetFrameBaseExpression().Evaluate(
-              &exe_ctx, nullptr, nullptr, nullptr, loclist_base_addr, nullptr,
-              nullptr, expr_value, &m_frame_base_error) == false) {
-        // We should really have an error if evaluate returns, but in case
-        // we don't, lets set the error to something at least.
+      if (!m_sc.function->GetFrameBaseExpression().Evaluate(
+              &exe_ctx, nullptr, loclist_base_addr, nullptr, nullptr,
+              expr_value, &m_frame_base_error)) {
+        // We should really have an error if evaluate returns, but in case we
+        // don't, lets set the error to something at least.
         if (m_frame_base_error.Success())
           m_frame_base_error.SetErrorString(
               "Evaluation of the frame base expression failed.");
@@ -1111,7 +1109,7 @@ bool StackFrame::GetFrameBaseValue(Scalar &frame_base, Error *error_ptr) {
   return m_frame_base_error.Success();
 }
 
-DWARFExpression *StackFrame::GetFrameBaseExpression(Error *error_ptr) {
+DWARFExpression *StackFrame::GetFrameBaseExpression(Status *error_ptr) {
   if (!m_sc.function) {
     if (error_ptr) {
       error_ptr->SetErrorString("No function in symbol context.");
@@ -1142,7 +1140,7 @@ StackFrame::GetValueObjectForFrameVariable(const VariableSP &variable_sp,
                                            DynamicValueType use_dynamic) {
   std::lock_guard<std::recursive_mutex> guard(m_mutex);
   ValueObjectSP valobj_sp;
-  if (m_is_history_frame) {
+  if (IsHistorical()) {
     return valobj_sp;
   }
   VariableList *var_list = GetVariableList(true);
@@ -1168,37 +1166,20 @@ StackFrame::GetValueObjectForFrameVariable(const VariableSP &variable_sp,
   return valobj_sp;
 }
 
-ValueObjectSP StackFrame::TrackGlobalVariable(const VariableSP &variable_sp,
-                                              DynamicValueType use_dynamic) {
-  std::lock_guard<std::recursive_mutex> guard(m_mutex);
-  if (m_is_history_frame)
-    return ValueObjectSP();
-
-  // Check to make sure we aren't already tracking this variable?
-  ValueObjectSP valobj_sp(
-      GetValueObjectForFrameVariable(variable_sp, use_dynamic));
-  if (!valobj_sp) {
-    // We aren't already tracking this global
-    VariableList *var_list = GetVariableList(true);
-    // If this frame has no variables, create a new list
-    if (var_list == nullptr)
-      m_variable_list_sp.reset(new VariableList());
-
-    // Add the global/static variable to this frame
-    m_variable_list_sp->AddVariable(variable_sp);
-
-    // Now make a value object for it so we can track its changes
-    valobj_sp = GetValueObjectForFrameVariable(variable_sp, use_dynamic);
-  }
-  return valobj_sp;
-}
-
 bool StackFrame::IsInlined() {
   if (m_sc.block == nullptr)
     GetSymbolContext(eSymbolContextBlock);
   if (m_sc.block)
     return m_sc.block->GetContainingInlinedBlock() != nullptr;
   return false;
+}
+
+bool StackFrame::IsHistorical() const {
+  return m_stack_frame_kind == StackFrame::Kind::History;
+}
+
+bool StackFrame::IsArtificial() const {
+  return m_stack_frame_kind == StackFrame::Kind::Artificial;
 }
 
 lldb::LanguageType StackFrame::GetLanguage() {
@@ -1311,14 +1292,13 @@ lldb::ValueObjectSP StackFrame::GuessValueForAddress(lldb::addr_t addr) {
   pc_range.GetBaseAddress() = GetFrameCodeAddress();
   pc_range.SetByteSize(target_arch.GetMaximumOpcodeByteSize());
 
-  ExecutionContext exe_ctx(shared_from_this());
-
   const char *plugin_name = nullptr;
   const char *flavor = nullptr;
   const bool prefer_file_cache = false;
 
-  DisassemblerSP disassembler_sp = Disassembler::DisassembleRange(
-      target_arch, plugin_name, flavor, exe_ctx, pc_range, prefer_file_cache);
+  DisassemblerSP disassembler_sp =
+      Disassembler::DisassembleRange(target_arch, plugin_name, flavor,
+                                     *target_sp, pc_range, prefer_file_cache);
 
   if (!disassembler_sp || !disassembler_sp->GetInstructionList().GetSize()) {
     return ValueObjectSP();
@@ -1353,13 +1333,16 @@ lldb::ValueObjectSP StackFrame::GuessValueForAddress(lldb::addr_t addr) {
       if (target_sp->ResolveLoadAddress(base_and_offset.first->m_immediate +
                                             base_and_offset.second,
                                         addr)) {
-        TypeSystem *c_type_system =
-            target_sp->GetScratchTypeSystemForLanguage(nullptr, eLanguageTypeC);
-        if (!c_type_system) {
+        auto c_type_system_or_err =
+            target_sp->GetScratchTypeSystemForLanguage(eLanguageTypeC);
+        if (auto err = c_type_system_or_err.takeError()) {
+          LLDB_LOG_ERROR(
+              lldb_private::GetLogIfAnyCategoriesSet(LIBLLDB_LOG_THREAD),
+              std::move(err), "Unable to guess value for given address");
           return ValueObjectSP();
         } else {
           CompilerType void_ptr_type =
-              c_type_system
+              c_type_system_or_err
                   ->GetBasicTypeFromAST(lldb::BasicType::eBasicTypeChar)
                   .GetPointerType();
           return ValueObjectMemory::Create(this, "", addr, void_ptr_type);
@@ -1401,7 +1384,7 @@ ValueObjectSP GetValueForOffset(StackFrame &frame, ValueObjectSP &parent,
     }
 
     int64_t child_offset = child_sp->GetByteOffset();
-    int64_t child_size = child_sp->GetByteSize();
+    int64_t child_size = child_sp->GetByteSize().getValueOr(0);
 
     if (offset >= child_offset && offset < (child_offset + child_size)) {
       return GetValueForOffset(frame, child_sp, offset - child_offset);
@@ -1419,14 +1402,14 @@ ValueObjectSP GetValueForDereferincingOffset(StackFrame &frame,
                                              ValueObjectSP &base,
                                              int64_t offset) {
   // base is a pointer to something
-  // offset is the thing to add to the pointer
-  // We return the most sensible ValueObject for the result of *(base+offset)
+  // offset is the thing to add to the pointer We return the most sensible
+  // ValueObject for the result of *(base+offset)
 
   if (!base->IsPointerOrReferenceType()) {
     return ValueObjectSP();
   }
 
-  Error error;
+  Status error;
   ValueObjectSP pointee = base->Dereference(error);
     
   if (!pointee) {
@@ -1434,8 +1417,8 @@ ValueObjectSP GetValueForDereferincingOffset(StackFrame &frame,
   }
 
   if (offset >= 0 && uint64_t(offset) >= pointee->GetByteSize()) {
-    int64_t index = offset / pointee->GetByteSize();
-    offset = offset % pointee->GetByteSize();
+    int64_t index = offset / pointee->GetByteSize().getValueOr(1);
+    offset = offset % pointee->GetByteSize().getValueOr(1);
     const bool can_create = true;
     pointee = base->GetSyntheticArrayMember(index, can_create);
   }
@@ -1447,33 +1430,31 @@ ValueObjectSP GetValueForDereferincingOffset(StackFrame &frame,
   return GetValueForOffset(frame, pointee, offset);
 }
 
-//------------------------------------------------------------------
 /// Attempt to reconstruct the ValueObject for the address contained in a
 /// given register plus an offset.
 ///
-/// @params [in] frame
+/// \params [in] frame
 ///   The current stack frame.
 ///
-/// @params [in] reg
+/// \params [in] reg
 ///   The register.
 ///
-/// @params [in] offset
+/// \params [in] offset
 ///   The offset from the register.
 ///
-/// @param [in] disassembler
+/// \param [in] disassembler
 ///   A disassembler containing instructions valid up to the current PC.
 ///
-/// @param [in] variables
+/// \param [in] variables
 ///   The variable list from the current frame,
 ///
-/// @param [in] pc
+/// \param [in] pc
 ///   The program counter for the instruction considered the 'user'.
 ///
-/// @return
+/// \return
 ///   A string describing the base for the ExpressionPath.  This could be a
 ///     variable, a register value, an argument, or a function return value.
 ///   The ValueObject if found.  If valid, it has a valid ExpressionPath.
-//------------------------------------------------------------------
 lldb::ValueObjectSP DoGuessValueAt(StackFrame &frame, ConstString reg,
                                    int64_t offset, Disassembler &disassembler,
                                    VariableList &variables, const Address &pc) {
@@ -1485,11 +1466,11 @@ lldb::ValueObjectSP DoGuessValueAt(StackFrame &frame, ConstString reg,
   //
   // f, a pointer to a struct, is known to be at -0x8(%rbp).
   //
-  // DoGuessValueAt(frame, rdi, 4, dis, vars, 0x22) finds the instruction at +18
-  // that assigns to rdi, and calls itself recursively for that dereference
+  // DoGuessValueAt(frame, rdi, 4, dis, vars, 0x22) finds the instruction at
+  // +18 that assigns to rdi, and calls itself recursively for that dereference
   //   DoGuessValueAt(frame, rdi, 8, dis, vars, 0x18) finds the instruction at
   //   +14 that assigns to rdi, and calls itself recursively for that
-  //   derefernece
+  //   dereference
   //     DoGuessValueAt(frame, rbp, -8, dis, vars, 0x14) finds "f" in the
   //     variable list.
   //     Returns a ValueObject for f.  (That's what was stored at rbp-8 at +14)
@@ -1517,11 +1498,9 @@ lldb::ValueObjectSP DoGuessValueAt(StackFrame &frame, ConstString reg,
              : Instruction::Operand::BuildDereference(
                    Instruction::Operand::BuildRegister(reg));
 
-  for (size_t vi = 0, ve = variables.GetSize(); vi != ve; ++vi) {
-    VariableSP var_sp = variables.GetVariableAtIndex(vi);
-    if (var_sp->LocationExpression().MatchesOperand(frame, op)) {
+  for (VariableSP var_sp : variables) {
+    if (var_sp->LocationExpression().MatchesOperand(frame, op))
       return frame.GetValueObjectForFrameVariable(var_sp, eNoDynamicValues);
-    }
   }
 
   const uint32_t current_inst =
@@ -1532,9 +1511,9 @@ lldb::ValueObjectSP DoGuessValueAt(StackFrame &frame, ConstString reg,
 
   for (uint32_t ii = current_inst - 1; ii != (uint32_t)-1; --ii) {
     // This is not an exact algorithm, and it sacrifices accuracy for
-    // generality.  Recognizing "mov" and "ld" instructions –– and which are
-    // their source and destination operands -- is something the disassembler
-    // should do for us.
+    // generality.  Recognizing "mov" and "ld" instructions –– and which
+    // are their source and destination operands -- is something the
+    // disassembler should do for us.
     InstructionSP instruction_sp =
         disassembler.GetInstructionList().GetInstructionAtIndex(ii);
 
@@ -1693,13 +1672,12 @@ lldb::ValueObjectSP StackFrame::GuessValueForRegisterAndOffset(ConstString reg,
     return ValueObjectSP();
   }
 
-  ExecutionContext exe_ctx(shared_from_this());
-
   const char *plugin_name = nullptr;
   const char *flavor = nullptr;
   const bool prefer_file_cache = false;
-  DisassemblerSP disassembler_sp = Disassembler::DisassembleRange(
-      target_arch, plugin_name, flavor, exe_ctx, pc_range, prefer_file_cache);
+  DisassemblerSP disassembler_sp =
+      Disassembler::DisassembleRange(target_arch, plugin_name, flavor,
+                                     *target_sp, pc_range, prefer_file_cache);
 
   if (!disassembler_sp || !disassembler_sp->GetInstructionList().GetSize()) {
     return ValueObjectSP();
@@ -1714,6 +1692,41 @@ lldb::ValueObjectSP StackFrame::GuessValueForRegisterAndOffset(ConstString reg,
 
   return DoGuessValueAt(*this, reg, offset, *disassembler_sp, *variables,
                         GetFrameCodeAddress());
+}
+
+lldb::ValueObjectSP StackFrame::FindVariable(ConstString name) {
+  ValueObjectSP value_sp;
+
+  if (!name)
+    return value_sp;
+
+  TargetSP target_sp = CalculateTarget();
+  ProcessSP process_sp = CalculateProcess();
+
+  if (!target_sp && !process_sp)
+    return value_sp;
+
+  VariableList variable_list;
+  VariableSP var_sp;
+  SymbolContext sc(GetSymbolContext(eSymbolContextBlock));
+
+  if (sc.block) {
+    const bool can_create = true;
+    const bool get_parent_variables = true;
+    const bool stop_if_block_is_inlined_function = true;
+
+    if (sc.block->AppendVariables(
+            can_create, get_parent_variables, stop_if_block_is_inlined_function,
+            [this](Variable *v) { return v->IsInScope(this); },
+            &variable_list)) {
+      var_sp = variable_list.FindVariable(name);
+    }
+
+    if (var_sp)
+      value_sp = GetValueObjectForFrameVariable(var_sp, eNoDynamicValues);
+  }
+
+  return value_sp;
 }
 
 TargetSP StackFrame::CalculateTarget() {
@@ -1743,7 +1756,7 @@ void StackFrame::CalculateExecutionContext(ExecutionContext &exe_ctx) {
   exe_ctx.SetContext(shared_from_this());
 }
 
-void StackFrame::DumpUsingSettingsFormat(Stream *strm,
+void StackFrame::DumpUsingSettingsFormat(Stream *strm, bool show_unique,
                                          const char *frame_marker) {
   if (strm == nullptr)
     return;
@@ -1757,8 +1770,13 @@ void StackFrame::DumpUsingSettingsFormat(Stream *strm,
 
   const FormatEntity::Entry *frame_format = nullptr;
   Target *target = exe_ctx.GetTargetPtr();
-  if (target)
-    frame_format = target->GetDebugger().GetFrameFormat();
+  if (target) {
+    if (show_unique) {
+      frame_format = target->GetDebugger().GetFrameFormatUnique();
+    } else {
+      frame_format = target->GetDebugger().GetFrameFormat();
+    }
+  }
   if (frame_format && FormatEntity::Format(*frame_format, s, &m_sc, &exe_ctx,
                                            nullptr, nullptr, false, false)) {
     strm->PutCString(s.GetString());
@@ -1814,6 +1832,7 @@ void StackFrame::UpdatePreviousFrameFromCurrentFrame(StackFrame &curr_frame) {
   m_concrete_frame_index = curr_frame.m_concrete_frame_index;
   m_reg_context_sp = curr_frame.m_reg_context_sp;
   m_frame_code_addr = curr_frame.m_frame_code_addr;
+  m_behaves_like_zeroth_frame = curr_frame.m_behaves_like_zeroth_frame;
   assert(!m_sc.target_sp || !curr_frame.m_sc.target_sp ||
          m_sc.target_sp.get() == curr_frame.m_sc.target_sp.get());
   assert(!m_sc.module_sp || !curr_frame.m_sc.module_sp ||
@@ -1840,11 +1859,10 @@ bool StackFrame::HasCachedData() const {
 }
 
 bool StackFrame::GetStatus(Stream &strm, bool show_frame_info, bool show_source,
-                           const char *frame_marker) {
-
+                           bool show_unique, const char *frame_marker) {
   if (show_frame_info) {
     strm.Indent();
-    DumpUsingSettingsFormat(&strm, frame_marker);
+    DumpUsingSettingsFormat(&strm, show_unique, frame_marker);
   }
 
   if (show_source) {
@@ -1894,16 +1912,14 @@ bool StackFrame::GetStatus(Stream &strm, bool show_frame_info, bool show_source,
           const uint32_t disasm_lines = debugger.GetDisassemblyLineCount();
           if (disasm_lines > 0) {
             const ArchSpec &target_arch = target->GetArchitecture();
-            AddressRange pc_range;
-            pc_range.GetBaseAddress() = GetFrameCodeAddress();
-            pc_range.SetByteSize(disasm_lines *
-                                 target_arch.GetMaximumOpcodeByteSize());
             const char *plugin_name = nullptr;
             const char *flavor = nullptr;
             const bool mixed_source_and_assembly = false;
             Disassembler::Disassemble(
                 target->GetDebugger(), target_arch, plugin_name, flavor,
-                exe_ctx, pc_range, disasm_lines, mixed_source_and_assembly, 0,
+                exe_ctx, GetFrameCodeAddress(),
+                {Disassembler::Limit::Instructions, disasm_lines},
+                mixed_source_and_assembly, 0,
                 Disassembler::eOptionMarkPCAddress, strm);
           }
         }
@@ -1912,4 +1928,15 @@ bool StackFrame::GetStatus(Stream &strm, bool show_frame_info, bool show_source,
     }
   }
   return true;
+}
+
+RecognizedStackFrameSP StackFrame::GetRecognizedFrame() {
+  if (!m_recognized_frame_sp) {
+    m_recognized_frame_sp = GetThread()
+                                ->GetProcess()
+                                ->GetTarget()
+                                .GetFrameRecognizerManager()
+                                .RecognizeFrame(CalculateStackFrame());
+  }
+  return m_recognized_frame_sp;
 }

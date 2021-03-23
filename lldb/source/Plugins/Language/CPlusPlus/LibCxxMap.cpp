@@ -1,26 +1,21 @@
-//===-- LibCxxMap.cpp -------------------------------------------*- C++ -*-===//
+//===-- LibCxxMap.cpp -----------------------------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
-// C Includes
-// C++ Includes
-// Other libraries and framework includes
-// Project includes
 #include "LibCxx.h"
 
+#include "Plugins/TypeSystem/Clang/TypeSystemClang.h"
 #include "lldb/Core/ValueObject.h"
 #include "lldb/Core/ValueObjectConstResult.h"
 #include "lldb/DataFormatters/FormattersHelpers.h"
-#include "lldb/Symbol/ClangASTContext.h"
 #include "lldb/Target/Target.h"
 #include "lldb/Utility/DataBufferHeap.h"
 #include "lldb/Utility/Endian.h"
-#include "lldb/Utility/Error.h"
+#include "lldb/Utility/Status.h"
 #include "lldb/Utility/Stream.h"
 
 using namespace lldb;
@@ -98,6 +93,8 @@ public:
       : m_entry(rhs.m_entry), m_max_depth(rhs.m_max_depth), m_error(false) {}
   MapIterator(ValueObject *entry, size_t depth = 0)
       : m_entry(entry), m_max_depth(depth), m_error(false) {}
+
+  MapIterator &operator=(const MapIterator &) = default;
 
   ValueObjectSP value() { return m_entry.GetEntry(); }
 
@@ -189,7 +186,7 @@ public:
 
   bool MightHaveChildren() override;
 
-  size_t GetIndexOfChildWithName(const ConstString &name) override;
+  size_t GetIndexOfChildWithName(ConstString name) override;
 
 private:
   bool GetDataType();
@@ -259,7 +256,7 @@ bool lldb_private::formatters::LibcxxStdMapSyntheticFrontEnd::GetDataType() {
     return true;
   m_element_type.Clear();
   ValueObjectSP deref;
-  Error error;
+  Status error;
   deref = m_root_node->Dereference(error);
   if (!deref || error.Fail())
     return false;
@@ -268,13 +265,12 @@ bool lldb_private::formatters::LibcxxStdMapSyntheticFrontEnd::GetDataType() {
     m_element_type = deref->GetCompilerType();
     return true;
   }
-  lldb::TemplateArgumentKind kind;
   deref = m_backend.GetChildAtNamePath({g_tree_, g_pair3});
   if (!deref)
     return false;
-  m_element_type =
-      deref->GetCompilerType().GetTemplateArgument(1, kind).GetTemplateArgument(
-          1, kind);
+  m_element_type = deref->GetCompilerType()
+                       .GetTypeTemplateArgument(1)
+                       .GetTypeTemplateArgument(1);
   if (m_element_type) {
     std::string name;
     uint64_t bit_offset_ptr;
@@ -285,7 +281,7 @@ bool lldb_private::formatters::LibcxxStdMapSyntheticFrontEnd::GetDataType() {
     m_element_type = m_element_type.GetTypedefedType();
     return m_element_type.IsValid();
   } else {
-    m_element_type = m_backend.GetCompilerType().GetTemplateArgument(0, kind);
+    m_element_type = m_backend.GetCompilerType().GetTypeTemplateArgument(0);
     return m_element_type.IsValid();
   }
 }
@@ -302,8 +298,8 @@ void lldb_private::formatters::LibcxxStdMapSyntheticFrontEnd::GetValueOffset(
       UINT32_MAX) {
     m_skip_size = bit_offset / 8u;
   } else {
-    ClangASTContext *ast_ctx =
-        llvm::dyn_cast_or_null<ClangASTContext>(node_type.GetTypeSystem());
+    TypeSystemClang *ast_ctx =
+        llvm::dyn_cast_or_null<TypeSystemClang>(node_type.GetTypeSystem());
     if (!ast_ctx)
       return;
     CompilerType tree_node_type = ast_ctx->CreateStructForIdentifier(
@@ -365,7 +361,7 @@ lldb_private::formatters::LibcxxStdMapSyntheticFrontEnd::GetChildAtIndex(
   }
   if (GetDataType()) {
     if (!need_to_skip) {
-      Error error;
+      Status error;
       iterated_sp = iterated_sp->Dereference(error);
       if (!iterated_sp || error.Fail()) {
         m_tree = nullptr;
@@ -383,8 +379,8 @@ lldb_private::formatters::LibcxxStdMapSyntheticFrontEnd::GetChildAtIndex(
         return lldb::ValueObjectSP();
       }
     } else {
-      // because of the way our debug info is made, we need to read item 0 first
-      // so that we can cache information used to generate other elements
+      // because of the way our debug info is made, we need to read item 0
+      // first so that we can cache information used to generate other elements
       if (m_skip_size == UINT32_MAX)
         GetChildAtIndex(0);
       if (m_skip_size == UINT32_MAX) {
@@ -406,7 +402,7 @@ lldb_private::formatters::LibcxxStdMapSyntheticFrontEnd::GetChildAtIndex(
   // we need to copy current_sp into a new object otherwise we will end up with
   // all items named __value_
   DataExtractor data;
-  Error error;
+  Status error;
   iterated_sp->GetData(data, error);
   if (error.Fail()) {
     m_tree = nullptr;
@@ -458,7 +454,7 @@ bool lldb_private::formatters::LibcxxStdMapSyntheticFrontEnd::
 }
 
 size_t lldb_private::formatters::LibcxxStdMapSyntheticFrontEnd::
-    GetIndexOfChildWithName(const ConstString &name) {
+    GetIndexOfChildWithName(ConstString name) {
   return ExtractIndexFromString(name.GetCString());
 }
 

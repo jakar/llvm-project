@@ -1,7 +1,5 @@
-; REQUIRES: object-emission
-
 ; RUN: %llc_dwarf -filetype=obj -O0 < %s > %t
-; RUN: llvm-dwarfdump -debug-dump=info %t | FileCheck %s
+; RUN: llvm-dwarfdump -v -debug-info %t | FileCheck %s
 ; CHECK: [[TYPE:.*]]: DW_TAG_structure_type
 ; Make sure we correctly handle containing type of a struct being a type identifier.
 ; CHECK-NEXT: DW_AT_containing_type [DW_FORM_ref4]       (cu + {{.*}} => {[[TYPE]]})
@@ -32,21 +30,21 @@
 ; CHECK-NEXT: DW_AT_name [DW_FORM_strp] {{.*}}= "virt<bar>")
 ; Make sure we correctly handle type of a template_type being a type identifier.
 ; CHECK: DW_TAG_template_type_parameter
-; CHECK-NEXT: DW_AT_type [DW_FORM_ref4] (cu + {{.*}} => {[[TYPE2]]})
+; CHECK-NEXT: DW_AT_type [DW_FORM_ref4] (cu + {{.*}} => {[[TYPE2]]}
 ; CHECK-NEXT: DW_AT_name [DW_FORM_strp] {{.*}}= "T")
 ; Make sure we correctly handle derived-from of a typedef being a type identifier.
 ; CHECK: DW_TAG_typedef
-; CHECK-NEXT: DW_AT_type [DW_FORM_ref4] (cu + {{.*}} => {[[TYPE2]]})
+; CHECK-NEXT: DW_AT_type [DW_FORM_ref4] (cu + {{.*}} => {[[TYPE2]]}
 ; CHECK: DW_AT_name [DW_FORM_strp] {{.*}}= "baz2")
 ; Make sure we correctly handle derived-from of a pointer type being a type identifier.
 ; CHECK: DW_TAG_pointer_type
-; CHECK: DW_AT_type [DW_FORM_ref4] (cu + {{.*}} => {[[TYPE]]})
+; CHECK: DW_AT_type [DW_FORM_ref4] (cu + {{.*}} => {[[TYPE]]}
 ; CHECK: DW_TAG_typedef
-; CHECK-NEXT: DW_AT_type [DW_FORM_ref4] (cu + {{.*}} => {[[TYPE2]]})
+; CHECK-NEXT: DW_AT_type [DW_FORM_ref4] (cu + {{.*}} => {[[TYPE2]]}
 ; CHECK: DW_AT_name [DW_FORM_strp] {{.*}}= "baz")
 ; Make sure we correctly handle derived-from of an array type being a type identifier.
 ; CHECK: DW_TAG_array_type
-; CHECK-NEXT: DW_AT_type [DW_FORM_ref4] (cu + {{.*}} => {[[TYPE2]]})
+; CHECK-NEXT: DW_AT_type [DW_FORM_ref4] (cu + {{.*}} => {[[TYPE2]]}
 ; IR generated from clang -g with the following source:
 ; struct C {
 ;   virtual void foo();
@@ -117,7 +115,7 @@ entry:
   ret void, !dbg !58
 }
 
-attributes #0 = { nounwind ssp uwtable "less-precise-fpmad"="false" "no-frame-pointer-elim"="true" "no-frame-pointer-elim-non-leaf" "no-infs-fp-math"="false" "no-nans-fp-math"="false" "stack-protector-buffer-size"="8" "unsafe-fp-math"="false" "use-soft-float"="false" }
+attributes #0 = { nounwind ssp uwtable "less-precise-fpmad"="false" "frame-pointer"="all" "no-infs-fp-math"="false" "no-nans-fp-math"="false" "stack-protector-buffer-size"="8" "unsafe-fp-math"="false" "use-soft-float"="false" }
 attributes #1 = { nounwind readnone }
 
 !llvm.dbg.cu = !{!0}
@@ -152,8 +150,8 @@ attributes #1 = { nounwind readnone }
 !27 = !DIDerivedType(tag: DW_TAG_pointer_type, size: 64, align: 64, baseType: !18)
 !28 = !{!29}
 !29 = !DITemplateTypeParameter(name: "T", type: !18)
-!31 = distinct !DISubprogram(name: "foo", linkageName: "_ZN1C3fooEv", line: 4, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, unit: !0, scopeLine: 4, file: !1, scope: null, type: !14, declaration: !13, variables: !2)
-!32 = distinct !DISubprogram(name: "test", linkageName: "_Z4testv", line: 20, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, unit: !0, scopeLine: 20, file: !1, scope: !7, type: !33, variables: !2)
+!31 = distinct !DISubprogram(name: "foo", linkageName: "_ZN1C3fooEv", line: 4, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, unit: !0, scopeLine: 4, file: !1, scope: null, type: !14, declaration: !13, retainedNodes: !2)
+!32 = distinct !DISubprogram(name: "test", linkageName: "_Z4testv", line: 20, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, unit: !0, scopeLine: 20, file: !1, scope: !7, type: !33, retainedNodes: !2)
 !33 = !DISubroutineType(types: !34)
 !34 = !{null}
 !35 = !{i32 2, !"Dwarf Version", i32 2}

@@ -1,9 +1,8 @@
 //===-- NVPTXLowerArgs.cpp - Lower arguments ------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -90,8 +89,9 @@
 //===----------------------------------------------------------------------===//
 
 #include "NVPTX.h"
-#include "NVPTXUtilities.h"
 #include "NVPTXTargetMachine.h"
+#include "NVPTXUtilities.h"
+#include "MCTargetDesc/NVPTXBaseInfo.h"
 #include "llvm/Analysis/ValueTracking.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/Instructions.h"
@@ -140,6 +140,7 @@ INITIALIZE_PASS(NVPTXLowerArgs, "nvptx-lower-args",
 
 // =============================================================================
 // If the function had a byval struct ptr arg, say foo(%struct.x* byval %d),
+// and we can't guarantee that the only accesses are loads,
 // then add the following instructions to the first basic block:
 //
 // %temp = alloca %struct.x, align 8
@@ -150,7 +151,57 @@ INITIALIZE_PASS(NVPTXLowerArgs, "nvptx-lower-args",
 // The above code allocates some space in the stack and copies the incoming
 // struct from param space to local space.
 // Then replace all occurrences of %d by %temp.
+//
+// In case we know that all users are GEPs or Loads, replace them with the same
+// ones in parameter AS, so we can access them using ld.param.
 // =============================================================================
+
+// Replaces the \p OldUser instruction with the same in parameter AS.
+// Only Load and GEP are supported.
+static void convertToParamAS(Value *OldUser, Value *Param) {
+  Instruction *I = dyn_cast<Instruction>(OldUser);
+  assert(I && "OldUser must be an instruction");
+  struct IP {
+    Instruction *OldInstruction;
+    Value *NewParam;
+  };
+  SmallVector<IP> ItemsToConvert = {{I, Param}};
+  SmallVector<GetElementPtrInst *> GEPsToDelete;
+  while (!ItemsToConvert.empty()) {
+    IP I = ItemsToConvert.pop_back_val();
+    if (auto *LI = dyn_cast<LoadInst>(I.OldInstruction))
+      LI->setOperand(0, I.NewParam);
+    else if (auto *GEP = dyn_cast<GetElementPtrInst>(I.OldInstruction)) {
+      SmallVector<Value *, 4> Indices(GEP->indices());
+      auto *NewGEP = GetElementPtrInst::Create(nullptr, I.NewParam, Indices,
+                                               GEP->getName(), GEP);
+      NewGEP->setIsInBounds(GEP->isInBounds());
+      llvm::for_each(GEP->users(), [NewGEP, &ItemsToConvert](Value *V) {
+        ItemsToConvert.push_back({cast<Instruction>(V), NewGEP});
+      });
+      GEPsToDelete.push_back(GEP);
+    } else
+      llvm_unreachable("Only Load and GEP can be converted to param AS.");
+  }
+  llvm::for_each(GEPsToDelete,
+                 [](GetElementPtrInst *GEP) { GEP->eraseFromParent(); });
+}
+
+static bool isALoadChain(Value *Start) {
+  SmallVector<Value *, 16> ValuesToCheck = {Start};
+  while (!ValuesToCheck.empty()) {
+    Value *V = ValuesToCheck.pop_back_val();
+    Instruction *I = dyn_cast<Instruction>(V);
+    if (!I)
+      return false;
+    if (isa<GetElementPtrInst>(I))
+      ValuesToCheck.append(I->user_begin(), I->user_end());
+    else if (!isa<LoadInst>(I))
+      return false;
+  }
+  return true;
+}
+
 void NVPTXLowerArgs::handleByValParam(Argument *Arg) {
   Function *Func = Arg->getParent();
   Instruction *FirstInst = &(Func->getEntryBlock().front());
@@ -159,18 +210,40 @@ void NVPTXLowerArgs::handleByValParam(Argument *Arg) {
   assert(PType && "Expecting pointer type in handleByValParam");
 
   Type *StructType = PType->getElementType();
-  unsigned AS = Func->getParent()->getDataLayout().getAllocaAddrSpace();
+
+  if (llvm::all_of(Arg->users(), isALoadChain)) {
+    // Replace all loads with the loads in param AS. This allows loading the Arg
+    // directly from parameter AS, without making a temporary copy.
+    SmallVector<User *, 16> UsersToUpdate(Arg->users());
+    Value *ArgInParamAS = new AddrSpaceCastInst(
+        Arg, PointerType::get(StructType, ADDRESS_SPACE_PARAM), Arg->getName(),
+        FirstInst);
+    llvm::for_each(UsersToUpdate, [ArgInParamAS](Value *V) {
+      convertToParamAS(V, ArgInParamAS);
+    });
+    return;
+  }
+
+  // Otherwise we have to create a temporary copy.
+  const DataLayout &DL = Func->getParent()->getDataLayout();
+  unsigned AS = DL.getAllocaAddrSpace();
   AllocaInst *AllocA = new AllocaInst(StructType, AS, Arg->getName(), FirstInst);
   // Set the alignment to alignment of the byval parameter. This is because,
   // later load/stores assume that alignment, and we are going to replace
   // the use of the byval parameter with this alloca instruction.
-  AllocA->setAlignment(Func->getParamAlignment(Arg->getArgNo()));
+  AllocA->setAlignment(Func->getParamAlign(Arg->getArgNo())
+                           .getValueOr(DL.getPrefTypeAlign(StructType)));
   Arg->replaceAllUsesWith(AllocA);
 
   Value *ArgInParam = new AddrSpaceCastInst(
       Arg, PointerType::get(StructType, ADDRESS_SPACE_PARAM), Arg->getName(),
       FirstInst);
-  LoadInst *LI = new LoadInst(ArgInParam, Arg->getName(), FirstInst);
+  // Be sure to propagate alignment to this load; LLVM doesn't know that NVPTX
+  // addrspacecast preserves alignment.  Since params are constant, this load is
+  // definitely not volatile.
+  LoadInst *LI =
+      new LoadInst(StructType, ArgInParam, Arg->getName(),
+                   /*isVolatile=*/false, AllocA->getAlign(), FirstInst);
   new StoreInst(LI, AllocA, FirstInst);
 }
 
@@ -211,8 +284,7 @@ bool NVPTXLowerArgs::runOnKernelFunction(Function &F) {
       for (auto &I : B) {
         if (LoadInst *LI = dyn_cast<LoadInst>(&I)) {
           if (LI->getType()->isPointerTy()) {
-            Value *UO = GetUnderlyingObject(LI->getPointerOperand(),
-                                            F.getParent()->getDataLayout());
+            Value *UO = getUnderlyingObject(LI->getPointerOperand());
             if (Argument *Arg = dyn_cast<Argument>(UO)) {
               if (Arg->hasByValAttr()) {
                 // LI is a load from a pointer within a byval kernel parameter.

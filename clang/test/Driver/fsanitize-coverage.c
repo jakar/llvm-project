@@ -5,11 +5,18 @@
 // CHECK-SANITIZE-COVERAGE-0: -fsanitize=address
 
 // RUN: %clang -target x86_64-linux-gnu -fsanitize=address -fsanitize-coverage=func,trace-pc %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-SANITIZE-COVERAGE-FUNC
+// RUN: %clang -target x86_64-linux-gnu -fsanitize=kernel-address -fsanitize-coverage=func,trace-pc %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-SANITIZE-COVERAGE-FUNC
+// RUN: %clang -target x86_64-linux-gnu -fsanitize=hwaddress -fsanitize-coverage=func,trace-pc %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-SANITIZE-COVERAGE-FUNC
+// RUN: %clang -target x86_64-linux-gnu -fsanitize=kernel-hwaddress -fsanitize-coverage=func,trace-pc %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-SANITIZE-COVERAGE-FUNC
 // RUN: %clang -target x86_64-linux-gnu -fsanitize=memory -fsanitize-coverage=func,trace-pc %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-SANITIZE-COVERAGE-FUNC
+// RUN: %clang -target x86_64-linux-gnu -fsanitize=kernel-memory -fsanitize-coverage=func,trace-pc %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-SANITIZE-COVERAGE-FUNC
 // RUN: %clang -target x86_64-linux-gnu -fsanitize=leak -fsanitize-coverage=func,trace-pc %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-SANITIZE-COVERAGE-FUNC
 // RUN: %clang -target x86_64-linux-gnu -fsanitize=undefined -fsanitize-coverage=func,trace-pc %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-SANITIZE-COVERAGE-FUNC
+// RUN: %clang -target x86_64-linux-gnu -fsanitize=bounds -fsanitize-coverage=func,trace-pc %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-SANITIZE-COVERAGE-FUNC
 // RUN: %clang -target x86_64-linux-gnu -fsanitize=bool -fsanitize-coverage=func,trace-pc %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-SANITIZE-COVERAGE-FUNC
 // RUN: %clang -target x86_64-linux-gnu -fsanitize=dataflow -fsanitize-coverage=func,trace-pc %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-SANITIZE-COVERAGE-FUNC
+// RUN: %clang -target x86_64-linux-gnu -fsanitize=thread -fsanitize-coverage=func,trace-pc %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-SANITIZE-COVERAGE-FUNC
+// RUN: %clang -target %itanium_abi_triple -fsanitize=float-divide-by-zero -fsanitize-coverage=func,trace-pc %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-SANITIZE-COVERAGE-FUNC
 // RUN: %clang -target x86_64-linux-gnu                     -fsanitize-coverage=func,trace-pc %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-SANITIZE-COVERAGE-FUNC
 // CHECK-SANITIZE-COVERAGE-FUNC: fsanitize-coverage-type=1
 
@@ -71,6 +78,17 @@
 // CHECK-TRACE_PC_GUARD_FUNC: -fsanitize-coverage-type=1
 // CHECK-TRACE_PC_GUARD_FUNC: -fsanitize-coverage-trace-pc-guard
 
+// RUN: %clang -target x86_64-linux-gnu -fsanitize-coverage=stack-depth %s \
+// RUN:     -### 2>&1 | FileCheck %s --check-prefix=CHECK-STACK-DEPTH
+// RUN: %clang -target x86_64-linux-gnu \
+// RUN:     -fsanitize-coverage=trace-pc-guard,stack-depth %s -### 2>&1 | \
+// RUN:     FileCheck %s --check-prefix=CHECK-STACK-DEPTH-PC-GUARD
+// CHECK-STACK-DEPTH: -fsanitize-coverage-type=1
+// CHECK-STACK-DEPTH: -fsanitize-coverage-stack-depth
+// CHECK-STACK-DEPTH-PC-GUARD: -fsanitize-coverage-type=3
+// CHECK-STACK-DEPTH-PC-GUARD: -fsanitize-coverage-trace-pc-guard
+// CHECK-STACK-DEPTH-PC-GUARD: -fsanitize-coverage-stack-depth
+
 // RUN: %clang -target x86_64-linux-gnu -fsanitize=address -fsanitize-coverage=trace-cmp,indirect-calls %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-NO-TYPE-NECESSARY
 // CHECK-NO-TYPE-NECESSARY-NOT: error:
 // CHECK-NO-TYPE-NECESSARY: -fsanitize-coverage-indirect-calls
@@ -84,6 +102,24 @@
 // RUN: %clang -target x86_64-linux-gnu -fsanitize-coverage=no-prune,func,trace-pc-guard %s -### 2>&1 | FileCheck %s --check-prefix=CHECK_NOPRUNE
 // CHECK_NOPRUNE: -fsanitize-coverage-no-prune
 
+// RUN: %clang -target x86_64-linux-gnu -fsanitize-coverage=inline-8bit-counters %s -### 2>&1 | FileCheck %s --check-prefix=CHECK_INLINE8BIT
+// RUN: %clang -target x86_64-linux-gnu -fsanitize-coverage=bb,inline-8bit-counters %s -### 2>&1 | FileCheck %s --check-prefix=CHECK_INLINE8BIT
+// CHECK_INLINE8BIT-NOT: warning
+// CHECK_INLINE8BIT: -fsanitize-coverage-inline-8bit-counters
+
+// RUN: %clang -target x86_64-linux-gnu -fsanitize-coverage=inline-8bit-counters,pc-table %s -### 2>&1 | FileCheck %s --check-prefix=CHECK_PC_TABLE_FOR_INLINE8BIT
+// RUN: %clang -target x86_64-linux-gnu -fsanitize-coverage=trace-pc-guard,pc-table %s -### 2>&1 | FileCheck %s --check-prefix=CHECK_PC_TABLE_FOR_INLINE8BIT
+// CHECK_PC_TABLE_FOR_INLINE8BIT: -fsanitize-coverage-pc-table
+
+// RUN: %clang -target x86_64-linux-gnu -fsanitize-coverage=inline-bool-flag %s -### 2>&1 | FileCheck %s --check-prefix=CHECK_INLINE_BOOL_FLAG
+// RUN: %clang -target x86_64-linux-gnu -fsanitize-coverage=bb,inline-bool-flag %s -### 2>&1 | FileCheck %s --check-prefix=CHECK_INLINE_BOOL_FLAG
+// CHECK_INLINE_BOOL_FLAG-NOT: warning
+// CHECK_INLINE_BOOL_FLAG: -fsanitize-coverage-inline-bool-flag
+
+// RUN: %clang -target x86_64-linux-gnu -fsanitize-coverage=inline-bool-flag,pc-table %s -### 2>&1 | FileCheck %s --check-prefix=CHECK_PC_TABLE_FOR_INLINEBOOL
+// RUN: %clang -target x86_64-linux-gnu -fsanitize-coverage=trace-pc-guard,pc-table %s -### 2>&1 | FileCheck %s --check-prefix=CHECK_PC_TABLE_FOR_INLINEBOOL
+// CHECK_PC_TABLE_FOR_INLINEBOOL: -fsanitize-coverage-pc-table
+
 // RUN: %clang_cl --target=i386-pc-win32 -fsanitize=address -fsanitize-coverage=func,trace-pc-guard -c -### -- %s 2>&1 | FileCheck %s -check-prefix=CLANG-CL-COVERAGE
 // CLANG-CL-COVERAGE-NOT: error:
 // CLANG-CL-COVERAGE-NOT: warning:
@@ -91,3 +127,27 @@
 // CLANG-CL-COVERAGE-NOT: unknown argument
 // CLANG-CL-COVERAGE: -fsanitize-coverage-type=1
 // CLANG-CL-COVERAGE: -fsanitize=address
+
+// RUN: %clang -target x86_64-linux-gnu -fsanitize=safe-stack -fsanitize-coverage=trace-pc-guard %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-VS-SAFESTACK
+// CHECK-VS-SAFESTACK: -fsanitize-coverage-trace-pc-guard
+// CHECK-VS-SAFESTACK: -fsanitize=safe-stack
+
+// RUN: %clang -target x86_64-linux-gnu -fsanitize=safe-stack -fsanitize-coverage=trace-pc-guard -fno-sanitize=safe-stack %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-NO-SAFESTACK
+// CHECK-NO-SAFESTACK-NOT: error:
+// CHECK-NO-SAFESTACK-NOT: warning:
+// CHECK-NO-SAFESTACK-NOT: argument unused
+// CHECK-NO-SAFESTACK-NOT: unknown argument
+// CHECK-NO-SAFESTACK-NOT: -fsanitize=safe-stack
+// CHECK-NO-SAFESTACK: -fsanitize-coverage-trace-pc-guard
+
+// RUN: %clang -target x86_64-linux-gnu -fsanitize=shadow-call-stack -fsanitize-coverage=trace-pc-guard %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-VS-SHADOWCALLSTACK
+// CHECK-VS-SHADOWCALLSTACK: -fsanitize-coverage-trace-pc-guard
+// CHECK-VS-SHADOWCALLSTACK: -fsanitize=shadow-call-stack
+
+// RUN: %clang -target x86_64-linux-gnu -fsanitize=shadow-call-stack -fsanitize-coverage=trace-pc-guard -fno-sanitize=shadow-call-stack %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-NO-SAFESTACK
+// CHECK-NO-SHADOWCALLSTACK-NOT: error:
+// CHECK-NO-SHADOWCALLSTACK-NOT: warning:
+// CHECK-NO-SHADOWCALLSTACK-NOT: argument unused
+// CHECK-NO-SHADOWCALLSTACK-NOT: unknown argument
+// CHECK-NO-SHADOWCALLSTACK-NOT: -fsanitize=shadow-call-stack
+// CHECK-NO-SHADOWCALLSTACK: -fsanitize-coverage-trace-pc-guard

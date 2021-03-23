@@ -1,9 +1,8 @@
-//===- ConstantPool.h - Keep track of assembler-generated  ------*- C++ -*-===//
+//===- ConstantPools.h - Keep track of assembler-generated ------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -14,11 +13,11 @@
 #ifndef LLVM_MC_CONSTANTPOOLS_H
 #define LLVM_MC_CONSTANTPOOLS_H
 
-#include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/MapVector.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/Support/SMLoc.h"
 #include <cstdint>
+#include <map>
 
 namespace llvm {
 
@@ -44,7 +43,7 @@ struct ConstantPoolEntry {
 class ConstantPool {
   using EntryVecTy = SmallVector<ConstantPoolEntry, 4>;
   EntryVecTy Entries;
-  DenseMap<int64_t, const MCSymbolRefExpr *> CachedEntries;
+  std::map<int64_t, const MCSymbolRefExpr *> CachedEntries;
 
 public:
   // Initialize a new empty constant pool

@@ -1,20 +1,18 @@
 //===----------------------------------------------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is dual licensed under the MIT and the University of Illinois Open
-// Source Licenses. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
-// UNSUPPORTED: c++98, c++03, c++11, c++14
+// UNSUPPORTED: c++03, c++11, c++14
 
-// XFAIL: with_system_cxx_lib=macosx10.12
-// XFAIL: with_system_cxx_lib=macosx10.11
-// XFAIL: with_system_cxx_lib=macosx10.10
-// XFAIL: with_system_cxx_lib=macosx10.9
-// XFAIL: with_system_cxx_lib=macosx10.7
-// XFAIL: with_system_cxx_lib=macosx10.8
+// Throwing bad_optional_access is supported starting in macosx10.13
+// XFAIL: with_system_cxx_lib=macosx10.12 && !no-exceptions
+// XFAIL: with_system_cxx_lib=macosx10.11 && !no-exceptions
+// XFAIL: with_system_cxx_lib=macosx10.10 && !no-exceptions
+// XFAIL: with_system_cxx_lib=macosx10.9 && !no-exceptions
 
 // <optional>
 
@@ -41,7 +39,7 @@ struct X
     int test() && {return 6;}
 };
 
-int main()
+int main(int, char**)
 {
     {
         const optional<X> opt; ((void)opt);
@@ -61,7 +59,7 @@ int main()
         const optional<X> opt;
         try
         {
-            std::move(opt).value();
+            (void)std::move(opt).value();
             assert(false);
         }
         catch (const bad_optional_access&)
@@ -69,4 +67,6 @@ int main()
         }
     }
 #endif
+
+  return 0;
 }

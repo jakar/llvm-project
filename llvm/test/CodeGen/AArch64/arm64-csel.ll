@@ -1,4 +1,4 @@
-; RUN: llc -O3 < %s | FileCheck %s
+; RUN: llc -debugify-and-strip-all-safe -O3 < %s | FileCheck %s
 target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-n32:64"
 target triple = "arm64-unknown-unknown"
 
@@ -79,6 +79,7 @@ define i32 @foo7(i32 %a, i32 %b) nounwind {
 entry:
 ; CHECK-LABEL: foo7:
 ; CHECK: sub
+; FIXME: Misspelled CHECK-NEXT
 ; CHECK-next: adds
 ; CHECK-next: csneg
 ; CHECK-next: b
@@ -112,7 +113,7 @@ define i32 @foo9(i32 %v) nounwind readnone optsize ssp {
 entry:
 ; CHECK-LABEL: foo9:
 ; CHECK: cmp w0, #0
-; CHECK: orr w[[REG:[0-9]+]], wzr, #0x4
+; CHECK: mov w[[REG:[0-9]+]], #4
 ; CHECK: cinv w0, w[[REG]], eq
   %tobool = icmp ne i32 %v, 0
   %cond = select i1 %tobool, i32 4, i32 -5
@@ -123,7 +124,7 @@ define i64 @foo10(i64 %v) nounwind readnone optsize ssp {
 entry:
 ; CHECK-LABEL: foo10:
 ; CHECK: cmp x0, #0
-; CHECK: orr w[[REG:[0-9]+]], wzr, #0x4
+; CHECK: mov w[[REG:[0-9]+]], #4
 ; CHECK: cinv x0, x[[REG]], eq
   %tobool = icmp ne i64 %v, 0
   %cond = select i1 %tobool, i64 4, i64 -5
@@ -134,7 +135,7 @@ define i32 @foo11(i32 %v) nounwind readnone optsize ssp {
 entry:
 ; CHECK-LABEL: foo11:
 ; CHECK: cmp w0, #0
-; CHECK: orr w[[REG:[0-9]+]], wzr, #0x4
+; CHECK: mov w[[REG:[0-9]+]], #4
 ; CHECK: cneg w0, w[[REG]], eq
   %tobool = icmp ne i32 %v, 0
   %cond = select i1 %tobool, i32 4, i32 -4
@@ -145,7 +146,7 @@ define i64 @foo12(i64 %v) nounwind readnone optsize ssp {
 entry:
 ; CHECK-LABEL: foo12:
 ; CHECK: cmp x0, #0
-; CHECK: orr w[[REG:[0-9]+]], wzr, #0x4
+; CHECK: mov w[[REG:[0-9]+]], #4
 ; CHECK: cneg x0, x[[REG]], eq
   %tobool = icmp ne i64 %v, 0
   %cond = select i1 %tobool, i64 4, i64 -4
@@ -178,7 +179,7 @@ define i32 @foo15(i32 %a, i32 %b) nounwind readnone optsize ssp {
 entry:
 ; CHECK-LABEL: foo15:
 ; CHECK: cmp w0, w1
-; CHECK: orr w[[REG:[0-9]+]], wzr, #0x1
+; CHECK: mov w[[REG:[0-9]+]], #1
 ; CHECK: cinc w0, w[[REG]], gt
   %cmp = icmp sgt i32 %a, %b
   %. = select i1 %cmp, i32 2, i32 1
@@ -189,7 +190,7 @@ define i32 @foo16(i32 %a, i32 %b) nounwind readnone optsize ssp {
 entry:
 ; CHECK-LABEL: foo16:
 ; CHECK: cmp w0, w1
-; CHECK: orr w[[REG:[0-9]+]], wzr, #0x1
+; CHECK: mov w[[REG:[0-9]+]], #1
 ; CHECK: cinc w0, w[[REG]], le
   %cmp = icmp sgt i32 %a, %b
   %. = select i1 %cmp, i32 1, i32 2
@@ -200,7 +201,7 @@ define i64 @foo17(i64 %a, i64 %b) nounwind readnone optsize ssp {
 entry:
 ; CHECK-LABEL: foo17:
 ; CHECK: cmp x0, x1
-; CHECK: orr w[[REG:[0-9]+]], wzr, #0x1
+; CHECK: mov w[[REG:[0-9]+]], #1
 ; CHECK: cinc x0, x[[REG]], gt
   %cmp = icmp sgt i64 %a, %b
   %. = select i1 %cmp, i64 2, i64 1
@@ -211,7 +212,7 @@ define i64 @foo18(i64 %a, i64 %b) nounwind readnone optsize ssp {
 entry:
 ; CHECK-LABEL: foo18:
 ; CHECK: cmp x0, x1
-; CHECK: orr w[[REG:[0-9]+]], wzr, #0x1
+; CHECK: mov w[[REG:[0-9]+]], #1
 ; CHECK: cinc x0, x[[REG]], le
   %cmp = icmp sgt i64 %a, %b
   %. = select i1 %cmp, i64 1, i64 2
@@ -232,7 +233,7 @@ entry:
 define i32 @foo20(i32 %x) {
 ; CHECK-LABEL: foo20:
 ; CHECK: cmp w0, #5
-; CHECK: orr w[[REG:[0-9]+]], wzr, #0x6
+; CHECK: mov w[[REG:[0-9]+]], #6
 ; CHECK: csinc w0, w[[REG]], wzr, eq
   %cmp = icmp eq i32 %x, 5
   %res = select i1 %cmp, i32 6, i32 1
@@ -242,7 +243,7 @@ define i32 @foo20(i32 %x) {
 define i64 @foo21(i64 %x) {
 ; CHECK-LABEL: foo21:
 ; CHECK: cmp x0, #5
-; CHECK: orr w[[REG:[0-9]+]], wzr, #0x6
+; CHECK: mov w[[REG:[0-9]+]], #6
 ; CHECK: csinc x0, x[[REG]], xzr, eq
   %cmp = icmp eq i64 %x, 5
   %res = select i1 %cmp, i64 6, i64 1
@@ -252,7 +253,7 @@ define i64 @foo21(i64 %x) {
 define i32 @foo22(i32 %x) {
 ; CHECK-LABEL: foo22:
 ; CHECK: cmp w0, #5
-; CHECK: orr w[[REG:[0-9]+]], wzr, #0x6
+; CHECK: mov w[[REG:[0-9]+]], #6
 ; CHECK: csinc w0, w[[REG]], wzr, ne
   %cmp = icmp eq i32 %x, 5
   %res = select i1 %cmp, i32 1, i32 6
@@ -262,9 +263,50 @@ define i32 @foo22(i32 %x) {
 define i64 @foo23(i64 %x) {
 ; CHECK-LABEL: foo23:
 ; CHECK: cmp x0, #5
-; CHECK: orr w[[REG:[0-9]+]], wzr, #0x6
+; CHECK: mov w[[REG:[0-9]+]], #6
 ; CHECK: csinc x0, x[[REG]], xzr, ne
   %cmp = icmp eq i64 %x, 5
   %res = select i1 %cmp, i64 1, i64 6
   ret i64 %res
 }
+
+define i16 @foo24(i8* nocapture readonly %A, i8* nocapture readonly %B) {
+; CHECK-LABEL: foo24:
+; CHECK:       ldrb    w[[W8:[0-9]+]], [x1]
+; CHECK-NEXT:  ldrb    w[[W9:[0-9]+]], [x0]
+; CHECK-NEXT:  cmp     w[[W8]], #33
+; CHECK-NEXT:  cset    w[[W8]], hi
+; CHECK-NEXT:  cmp     w[[W9]], #3
+; CHECK-NEXT:  cinc    w0, w[[W8]], hi
+; CHECK-NEXT:  ret
+entry:
+  %0 = load i8, i8* %A, align 1
+  %cmp = icmp ugt i8 %0, 3
+  %conv1 = zext i1 %cmp to i16
+  %1 = load i8, i8* %B, align 1
+  %cmp4 = icmp ugt i8 %1, 33
+  %conv5 = zext i1 %cmp4 to i16
+  %add = add nuw nsw i16 %conv5, %conv1
+  ret i16 %add
+}
+
+define i64 @foo25(i64* nocapture readonly %A, i64* nocapture readonly %B) {
+; CHECK-LABEL: foo25:
+; CHECK:       ldr    x[[X8:[0-9]+]], [x1]
+; CHECK-NEXT:  ldr    x[[X9:[0-9]+]], [x0]
+; CHECK-NEXT:  cmp    x[[X8]], #33
+; CHECK-NEXT:  cset   w[[W8]], hi
+; CHECK-NEXT:  cmp    x[[X9]], #3
+; CHECK-NEXT:  cinc   x0, x[[X8]], hi
+; CHECK-NEXT:  ret
+entry:
+  %0 = load i64, i64* %A, align 1
+  %cmp = icmp ugt i64 %0, 3
+  %conv1 = zext i1 %cmp to i64
+  %1 = load i64, i64* %B, align 1
+  %cmp4 = icmp ugt i64 %1, 33
+  %conv5 = zext i1 %cmp4 to i64
+  %add = add nuw nsw i64 %conv5, %conv1
+  ret i64 %add
+}
+

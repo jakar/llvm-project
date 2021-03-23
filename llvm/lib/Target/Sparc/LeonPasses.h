@@ -1,9 +1,8 @@
 //===------- LeonPasses.h - Define passes specific to LEON ----------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -13,18 +12,15 @@
 #ifndef LLVM_LIB_TARGET_SPARC_LEON_PASSES_H
 #define LLVM_LIB_TARGET_SPARC_LEON_PASSES_H
 
-#include "llvm/CodeGen/MachineBasicBlock.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
-#include "llvm/CodeGen/Passes.h"
-
-#include "Sparc.h"
-#include "SparcSubtarget.h"
 
 namespace llvm {
+class SparcSubtarget;
+
 class LLVM_LIBRARY_VISIBILITY LEONMachineFunctionPass
     : public MachineFunctionPass {
 protected:
-  const SparcSubtarget *Subtarget;
+  const SparcSubtarget *Subtarget = nullptr;
   const int LAST_OPERAND = -1;
 
   // this vector holds free registers that we allocate in groups for some of the
@@ -32,23 +28,20 @@ protected:
   std::vector<int> UsedRegisters;
 
 protected:
-  LEONMachineFunctionPass(TargetMachine &tm, char &ID);
   LEONMachineFunctionPass(char &ID);
 
-  int GetRegIndexForOperand(MachineInstr &MI, int OperandIndex);
   void clearUsedRegisterList() { UsedRegisters.clear(); }
 
   void markRegisterUsed(int registerIndex) {
     UsedRegisters.push_back(registerIndex);
   }
-  int getUnusedFPRegister(MachineRegisterInfo &MRI);
 };
 
 class LLVM_LIBRARY_VISIBILITY InsertNOPLoad : public LEONMachineFunctionPass {
 public:
   static char ID;
 
-  InsertNOPLoad(TargetMachine &tm);
+  InsertNOPLoad();
   bool runOnMachineFunction(MachineFunction &MF) override;
 
   StringRef getPassName() const override {
@@ -58,38 +51,12 @@ public:
   }
 };
 
-class LLVM_LIBRARY_VISIBILITY FixFSMULD : public LEONMachineFunctionPass {
-public:
-  static char ID;
-
-  FixFSMULD(TargetMachine &tm);
-  bool runOnMachineFunction(MachineFunction &MF) override;
-
-  StringRef getPassName() const override {
-    return "FixFSMULD: Erratum Fix LBR31: do not select FSMULD";
-  }
-};
-
-class LLVM_LIBRARY_VISIBILITY ReplaceFMULS : public LEONMachineFunctionPass {
-public:
-  static char ID;
-
-  ReplaceFMULS(TargetMachine &tm);
-  bool runOnMachineFunction(MachineFunction &MF) override;
-
-  StringRef getPassName() const override {
-    return "ReplaceFMULS: Erratum Fix LBR32: replace FMULS instruction with a "
-           "routine using conversions/double precision operations to replace "
-           "FMULS";
-  }
-};
-
 class LLVM_LIBRARY_VISIBILITY DetectRoundChange
     : public LEONMachineFunctionPass {
 public:
   static char ID;
 
-  DetectRoundChange(TargetMachine &tm);
+  DetectRoundChange();
   bool runOnMachineFunction(MachineFunction &MF) override;
 
   StringRef getPassName() const override {
@@ -102,7 +69,7 @@ class LLVM_LIBRARY_VISIBILITY FixAllFDIVSQRT : public LEONMachineFunctionPass {
 public:
   static char ID;
 
-  FixAllFDIVSQRT(TargetMachine &tm);
+  FixAllFDIVSQRT();
   bool runOnMachineFunction(MachineFunction &MF) override;
 
   StringRef getPassName() const override {

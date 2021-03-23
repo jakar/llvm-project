@@ -1,16 +1,15 @@
 //===--- SimplifyBooleanExpr.h clang-tidy -----------------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
 #ifndef LLVM_CLANG_TOOLS_EXTRA_CLANG_TIDY_READABILITY_SIMPLIFY_BOOLEAN_EXPR_H
 #define LLVM_CLANG_TOOLS_EXTRA_CLANG_TIDY_READABILITY_SIMPLIFY_BOOLEAN_EXPR_H
 
-#include "../ClangTidy.h"
+#include "../ClangTidyCheck.h"
 
 namespace clang {
 namespace tidy {
@@ -28,19 +27,15 @@ public:
   void storeOptions(ClangTidyOptions::OptionMap &Options) override;
   void registerMatchers(ast_matchers::MatchFinder *Finder) override;
   void check(const ast_matchers::MatchFinder::MatchResult &Result) override;
+  llvm::Optional<TraversalKind> getCheckTraversalKind() const override {
+    return TK_IgnoreUnlessSpelledInSource;
+  }
 
 private:
-  void matchBoolBinOpExpr(ast_matchers::MatchFinder *Finder, bool Value,
-                          StringRef OperatorName, StringRef BooleanId);
+  class Visitor;
 
-  void matchExprBinOpBool(ast_matchers::MatchFinder *Finder, bool Value,
-                          StringRef OperatorName, StringRef BooleanId);
-
-  void matchBoolCompOpExpr(ast_matchers::MatchFinder *Finder, bool Value,
-                           StringRef OperatorName, StringRef BooleanId);
-
-  void matchExprCompOpBool(ast_matchers::MatchFinder *Finder, bool Value,
-                           StringRef OperatorName, StringRef BooleanId);
+  void reportBinOp(const ast_matchers::MatchFinder::MatchResult &Result,
+                   const BinaryOperator *Op);
 
   void matchBoolCondition(ast_matchers::MatchFinder *Finder, bool Value,
                           StringRef BooleanId);
@@ -58,17 +53,12 @@ private:
                                   StringRef Id);
 
   void
-  replaceWithExpression(const ast_matchers::MatchFinder::MatchResult &Result,
-                        const CXXBoolLiteralExpr *BoolLiteral, bool UseLHS,
-                        bool Negated = false);
-
-  void
   replaceWithThenStatement(const ast_matchers::MatchFinder::MatchResult &Result,
-                           const CXXBoolLiteralExpr *BoolLiteral);
+                           const Expr *BoolLiteral);
 
   void
   replaceWithElseStatement(const ast_matchers::MatchFinder::MatchResult &Result,
-                           const CXXBoolLiteralExpr *FalseConditionRemoved);
+                           const Expr *FalseConditionRemoved);
 
   void
   replaceWithCondition(const ast_matchers::MatchFinder::MatchResult &Result,

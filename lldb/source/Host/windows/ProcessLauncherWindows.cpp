@@ -1,18 +1,18 @@
-//===-- ProcessLauncherWindows.cpp ------------------------------*- C++ -*-===//
+//===-- ProcessLauncherWindows.cpp ----------------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
 #include "lldb/Host/windows/ProcessLauncherWindows.h"
 #include "lldb/Host/HostProcess.h"
-#include "lldb/Target/ProcessLaunchInfo.h"
+#include "lldb/Host/ProcessLaunchInfo.h"
 
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/Support/ConvertUTF.h"
+#include "llvm/Support/Program.h"
 
 #include <string>
 #include <vector>
@@ -21,31 +21,51 @@ using namespace lldb;
 using namespace lldb_private;
 
 namespace {
-void CreateEnvironmentBuffer(const Args &env, std::vector<char> &buffer) {
-  if (env.GetArgumentCount() == 0)
-    return;
-
-  // Environment buffer is a null terminated list of null terminated strings
-  for (auto &entry : env.entries()) {
+void CreateEnvironmentBuffer(const Environment &env,
+                             std::vector<char> &buffer) {
+  // The buffer is a list of null-terminated UTF-16 strings, followed by an
+  // extra L'\0' (two bytes of 0).  An empty environment must have one
+  // empty string, followed by an extra L'\0'.
+  for (const auto &KV : env) {
     std::wstring warg;
-    if (llvm::ConvertUTF8toWide(entry.ref, warg)) {
-      buffer.insert(buffer.end(), (char *)warg.c_str(),
-                    (char *)(warg.c_str() + warg.size() + 1));
+    if (llvm::ConvertUTF8toWide(Environment::compose(KV), warg)) {
+      buffer.insert(
+          buffer.end(), reinterpret_cast<const char *>(warg.c_str()),
+          reinterpret_cast<const char *>(warg.c_str() + warg.size() + 1));
     }
   }
   // One null wchar_t (to end the block) is two null bytes
   buffer.push_back(0);
   buffer.push_back(0);
+  // Insert extra two bytes, just in case the environment was empty.
+  buffer.push_back(0);
+  buffer.push_back(0);
 }
+
+bool GetFlattenedWindowsCommandString(Args args, std::wstring &command) {
+  if (args.empty())
+    return false;
+
+  std::vector<llvm::StringRef> args_ref;
+  for (auto &entry : args.entries())
+    args_ref.push_back(entry.ref());
+
+  llvm::ErrorOr<std::wstring> result =
+      llvm::sys::flattenWindowsCommandLine(args_ref);
+  if (result.getError())
+    return false;
+
+  command = *result;
+  return true;
 }
+} // namespace
 
 HostProcess
 ProcessLauncherWindows::LaunchProcess(const ProcessLaunchInfo &launch_info,
-                                      Error &error) {
+                                      Status &error) {
   error.Clear();
 
   std::string executable;
-  std::string commandLine;
   std::vector<char> environment;
   STARTUPINFO startupinfo = {};
   PROCESS_INFORMATION pi = {};
@@ -75,27 +95,38 @@ ProcessLauncherWindows::LaunchProcess(const ProcessLaunchInfo &launch_info,
   if (launch_info.GetFlags().Test(eLaunchFlagDebug))
     flags |= DEBUG_ONLY_THIS_PROCESS;
 
-  auto &env = const_cast<Args &>(launch_info.GetEnvironmentEntries());
+  if (launch_info.GetFlags().Test(eLaunchFlagDisableSTDIO))
+    flags &= ~CREATE_NEW_CONSOLE;
+
   LPVOID env_block = nullptr;
-  ::CreateEnvironmentBuffer(env, environment);
-  if (!environment.empty())
-    env_block = environment.data();
+  ::CreateEnvironmentBuffer(launch_info.GetEnvironment(), environment);
+  env_block = environment.data();
 
   executable = launch_info.GetExecutableFile().GetPath();
-  launch_info.GetArguments().GetQuotedCommandString(commandLine);
+  std::wstring wcommandLine;
+  GetFlattenedWindowsCommandString(launch_info.GetArguments(), wcommandLine);
 
-  std::wstring wexecutable, wcommandLine, wworkingDirectory;
+  std::wstring wexecutable, wworkingDirectory;
   llvm::ConvertUTF8toWide(executable, wexecutable);
-  llvm::ConvertUTF8toWide(commandLine, wcommandLine);
   llvm::ConvertUTF8toWide(launch_info.GetWorkingDirectory().GetCString(),
                           wworkingDirectory);
+  // If the command line is empty, it's best to pass a null pointer to tell
+  // CreateProcessW to use the executable name as the command line.  If the
+  // command line is not empty, its contents may be modified by CreateProcessW.
+  WCHAR *pwcommandLine = wcommandLine.empty() ? nullptr : &wcommandLine[0];
 
-  wcommandLine.resize(PATH_MAX); // Needs to be over-allocated because
-                                 // CreateProcessW can modify it
   BOOL result = ::CreateProcessW(
-      wexecutable.c_str(), &wcommandLine[0], NULL, NULL, TRUE, flags, env_block,
+      wexecutable.c_str(), pwcommandLine, NULL, NULL, TRUE, flags, env_block,
       wworkingDirectory.size() == 0 ? NULL : wworkingDirectory.c_str(),
       &startupinfo, &pi);
+
+  if (!result) {
+    // Call GetLastError before we make any other system calls.
+    error.SetError(::GetLastError(), eErrorTypeWin32);
+    // Note that error 50 ("The request is not supported") will occur if you
+    // try debug a 64-bit inferior from a 32-bit LLDB.
+  }
+
   if (result) {
     // Do not call CloseHandle on pi.hProcess, since we want to pass that back
     // through the HostProcess.
@@ -110,7 +141,8 @@ ProcessLauncherWindows::LaunchProcess(const ProcessLaunchInfo &launch_info,
     ::CloseHandle(stderr_handle);
 
   if (!result)
-    error.SetError(::GetLastError(), eErrorTypeWin32);
+    return HostProcess();
+
   return HostProcess(pi.hProcess);
 }
 

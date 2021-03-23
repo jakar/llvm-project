@@ -1,9 +1,8 @@
 //===--- StaticAssertCheck.cpp - clang-tidy -------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -28,51 +27,37 @@ StaticAssertCheck::StaticAssertCheck(StringRef Name, ClangTidyContext *Context)
     : ClangTidyCheck(Name, Context) {}
 
 void StaticAssertCheck::registerMatchers(MatchFinder *Finder) {
-  // This checker only makes sense for languages that have static assertion
-  // capabilities: C++11 and C11.
-  if (!(getLangOpts().CPlusPlus11 || getLangOpts().C11))
-    return;
-
+  auto NegatedString =
+      unaryOperator(hasOperatorName("!"), hasUnaryOperand(stringLiteral()));
   auto IsAlwaysFalse =
       expr(anyOf(cxxBoolLiteral(equals(false)), integerLiteral(equals(0)),
-                 cxxNullPtrLiteralExpr(), gnuNullExpr()))
+                 cxxNullPtrLiteralExpr(), gnuNullExpr(), NegatedString))
           .bind("isAlwaysFalse");
-  auto IsAlwaysFalseWithCast = ignoringParenImpCasts(anyOf(
-      IsAlwaysFalse, cStyleCastExpr(has(ignoringParenImpCasts(IsAlwaysFalse)))
-                         .bind("castExpr")));
-  auto AssertExprRoot = anyOf(
-      binaryOperator(
-          anyOf(hasOperatorName("&&"), hasOperatorName("==")),
-          hasEitherOperand(ignoringImpCasts(stringLiteral().bind("assertMSG"))),
-          anyOf(binaryOperator(hasEitherOperand(IsAlwaysFalseWithCast)),
-                anything()))
-          .bind("assertExprRoot"),
-      IsAlwaysFalse);
+  auto IsAlwaysFalseWithCast =
+      anyOf(IsAlwaysFalse, cStyleCastExpr(has(IsAlwaysFalse)).bind("castExpr"));
+  auto AssertExprRoot =
+      anyOf(binaryOperator(
+                hasAnyOperatorName("&&", "=="),
+                hasEitherOperand(stringLiteral().bind("assertMSG")),
+                anyOf(binaryOperator(hasEitherOperand(IsAlwaysFalseWithCast)),
+                      anything()))
+                .bind("assertExprRoot"),
+            IsAlwaysFalse);
   auto NonConstexprFunctionCall =
       callExpr(hasDeclaration(functionDecl(unless(isConstexpr()))));
   auto AssertCondition =
-      expr(
-          anyOf(expr(ignoringParenCasts(anyOf(
-                    AssertExprRoot, unaryOperator(hasUnaryOperand(
-                                        ignoringParenCasts(AssertExprRoot)))))),
-                anything()),
-          unless(findAll(NonConstexprFunctionCall)))
+      expr(optionally(expr(anyOf(AssertExprRoot,
+                            unaryOperator(hasUnaryOperand(AssertExprRoot))))),
+           unless(findAll(NonConstexprFunctionCall)))
           .bind("condition");
   auto Condition =
-      anyOf(ignoringParenImpCasts(callExpr(
-                hasDeclaration(functionDecl(hasName("__builtin_expect"))),
-                hasArgument(0, AssertCondition))),
+      anyOf(callExpr(traverse(TK_AsIs, callExpr(hasDeclaration(functionDecl(
+                                           hasName("__builtin_expect"))))),
+                     hasArgument(0, AssertCondition)),
             AssertCondition);
 
-  Finder->addMatcher(conditionalOperator(hasCondition(Condition),
-                                         unless(isInTemplateInstantiation()))
-                         .bind("condStmt"),
-                     this);
-
   Finder->addMatcher(
-      ifStmt(hasCondition(Condition), unless(isInTemplateInstantiation()))
-          .bind("condStmt"),
-      this);
+      mapAnyOf(ifStmt, conditionalOperator).with(hasCondition(Condition)).bind("condStmt"), this);
 }
 
 void StaticAssertCheck::check(const MatchFinder::MatchResult &Result) {
@@ -86,7 +71,7 @@ void StaticAssertCheck::check(const MatchFinder::MatchResult &Result) {
   const auto *AssertExprRoot =
       Result.Nodes.getNodeAs<BinaryOperator>("assertExprRoot");
   const auto *CastExpr = Result.Nodes.getNodeAs<CStyleCastExpr>("castExpr");
-  SourceLocation AssertExpansionLoc = CondStmt->getLocStart();
+  SourceLocation AssertExpansionLoc = CondStmt->getBeginLoc();
 
   if (!AssertExpansionLoc.isValid() || !AssertExpansionLoc.isMacroID())
     return;
@@ -122,17 +107,16 @@ void StaticAssertCheck::check(const MatchFinder::MatchResult &Result) {
     FixItHints.push_back(
         FixItHint::CreateReplacement(SourceRange(AssertLoc), "static_assert"));
 
-    std::string StaticAssertMSG = ", \"\"";
     if (AssertExprRoot) {
       FixItHints.push_back(FixItHint::CreateRemoval(
           SourceRange(AssertExprRoot->getOperatorLoc())));
       FixItHints.push_back(FixItHint::CreateRemoval(
-          SourceRange(AssertMSG->getLocStart(), AssertMSG->getLocEnd())));
-      StaticAssertMSG = (Twine(", \"") + AssertMSG->getString() + "\"").str();
+          SourceRange(AssertMSG->getBeginLoc(), AssertMSG->getEndLoc())));
+      FixItHints.push_back(FixItHint::CreateInsertion(
+          LastParenLoc, (Twine(", \"") + AssertMSG->getString() + "\"").str()));
+    } else if (!Opts.CPlusPlus17) {
+      FixItHints.push_back(FixItHint::CreateInsertion(LastParenLoc, ", \"\""));
     }
-
-    FixItHints.push_back(
-        FixItHint::CreateInsertion(LastParenLoc, StaticAssertMSG));
   }
 
   diag(AssertLoc, "found assert() that could be replaced by static_assert()")
@@ -144,7 +128,8 @@ SourceLocation StaticAssertCheck::getLastParenLoc(const ASTContext *ASTCtx,
   const LangOptions &Opts = ASTCtx->getLangOpts();
   const SourceManager &SM = ASTCtx->getSourceManager();
 
-  llvm::MemoryBuffer *Buffer = SM.getBuffer(SM.getFileID(AssertLoc));
+  llvm::Optional<llvm::MemoryBufferRef> Buffer =
+      SM.getBufferOrNone(SM.getFileID(AssertLoc));
   if (!Buffer)
     return SourceLocation();
 

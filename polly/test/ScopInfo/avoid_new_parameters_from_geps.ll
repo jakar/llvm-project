@@ -11,8 +11,8 @@
 ; CHECK-NEXT:     Assumed Context:
 ; CHECK-NEXT:     {  :  }
 ; CHECK-NEXT:     Invalid Context:
-; CHECK-NEXT:     {  : 1 = 0 }
-; CHECK-NEXT:     Arrays {
+; CHECK-NEXT:     {  : false }
+; CHECK:          Arrays {
 ; CHECK-NEXT:         i32* MemRef_team2_0_in; // Element size 8
 ; CHECK-NEXT:     }
 ; CHECK-NEXT:     Arrays (Bounds as pw_affs) {

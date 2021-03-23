@@ -1,9 +1,8 @@
-//== llvm/ADT/IntrusiveRefCntPtr.h - Smart Refcounting Pointer ---*- C++ -*-==//
+//==- llvm/ADT/IntrusiveRefCntPtr.h - Smart Refcounting Pointer --*- C++ -*-==//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -59,6 +58,7 @@
 #include <atomic>
 #include <cassert>
 #include <cstddef>
+#include <memory>
 
 namespace llvm {
 
@@ -71,11 +71,25 @@ namespace llvm {
 template <class Derived> class RefCountedBase {
   mutable unsigned RefCount = 0;
 
-public:
+protected:
   RefCountedBase() = default;
-  RefCountedBase(const RefCountedBase &) : RefCount(0) {}
+  RefCountedBase(const RefCountedBase &) {}
+  RefCountedBase &operator=(const RefCountedBase &) = delete;
 
+#ifndef NDEBUG
+  ~RefCountedBase() {
+    assert(RefCount == 0 &&
+           "Destruction occured when there are still references to this.");
+  }
+#else
+  // Default the destructor in release builds, A trivial destructor may enable
+  // better codegen.
+  ~RefCountedBase() = default;
+#endif
+
+public:
   void Retain() const { ++RefCount; }
+
   void Release() const {
     assert(RefCount > 0 && "Reference count is already zero.");
     if (--RefCount == 0)
@@ -85,10 +99,24 @@ public:
 
 /// A thread-safe version of \c RefCountedBase.
 template <class Derived> class ThreadSafeRefCountedBase {
-  mutable std::atomic<int> RefCount;
+  mutable std::atomic<int> RefCount{0};
 
 protected:
-  ThreadSafeRefCountedBase() : RefCount(0) {}
+  ThreadSafeRefCountedBase() = default;
+  ThreadSafeRefCountedBase(const ThreadSafeRefCountedBase &) {}
+  ThreadSafeRefCountedBase &
+  operator=(const ThreadSafeRefCountedBase &) = delete;
+
+#ifndef NDEBUG
+  ~ThreadSafeRefCountedBase() {
+    assert(RefCount == 0 &&
+           "Destruction occured when there are still references to this.");
+  }
+#else
+  // Default the destructor in release builds, A trivial destructor may enable
+  // better codegen.
+  ~ThreadSafeRefCountedBase() = default;
+#endif
 
 public:
   void Retain() const { RefCount.fetch_add(1, std::memory_order_relaxed); }
@@ -136,29 +164,31 @@ template <typename T> class IntrusiveRefCntPtr {
   T *Obj = nullptr;
 
 public:
-  typedef T element_type;
+  using element_type = T;
 
   explicit IntrusiveRefCntPtr() = default;
   IntrusiveRefCntPtr(T *obj) : Obj(obj) { retain(); }
   IntrusiveRefCntPtr(const IntrusiveRefCntPtr &S) : Obj(S.Obj) { retain(); }
   IntrusiveRefCntPtr(IntrusiveRefCntPtr &&S) : Obj(S.Obj) { S.Obj = nullptr; }
 
-  template <class X>
-  IntrusiveRefCntPtr(IntrusiveRefCntPtr<X> &&S) : Obj(S.get()) {
+  template <class X,
+            std::enable_if_t<std::is_convertible<X *, T *>::value, bool> = true>
+  IntrusiveRefCntPtr(IntrusiveRefCntPtr<X> S) : Obj(S.get()) {
     S.Obj = nullptr;
   }
 
-  template <class X>
-  IntrusiveRefCntPtr(const IntrusiveRefCntPtr<X> &S) : Obj(S.get()) {
+  template <class X,
+            std::enable_if_t<std::is_convertible<X *, T *>::value, bool> = true>
+  IntrusiveRefCntPtr(std::unique_ptr<X> S) : Obj(S.release()) {
     retain();
   }
+
+  ~IntrusiveRefCntPtr() { release(); }
 
   IntrusiveRefCntPtr &operator=(IntrusiveRefCntPtr S) {
     swap(S);
     return *this;
   }
-
-  ~IntrusiveRefCntPtr() { release(); }
 
   T &operator*() const { return *Obj; }
   T *operator->() const { return Obj; }
@@ -183,6 +213,7 @@ private:
     if (Obj)
       IntrusiveRefCntPtrInfo<T>::retain(Obj);
   }
+
   void release() {
     if (Obj)
       IntrusiveRefCntPtrInfo<T>::release(Obj);
@@ -224,7 +255,7 @@ inline bool operator!=(T *A, const IntrusiveRefCntPtr<U> &B) {
 }
 
 template <class T>
-bool operator==(std::nullptr_t A, const IntrusiveRefCntPtr<T> &B) {
+bool operator==(std::nullptr_t, const IntrusiveRefCntPtr<T> &B) {
   return !B;
 }
 
@@ -248,18 +279,26 @@ bool operator!=(const IntrusiveRefCntPtr<T> &A, std::nullptr_t B) {
 template <typename From> struct simplify_type;
 
 template <class T> struct simplify_type<IntrusiveRefCntPtr<T>> {
-  typedef T *SimpleType;
+  using SimpleType = T *;
+
   static SimpleType getSimplifiedValue(IntrusiveRefCntPtr<T> &Val) {
     return Val.get();
   }
 };
 
 template <class T> struct simplify_type<const IntrusiveRefCntPtr<T>> {
-  typedef /*const*/ T *SimpleType;
+  using SimpleType = /*const*/ T *;
+
   static SimpleType getSimplifiedValue(const IntrusiveRefCntPtr<T> &Val) {
     return Val.get();
   }
 };
+
+/// Factory function for creating intrusive ref counted pointers.
+template <typename T, typename... Args>
+IntrusiveRefCntPtr<T> makeIntrusiveRefCnt(Args &&...A) {
+  return IntrusiveRefCntPtr<T>(new T(std::forward<Args>(A)...));
+}
 
 } // end namespace llvm
 

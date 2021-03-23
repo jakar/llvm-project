@@ -1,9 +1,8 @@
 //===-IslExprBuilder.h - Helper to generate code for isl AST expressions --===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -14,27 +13,18 @@
 
 #include "polly/CodeGen/IRBuilder.h"
 #include "polly/Support/ScopHelper.h"
-
-#include "llvm/ADT/MapVector.h"
-#include "isl/ast.h"
-
-namespace llvm {
-class DataLayout;
-class ScalarEvolution;
-} // namespace llvm
-
-struct isl_id;
+#include "isl/isl-noexceptions.h"
 
 namespace llvm {
 // Provide PointerLikeTypeTraits for isl_id.
-template <> class PointerLikeTypeTraits<isl_id *> {
+template <> struct PointerLikeTypeTraits<isl_id *> {
 
 public:
   static inline const void *getAsVoidPointer(isl_id *P) { return (void *)P; }
   static inline const Region *getFromVoidPointer(void *P) {
     return (Region *)P;
   }
-  enum { NumLowBitsAvailable = 0 };
+  static constexpr int NumLowBitsAvailable = 0;
 };
 } // namespace llvm
 
@@ -75,7 +65,7 @@ class ScopArrayInfo;
 /// in the wild. Signed computations are needed, as loop bounds may become
 /// negative.
 ///
-/// It is possible to track overflows that occured in the generated IR. See the
+/// It is possible to track overflows that occurred in the generated IR. See the
 /// description of @see OverflowState for more information.
 ///
 /// FIXME: Hardcoding sizes can cause issues:
@@ -181,8 +171,17 @@ public:
   /// @param Expr The ast expression of type isl_ast_op_access
   ///             for which we generate LLVM-IR.
   ///
-  /// @return The llvm::Value* containing the result of the computation.
-  llvm::Value *createAccessAddress(__isl_take isl_ast_expr *Expr);
+  /// @return A pair of the llvm::Value* containing the result of the
+  ///         computation and the llvm::Type* it points to.
+  std::pair<llvm::Value *, llvm::Type *>
+  createAccessAddress(__isl_take isl_ast_expr *Expr);
+
+  /// Check if an @p Expr contains integer constants larger than 64 bit.
+  ///
+  /// @param Expr The expression to check.
+  ///
+  /// @return True if the ast expression is larger than 64 bit.
+  bool hasLargeInts(isl::ast_expr Expr);
 
 private:
   Scop &S;

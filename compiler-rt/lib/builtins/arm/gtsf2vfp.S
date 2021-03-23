@@ -1,9 +1,8 @@
 //===-- gtsf2vfp.S - Implement gtsf2vfp -----------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is dual licensed under the MIT and the University of Illinois Open
-// Source Licenses. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -13,7 +12,7 @@
 // extern int __gtsf2vfp(float a, float b);
 //
 // Returns one iff a > b and neither is NaN.
-// Uses Darwin calling convention where single precision arguments are passsed 
+// Uses Darwin calling convention where single precision arguments are passsed
 // like 32-bit ints
 //
 	.syntax unified
@@ -27,6 +26,7 @@ DEFINE_COMPILERRT_FUNCTION(__gtsf2vfp)
 	vcmp.f32 s14, s15
 #endif
 	vmrs	apsr_nzcv, fpscr
+	ITE(gt)
 	movgt	r0, #1		// set result register to 1 if equal
 	movle	r0, #0
 	bx	lr

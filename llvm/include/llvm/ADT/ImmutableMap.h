@@ -1,9 +1,8 @@
 //===--- ImmutableMap.h - Immutable (functional) map interface --*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -26,12 +25,12 @@ namespace llvm {
 /// only the first element (the key) is used by isEqual and isLess.
 template <typename T, typename S>
 struct ImutKeyValueInfo {
-  typedef const std::pair<T,S> value_type;
-  typedef const value_type& value_type_ref;
-  typedef const T   key_type;
-  typedef const T&  key_type_ref;
-  typedef const S   data_type;
-  typedef const S&  data_type_ref;
+  using value_type = const std::pair<T,S>;
+  using value_type_ref = const value_type&;
+  using key_type = const T;
+  using key_type_ref = const T&;
+  using data_type = const S;
+  using data_type_ref = const S&;
 
   static inline key_type_ref KeyOfValue(value_type_ref V) {
     return V.first;
@@ -62,42 +61,23 @@ template <typename KeyT, typename ValT,
           typename ValInfo = ImutKeyValueInfo<KeyT,ValT>>
 class ImmutableMap {
 public:
-  typedef typename ValInfo::value_type      value_type;
-  typedef typename ValInfo::value_type_ref  value_type_ref;
-  typedef typename ValInfo::key_type        key_type;
-  typedef typename ValInfo::key_type_ref    key_type_ref;
-  typedef typename ValInfo::data_type       data_type;
-  typedef typename ValInfo::data_type_ref   data_type_ref;
-  typedef ImutAVLTree<ValInfo>              TreeTy;
+  using value_type = typename ValInfo::value_type;
+  using value_type_ref = typename ValInfo::value_type_ref;
+  using key_type = typename ValInfo::key_type;
+  using key_type_ref = typename ValInfo::key_type_ref;
+  using data_type = typename ValInfo::data_type;
+  using data_type_ref = typename ValInfo::data_type_ref;
+  using TreeTy = ImutAVLTree<ValInfo>;
 
 protected:
-  TreeTy* Root;
+  IntrusiveRefCntPtr<TreeTy> Root;
 
 public:
   /// Constructs a map from a pointer to a tree root.  In general one
   /// should use a Factory object to create maps instead of directly
   /// invoking the constructor, but there are cases where make this
   /// constructor public is useful.
-  explicit ImmutableMap(const TreeTy* R) : Root(const_cast<TreeTy*>(R)) {
-    if (Root) { Root->retain(); }
-  }
-
-  ImmutableMap(const ImmutableMap &X) : Root(X.Root) {
-    if (Root) { Root->retain(); }
-  }
-
-  ImmutableMap &operator=(const ImmutableMap &X) {
-    if (Root != X.Root) {
-      if (X.Root) { X.Root->retain(); }
-      if (Root) { Root->release(); }
-      Root = X.Root;
-    }
-    return *this;
-  }
-
-  ~ImmutableMap() {
-    if (Root) { Root->release(); }
-  }
+  explicit ImmutableMap(const TreeTy *R) : Root(const_cast<TreeTy *>(R)) {}
 
   class Factory {
     typename TreeTy::Factory F;
@@ -114,13 +94,14 @@ public:
 
     ImmutableMap getEmptyMap() { return ImmutableMap(F.getEmptyTree()); }
 
-    ImmutableMap add(ImmutableMap Old, key_type_ref K, data_type_ref D) {
-      TreeTy *T = F.add(Old.Root, std::pair<key_type,data_type>(K,D));
+    LLVM_NODISCARD ImmutableMap add(ImmutableMap Old, key_type_ref K,
+                                    data_type_ref D) {
+      TreeTy *T = F.add(Old.Root.get(), std::pair<key_type, data_type>(K, D));
       return ImmutableMap(Canonicalize ? F.getCanonicalTree(T): T);
     }
 
-    ImmutableMap remove(ImmutableMap Old, key_type_ref K) {
-      TreeTy *T = F.remove(Old.Root,K);
+    LLVM_NODISCARD ImmutableMap remove(ImmutableMap Old, key_type_ref K) {
+      TreeTy *T = F.remove(Old.Root.get(), K);
       return ImmutableMap(Canonicalize ? F.getCanonicalTree(T): T);
     }
 
@@ -134,19 +115,20 @@ public:
   }
 
   bool operator==(const ImmutableMap &RHS) const {
-    return Root && RHS.Root ? Root->isEqual(*RHS.Root) : Root == RHS.Root;
+    return Root && RHS.Root ? Root->isEqual(*RHS.Root.get()) : Root == RHS.Root;
   }
 
   bool operator!=(const ImmutableMap &RHS) const {
-    return Root && RHS.Root ? Root->isNotEqual(*RHS.Root) : Root != RHS.Root;
+    return Root && RHS.Root ? Root->isNotEqual(*RHS.Root.get())
+                            : Root != RHS.Root;
   }
 
   TreeTy *getRoot() const {
     if (Root) { Root->retain(); }
-    return Root;
+    return Root.get();
   }
 
-  TreeTy *getRootWithoutRetain() const { return Root; }
+  TreeTy *getRootWithoutRetain() const { return Root.get(); }
 
   void manualRetain() {
     if (Root) Root->retain();
@@ -166,12 +148,14 @@ private:
   template <typename Callback>
   struct CBWrapper {
     Callback C;
+
     void operator()(value_type_ref V) { C(V.first,V.second); }
   };
 
   template <typename Callback>
   struct CBWrapperRef {
     Callback &C;
+
     CBWrapperRef(Callback& c) : C(c) {}
 
     void operator()(value_type_ref V) { C(V.first,V.second); }
@@ -215,7 +199,7 @@ public:
     data_type_ref getData() const { return (*this)->second; }
   };
 
-  iterator begin() const { return iterator(Root); }
+  iterator begin() const { return iterator(Root.get()); }
   iterator end() const { return iterator(); }
 
   data_type* lookup(key_type_ref K) const {
@@ -241,7 +225,7 @@ public:
   unsigned getHeight() const { return Root ? Root->getHeight() : 0; }
 
   static inline void Profile(FoldingSetNodeID& ID, const ImmutableMap& M) {
-    ID.AddPointer(M.Root);
+    ID.AddPointer(M.Root.get());
   }
 
   inline void Profile(FoldingSetNodeID& ID) const {
@@ -254,17 +238,17 @@ template <typename KeyT, typename ValT,
 typename ValInfo = ImutKeyValueInfo<KeyT,ValT>>
 class ImmutableMapRef {
 public:
-  typedef typename ValInfo::value_type      value_type;
-  typedef typename ValInfo::value_type_ref  value_type_ref;
-  typedef typename ValInfo::key_type        key_type;
-  typedef typename ValInfo::key_type_ref    key_type_ref;
-  typedef typename ValInfo::data_type       data_type;
-  typedef typename ValInfo::data_type_ref   data_type_ref;
-  typedef ImutAVLTree<ValInfo>              TreeTy;
-  typedef typename TreeTy::Factory          FactoryTy;
+  using value_type = typename ValInfo::value_type;
+  using value_type_ref = typename ValInfo::value_type_ref;
+  using key_type = typename ValInfo::key_type;
+  using key_type_ref = typename ValInfo::key_type_ref;
+  using data_type = typename ValInfo::data_type;
+  using data_type_ref = typename ValInfo::data_type_ref;
+  using TreeTy = ImutAVLTree<ValInfo>;
+  using FactoryTy = typename TreeTy::Factory;
 
 protected:
-  TreeTy *Root;
+  IntrusiveRefCntPtr<TreeTy> Root;
   FactoryTy *Factory;
 
 public:
@@ -272,44 +256,12 @@ public:
   /// should use a Factory object to create maps instead of directly
   /// invoking the constructor, but there are cases where make this
   /// constructor public is useful.
-  explicit ImmutableMapRef(const TreeTy *R, FactoryTy *F)
-      : Root(const_cast<TreeTy *>(R)), Factory(F) {
-    if (Root) {
-      Root->retain();
-    }
-  }
+  ImmutableMapRef(const TreeTy *R, FactoryTy *F)
+      : Root(const_cast<TreeTy *>(R)), Factory(F) {}
 
-  explicit ImmutableMapRef(const ImmutableMap<KeyT, ValT> &X,
-                           typename ImmutableMap<KeyT, ValT>::Factory &F)
-    : Root(X.getRootWithoutRetain()),
-      Factory(F.getTreeFactory()) {
-    if (Root) { Root->retain(); }
-  }
-
-  ImmutableMapRef(const ImmutableMapRef &X) : Root(X.Root), Factory(X.Factory) {
-    if (Root) {
-      Root->retain();
-    }
-  }
-
-  ImmutableMapRef &operator=(const ImmutableMapRef &X) {
-    if (Root != X.Root) {
-      if (X.Root)
-        X.Root->retain();
-
-      if (Root)
-        Root->release();
-
-      Root = X.Root;
-      Factory = X.Factory;
-    }
-    return *this;
-  }
-
-  ~ImmutableMapRef() {
-    if (Root)
-      Root->release();
-  }
+  ImmutableMapRef(const ImmutableMap<KeyT, ValT> &X,
+                  typename ImmutableMap<KeyT, ValT>::Factory &F)
+      : Root(X.getRootWithoutRetain()), Factory(F.getTreeFactory()) {}
 
   static inline ImmutableMapRef getEmptyMap(FactoryTy *F) {
     return ImmutableMapRef(0, F);
@@ -324,12 +276,13 @@ public:
   }
 
   ImmutableMapRef add(key_type_ref K, data_type_ref D) const {
-    TreeTy *NewT = Factory->add(Root, std::pair<key_type, data_type>(K, D));
+    TreeTy *NewT =
+        Factory->add(Root.get(), std::pair<key_type, data_type>(K, D));
     return ImmutableMapRef(NewT, Factory);
   }
 
   ImmutableMapRef remove(key_type_ref K) const {
-    TreeTy *NewT = Factory->remove(Root, K);
+    TreeTy *NewT = Factory->remove(Root.get(), K);
     return ImmutableMapRef(NewT, Factory);
   }
 
@@ -338,15 +291,16 @@ public:
   }
 
   ImmutableMap<KeyT, ValT> asImmutableMap() const {
-    return ImmutableMap<KeyT, ValT>(Factory->getCanonicalTree(Root));
+    return ImmutableMap<KeyT, ValT>(Factory->getCanonicalTree(Root.get()));
   }
 
   bool operator==(const ImmutableMapRef &RHS) const {
-    return Root && RHS.Root ? Root->isEqual(*RHS.Root) : Root == RHS.Root;
+    return Root && RHS.Root ? Root->isEqual(*RHS.Root.get()) : Root == RHS.Root;
   }
 
   bool operator!=(const ImmutableMapRef &RHS) const {
-    return Root && RHS.Root ? Root->isNotEqual(*RHS.Root) : Root != RHS.Root;
+    return Root && RHS.Root ? Root->isNotEqual(*RHS.Root.get())
+                            : Root != RHS.Root;
   }
 
   bool isEmpty() const { return !Root; }
@@ -375,7 +329,7 @@ public:
     data_type_ref getData() const { return (*this)->second; }
   };
 
-  iterator begin() const { return iterator(Root); }
+  iterator begin() const { return iterator(Root.get()); }
   iterator end() const { return iterator(); }
 
   data_type *lookup(key_type_ref K) const {
@@ -401,7 +355,7 @@ public:
   unsigned getHeight() const { return Root ? Root->getHeight() : 0; }
 
   static inline void Profile(FoldingSetNodeID &ID, const ImmutableMapRef &M) {
-    ID.AddPointer(M.Root);
+    ID.AddPointer(M.Root.get());
   }
 
   inline void Profile(FoldingSetNodeID &ID) const { return Profile(ID, *this); }

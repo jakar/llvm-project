@@ -1,3 +1,4 @@
+# REQUIRES: mips
 # Check that R_MIPS_LO16 relocation is handled as non-relative,
 # and if a target symbol is a DSO data symbol, LLD create a copy
 # relocation.
@@ -9,11 +10,9 @@
 # RUN: ld.lld %t.o %t.so -o %t.exe
 # RUN: llvm-readobj -r %t.exe | FileCheck %s
 
-# REQUIRES: mips
-
 # CHECK:      Relocations [
 # CHECK-NEXT:   Section (7) .rel.dyn {
-# CHECK-NEXT:     0x{{[0-9A-F]+}} R_MIPS_COPY data0 0x0
+# CHECK-NEXT:     0x{{[0-9A-F]+}} R_MIPS_COPY data0
 # CHECK-NEXT:   }
 # CHECK-NEXT: ]
 

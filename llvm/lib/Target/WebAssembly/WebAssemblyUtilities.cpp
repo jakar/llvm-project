@@ -1,14 +1,13 @@
 //===-- WebAssemblyUtilities.cpp - WebAssembly Utility Functions ----------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 ///
 /// \file
-/// \brief This file implements several utility functions for WebAssembly.
+/// This file implements several utility functions for WebAssembly.
 ///
 //===----------------------------------------------------------------------===//
 
@@ -16,47 +15,14 @@
 #include "WebAssemblyMachineFunctionInfo.h"
 #include "llvm/CodeGen/MachineInstr.h"
 #include "llvm/CodeGen/MachineLoopInfo.h"
+#include "llvm/MC/MCContext.h"
 using namespace llvm;
 
-bool WebAssembly::isArgument(const MachineInstr &MI) {
-  switch (MI.getOpcode()) {
-  case WebAssembly::ARGUMENT_I32:
-  case WebAssembly::ARGUMENT_I64:
-  case WebAssembly::ARGUMENT_F32:
-  case WebAssembly::ARGUMENT_F64:
-  case WebAssembly::ARGUMENT_v16i8:
-  case WebAssembly::ARGUMENT_v8i16:
-  case WebAssembly::ARGUMENT_v4i32:
-  case WebAssembly::ARGUMENT_v4f32:
-    return true;
-  default:
-    return false;
-  }
-}
-
-bool WebAssembly::isCopy(const MachineInstr &MI) {
-  switch (MI.getOpcode()) {
-  case WebAssembly::COPY_I32:
-  case WebAssembly::COPY_I64:
-  case WebAssembly::COPY_F32:
-  case WebAssembly::COPY_F64:
-    return true;
-  default:
-    return false;
-  }
-}
-
-bool WebAssembly::isTee(const MachineInstr &MI) {
-  switch (MI.getOpcode()) {
-  case WebAssembly::TEE_I32:
-  case WebAssembly::TEE_I64:
-  case WebAssembly::TEE_F32:
-  case WebAssembly::TEE_F64:
-    return true;
-  default:
-    return false;
-  }
-}
+const char *const WebAssembly::CxaBeginCatchFn = "__cxa_begin_catch";
+const char *const WebAssembly::CxaRethrowFn = "__cxa_rethrow";
+const char *const WebAssembly::StdTerminateFn = "_ZSt9terminatev";
+const char *const WebAssembly::PersonalityWrapperFn =
+    "_Unwind_Wasm_CallPersonality";
 
 /// Test whether MI is a child of some other node in an expression tree.
 bool WebAssembly::isChild(const MachineInstr &MI,
@@ -66,32 +32,100 @@ bool WebAssembly::isChild(const MachineInstr &MI,
   const MachineOperand &MO = MI.getOperand(0);
   if (!MO.isReg() || MO.isImplicit() || !MO.isDef())
     return false;
-  unsigned Reg = MO.getReg();
-  return TargetRegisterInfo::isVirtualRegister(Reg) &&
-         MFI.isVRegStackified(Reg);
+  Register Reg = MO.getReg();
+  return Register::isVirtualRegister(Reg) && MFI.isVRegStackified(Reg);
 }
 
-bool WebAssembly::isCallIndirect(const MachineInstr &MI) {
+bool WebAssembly::mayThrow(const MachineInstr &MI) {
   switch (MI.getOpcode()) {
-  case WebAssembly::CALL_INDIRECT_VOID:
-  case WebAssembly::CALL_INDIRECT_I32:
-  case WebAssembly::CALL_INDIRECT_I64:
-  case WebAssembly::CALL_INDIRECT_F32:
-  case WebAssembly::CALL_INDIRECT_F64:
-  case WebAssembly::CALL_INDIRECT_v16i8:
-  case WebAssembly::CALL_INDIRECT_v8i16:
-  case WebAssembly::CALL_INDIRECT_v4i32:
-  case WebAssembly::CALL_INDIRECT_v4f32:
+  case WebAssembly::THROW:
+  case WebAssembly::THROW_S:
+  case WebAssembly::RETHROW:
+  case WebAssembly::RETHROW_S:
     return true;
-  default:
+  }
+  if (isCallIndirect(MI.getOpcode()))
+    return true;
+  if (!MI.isCall())
     return false;
+
+  const MachineOperand &MO = getCalleeOp(MI);
+  assert(MO.isGlobal() || MO.isSymbol());
+
+  if (MO.isSymbol()) {
+    // Some intrinsics are lowered to calls to external symbols, which are then
+    // lowered to calls to library functions. Most of libcalls don't throw, but
+    // we only list some of them here now.
+    // TODO Consider adding 'nounwind' info in TargetLowering::CallLoweringInfo
+    // instead for more accurate info.
+    const char *Name = MO.getSymbolName();
+    if (strcmp(Name, "memcpy") == 0 || strcmp(Name, "memmove") == 0 ||
+        strcmp(Name, "memset") == 0)
+      return false;
+    return true;
+  }
+
+  const auto *F = dyn_cast<Function>(MO.getGlobal());
+  if (!F)
+    return true;
+  if (F->doesNotThrow())
+    return false;
+  // These functions never throw
+  if (F->getName() == CxaBeginCatchFn || F->getName() == PersonalityWrapperFn ||
+      F->getName() == StdTerminateFn)
+    return false;
+
+  // TODO Can we exclude call instructions that are marked as 'nounwind' in the
+  // original LLVm IR? (Even when the callee may throw)
+  return true;
+}
+
+const MachineOperand &WebAssembly::getCalleeOp(const MachineInstr &MI) {
+  switch (MI.getOpcode()) {
+  case WebAssembly::CALL:
+  case WebAssembly::CALL_S:
+  case WebAssembly::RET_CALL:
+  case WebAssembly::RET_CALL_S:
+    return MI.getOperand(MI.getNumExplicitDefs());
+  case WebAssembly::CALL_INDIRECT:
+  case WebAssembly::CALL_INDIRECT_S:
+  case WebAssembly::RET_CALL_INDIRECT:
+  case WebAssembly::RET_CALL_INDIRECT_S:
+    return MI.getOperand(MI.getNumOperands() - 1);
+  default:
+    llvm_unreachable("Not a call instruction");
   }
 }
 
-MachineBasicBlock *llvm::LoopBottom(const MachineLoop *Loop) {
-  MachineBasicBlock *Bottom = Loop->getHeader();
-  for (MachineBasicBlock *MBB : Loop->blocks())
-    if (MBB->getNumber() > Bottom->getNumber())
-      Bottom = MBB;
-  return Bottom;
+MCSymbolWasm *WebAssembly::getOrCreateFunctionTableSymbol(
+    MCContext &Ctx, const WebAssemblySubtarget *Subtarget) {
+  StringRef Name = "__indirect_function_table";
+  MCSymbolWasm *Sym = cast_or_null<MCSymbolWasm>(Ctx.lookupSymbol(Name));
+  if (Sym) {
+    if (!Sym->isFunctionTable())
+      Ctx.reportError(SMLoc(), "symbol is not a wasm funcref table");
+  } else {
+    Sym = cast<MCSymbolWasm>(Ctx.getOrCreateSymbol(Name));
+    Sym->setFunctionTable();
+    // The default function table is synthesized by the linker.
+    Sym->setUndefined();
+  }
+  // MVP object files can't have symtab entries for tables.
+  if (!(Subtarget && Subtarget->hasReferenceTypes()))
+    Sym->setOmitFromLinkingSection();
+  return Sym;
+}
+
+// Find a catch instruction from an EH pad.
+MachineInstr *WebAssembly::findCatch(MachineBasicBlock *EHPad) {
+  assert(EHPad->isEHPad());
+  auto Pos = EHPad->begin();
+  // Skip any label or debug instructions. Also skip 'end' marker instructions
+  // that may exist after marker placement in CFGStackify.
+  while (Pos != EHPad->end() &&
+         (Pos->isLabel() || Pos->isDebugInstr() || isMarker(Pos->getOpcode())))
+    Pos++;
+  if (Pos != EHPad->end() && WebAssembly::isCatch(Pos->getOpcode()))
+    return &*Pos;
+  return nullptr;
 }

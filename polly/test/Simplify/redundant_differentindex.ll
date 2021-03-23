@@ -1,6 +1,5 @@
 ; RUN: opt %loadPolly -polly-simplify -analyze < %s | FileCheck %s -match-full-lines
-; RUN: opt %loadPolly -polly-simplify -disable-output -stats < %s 2>&1 | FileCheck %s --check-prefix=STATS -match-full-lines
-; REQUIRES: asserts
+; RUN: opt %loadPolly "-passes=scop(print<polly-simplify>)" -disable-output -aa-pipeline=basic-aa < %s | FileCheck %s -match-full-lines
 ;
 ; A store that has a different index than the load it is storing is
 ; not redundant.
@@ -36,5 +35,3 @@ return:
 
 
 ; CHECK: SCoP could not be simplified
-
-; STATS: 1 polly-simplify   - Number of Load-Store pairs NOT removed because of different access relations

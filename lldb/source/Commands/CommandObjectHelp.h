@@ -1,28 +1,21 @@
 //===-- CommandObjectHelp.h -------------------------------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef liblldb_CommandObjectHelp_h_
-#define liblldb_CommandObjectHelp_h_
+#ifndef LLDB_SOURCE_COMMANDS_COMMANDOBJECTHELP_H
+#define LLDB_SOURCE_COMMANDS_COMMANDOBJECTHELP_H
 
-// C Includes
-// C++ Includes
-// Other libraries and framework includes
-// Project includes
 #include "lldb/Host/OptionParser.h"
 #include "lldb/Interpreter/CommandObject.h"
 #include "lldb/Interpreter/Options.h"
 
 namespace lldb_private {
 
-//-------------------------------------------------------------------------
 // CommandObjectHelp
-//-------------------------------------------------------------------------
 
 class CommandObjectHelp : public CommandObjectParsed {
 public:
@@ -30,14 +23,11 @@ public:
 
   ~CommandObjectHelp() override;
 
-  int HandleCompletion(Args &input, int &cursor_index,
-                       int &cursor_char_position, int match_start_point,
-                       int max_return_elements, bool &word_complete,
-                       StringList &matches) override;
+  void HandleCompletion(CompletionRequest &request) override;
 
   static void GenerateAdditionalHelpAvenuesMessage(
       Stream *s, llvm::StringRef command, llvm::StringRef prefix,
-      llvm::StringRef subcommand, bool include_apropos = true,
+      llvm::StringRef subcommand, bool include_upropos = true,
       bool include_type_lookup = true);
 
   class CommandOptions : public Options {
@@ -46,9 +36,9 @@ public:
 
     ~CommandOptions() override {}
 
-    Error SetOptionValue(uint32_t option_idx, llvm::StringRef option_arg,
-                         ExecutionContext *execution_context) override {
-      Error error;
+    Status SetOptionValue(uint32_t option_idx, llvm::StringRef option_arg,
+                          ExecutionContext *execution_context) override {
+      Status error;
       const int short_option = m_getopt_table[option_idx].val;
 
       switch (short_option) {
@@ -62,9 +52,7 @@ public:
         m_show_hidden = true;
         break;
       default:
-        error.SetErrorStringWithFormat("unrecognized option '%c'",
-                                       short_option);
-        break;
+        llvm_unreachable("Unimplemented option");
       }
 
       return error;
@@ -96,4 +84,4 @@ private:
 
 } // namespace lldb_private
 
-#endif // liblldb_CommandObjectHelp_h_
+#endif // LLDB_SOURCE_COMMANDS_COMMANDOBJECTHELP_H

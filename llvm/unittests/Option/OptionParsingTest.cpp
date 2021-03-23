@@ -1,9 +1,8 @@
 //===- unittest/Support/OptionParsingTest.cpp - OptTable tests ------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -18,8 +17,9 @@ using namespace llvm::opt;
 
 enum ID {
   OPT_INVALID = 0, // This is not an option ID.
-#define OPTION(PREFIX, NAME, ID, KIND, GROUP, ALIAS, ALIASARGS, FLAGS, PARAM, \
-               HELPTEXT, METAVAR) OPT_##ID,
+#define OPTION(PREFIX, NAME, ID, KIND, GROUP, ALIAS, ALIASARGS, FLAGS, PARAM,  \
+               HELPTEXT, METAVAR, VALUES)                                      \
+  OPT_##ID,
 #include "Opts.inc"
   LastOption
 #undef OPTION
@@ -36,10 +36,10 @@ enum OptionFlags {
 };
 
 static const OptTable::Info InfoTable[] = {
-#define OPTION(PREFIX, NAME, ID, KIND, GROUP, ALIAS, ALIASARGS, FLAGS, PARAM, \
-               HELPTEXT, METAVAR)   \
-  { PREFIX, NAME, HELPTEXT, METAVAR, OPT_##ID, Option::KIND##Class, PARAM, \
-    FLAGS, OPT_##GROUP, OPT_##ALIAS, ALIASARGS },
+#define OPTION(PREFIX, NAME, ID, KIND, GROUP, ALIAS, ALIASARGS, FLAGS, PARAM,  \
+               HELPTEXT, METAVAR, VALUES)                                      \
+  {PREFIX, NAME,  HELPTEXT,    METAVAR,     OPT_##ID,  Option::KIND##Class,    \
+   PARAM,  FLAGS, OPT_##GROUP, OPT_##ALIAS, ALIASARGS, VALUES},
 #include "Opts.inc"
 #undef OPTION
 };
@@ -95,6 +95,10 @@ TEST(Option, OptionParsing) {
   raw_string_ostream RSO(Help);
   T.PrintHelp(RSO, "test", "title!");
   EXPECT_NE(std::string::npos, Help.find("-A"));
+
+  // Check usage line.
+  T.PrintHelp(RSO, "name [options] file...", "title!");
+  EXPECT_NE(std::string::npos, Help.find("USAGE: name [options] file...\n"));
 
   // Test aliases.
   auto Cs = AL.filtered(OPT_C);
@@ -264,4 +268,111 @@ TEST(Option, FlagAliasToJoined) {
   EXPECT_TRUE(AL.hasArg(OPT_B));
   EXPECT_EQ(1U, AL.getAllArgValues(OPT_B).size());
   EXPECT_EQ("", AL.getAllArgValues(OPT_B)[0]);
+}
+
+TEST(Option, FindNearest) {
+  TestOptTable T;
+  std::string Nearest;
+
+  // Options that are too short should not be considered
+  // "near" other short options.
+  EXPECT_GT(T.findNearest("-A", Nearest), 4U);
+  EXPECT_GT(T.findNearest("/C", Nearest), 4U);
+  EXPECT_GT(T.findNearest("--C=foo", Nearest), 4U);
+
+  // The nearest candidate should mirror the amount of prefix
+  // characters used in the original string.
+  EXPECT_EQ(1U, T.findNearest("-blorb", Nearest));
+  EXPECT_EQ(Nearest, "-blorp");
+  EXPECT_EQ(1U, T.findNearest("--blorm", Nearest));
+  EXPECT_EQ(Nearest, "--blorp");
+  EXPECT_EQ(1U, T.findNearest("-blarg", Nearest));
+  EXPECT_EQ(Nearest, "-blarn");
+  EXPECT_EQ(1U, T.findNearest("--blarm", Nearest));
+  EXPECT_EQ(Nearest, "--blarn");
+  EXPECT_EQ(1U, T.findNearest("-fjormp", Nearest));
+  EXPECT_EQ(Nearest, "--fjormp");
+
+  // The nearest candidate respects the prefix and value delimiter
+  // of the original string.
+  EXPECT_EQ(1U, T.findNearest("/framb:foo", Nearest));
+  EXPECT_EQ(Nearest, "/cramb:foo");
+
+  // `--glormp` should have an editing distance > 0 from `--glormp=`.
+  EXPECT_GT(T.findNearest("--glorrmp", Nearest), 0U);
+  EXPECT_EQ(Nearest, "--glorrmp=");
+  EXPECT_EQ(0U, T.findNearest("--glorrmp=foo", Nearest));
+
+  // `--blurmps` should correct to `--blurmp`, not `--blurmp=`, even though
+  // both naively have an editing distance of 1.
+  EXPECT_EQ(1U, T.findNearest("--blurmps", Nearest));
+  EXPECT_EQ(Nearest, "--blurmp");
+
+  // ...but `--blurmps=foo` should correct to `--blurmp=foo`.
+  EXPECT_EQ(1U, T.findNearest("--blurmps=foo", Nearest));
+  EXPECT_EQ(Nearest, "--blurmp=foo");
+
+  // Flags should be included and excluded as specified.
+  EXPECT_EQ(1U, T.findNearest("-doopf", Nearest, /*FlagsToInclude=*/OptFlag2));
+  EXPECT_EQ(Nearest, "-doopf2");
+  EXPECT_EQ(1U, T.findNearest("-doopf", Nearest,
+                              /*FlagsToInclude=*/0,
+                              /*FlagsToExclude=*/OptFlag2));
+  EXPECT_EQ(Nearest, "-doopf1");
+}
+
+TEST(DISABLED_Option, FindNearestFIXME) {
+  TestOptTable T;
+  std::string Nearest;
+
+  // FIXME: Options with joined values should not have those values considered
+  // when calculating distance. The test below would fail if run, but it should
+  // succeed.
+  EXPECT_EQ(1U, T.findNearest("--erbghFoo", Nearest));
+  EXPECT_EQ(Nearest, "--ermghFoo");
+
+}
+
+TEST(Option, ParseGroupedShortOptions) {
+  TestOptTable T;
+  T.setGroupedShortOptions(true);
+  unsigned MAI, MAC;
+
+  // Grouped short options can be followed by a long Flag (-Joo), or a non-Flag
+  // option (-C=1).
+  const char *Args1[] = {"-AIJ", "-AIJoo", "-AC=1"};
+  InputArgList AL = T.ParseArgs(Args1, MAI, MAC);
+  EXPECT_TRUE(AL.hasArg(OPT_A));
+  EXPECT_TRUE(AL.hasArg(OPT_H));
+  ASSERT_EQ((size_t)2, AL.getAllArgValues(OPT_B).size());
+  EXPECT_EQ("foo", AL.getAllArgValues(OPT_B)[0]);
+  EXPECT_EQ("bar", AL.getAllArgValues(OPT_B)[1]);
+  ASSERT_TRUE(AL.hasArg(OPT_C));
+  EXPECT_EQ("1", AL.getAllArgValues(OPT_C)[0]);
+
+  // Prefer a long option to a short option.
+  const char *Args2[] = {"-AB"};
+  InputArgList AL2 = T.ParseArgs(Args2, MAI, MAC);
+  EXPECT_TRUE(!AL2.hasArg(OPT_A));
+  EXPECT_TRUE(AL2.hasArg(OPT_AB));
+
+  // Short options followed by a long option. We probably should disallow this.
+  const char *Args3[] = {"-AIblorp"};
+  InputArgList AL3 = T.ParseArgs(Args3, MAI, MAC);
+  EXPECT_TRUE(AL3.hasArg(OPT_A));
+  EXPECT_TRUE(AL3.hasArg(OPT_Blorp));
+}
+
+TEST(Option, UnknownOptions) {
+  TestOptTable T;
+  unsigned MAI, MAC;
+  const char *Args[] = {"-u", "--long", "0"};
+  for (int I = 0; I < 2; ++I) {
+    T.setGroupedShortOptions(I != 0);
+    InputArgList AL = T.ParseArgs(Args, MAI, MAC);
+    const std::vector<std::string> Unknown = AL.getAllArgValues(OPT_UNKNOWN);
+    ASSERT_EQ((size_t)2, Unknown.size());
+    EXPECT_EQ("-u", Unknown[0]);
+    EXPECT_EQ("--long", Unknown[1]);
+  }
 }

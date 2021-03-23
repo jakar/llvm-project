@@ -1,6 +1,6 @@
-; RUN: llc -asm-verbose=false < %s -mattr=+vfp3,+fp16 | FileCheck %s -check-prefix=CHECK-FP16  --check-prefix=CHECK-VFP -check-prefix=CHECK-ALL
-; RUN: llc -asm-verbose=false < %s | FileCheck %s -check-prefix=CHECK-LIBCALL --check-prefix=CHECK-VFP -check-prefix=CHECK-ALL --check-prefix=CHECK-LIBCALL-VFP
-; RUN: llc -asm-verbose=false < %s -mattr=-vfp2 | FileCheck %s --check-prefix=CHECK-LIBCALL -check-prefix=CHECK-NOVFP -check-prefix=CHECK-ALL
+; RUN: llc -asm-verbose=false < %s -mattr=+vfp3,+fp16 | FileCheck -allow-deprecated-dag-overlap %s -check-prefix=CHECK-FP16  --check-prefix=CHECK-VFP -check-prefix=CHECK-ALL
+; RUN: llc -asm-verbose=false < %s | FileCheck -allow-deprecated-dag-overlap %s -check-prefix=CHECK-LIBCALL --check-prefix=CHECK-VFP -check-prefix=CHECK-ALL --check-prefix=CHECK-LIBCALL-VFP
+; RUN: llc -asm-verbose=false < %s -mattr=-fpregs | FileCheck -allow-deprecated-dag-overlap %s --check-prefix=CHECK-LIBCALL -check-prefix=CHECK-NOVFP -check-prefix=CHECK-ALL
 
 target datalayout = "e-p:32:32:32-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-n32"
 target triple = "armv7---eabihf"
@@ -170,8 +170,10 @@ define void @test_select(half* %p, half* %q, i1 zeroext %c) #0 {
 ; CHECK-LIBCALL: bl __aeabi_h2f
 ; CHECK-VFP: vcmp.f32
 ; CHECK-NOVFP: bl __aeabi_fcmpeq
-; CHECK-FP16: vmrs APSR_nzcv, fpscr
-; CHECK-ALL: movw{{ne|eq}}
+; CHECK-VFP-NEXT: vmrs APSR_nzcv, fpscr
+; CHECK-VFP-NEXT: movwne
+; CHECK-NOVFP-NEXT: clz r0, r0
+; CHECK-NOVFP-NEXT: lsr r0, r0, #5
 define i1 @test_fcmp_une(half* %p, half* %q) #0 {
   %a = load half, half* %p, align 2
   %b = load half, half* %q, align 2
@@ -200,7 +202,7 @@ define i1 @test_fcmp_ueq(half* %p, half* %q) #0 {
 ; CHECK-FP16: vcvtb.f32.f16
 ; CHECK-LIBCALL: bl __aeabi_h2f
 ; CHECK-LIBCALL: bl __aeabi_h2f
-; CHECK-VFP: vcmpe.f32
+; CHECK-VFP: vcmp.f32
 ; CHECK-NOVFP: bl __aeabi_fcmplt
 ; CHECK-FP16: vmrs APSR_nzcv, fpscr
 ; CHECK-VFP: strmi
@@ -422,7 +424,7 @@ declare half @llvm.fmuladd.f16(half %a, half %b, half %c) #0
 ; CHECK-FP16: vsqrt.f32
 ; CHECK-FP16: vcvtb.f16.f32
 ; CHECK-LIBCALL: bl __aeabi_h2f
-; CHECK-VFP-LIBCALL: vsqrt.f32
+; CHECK-LIBCALL-VFP: vsqrt.f32
 ; CHECK-NOVFP: bl sqrtf
 ; CHECK-LIBCALL: bl __aeabi_f2h
 define void @test_sqrt(half* %p) #0 {
@@ -491,6 +493,21 @@ define void @test_pow(half* %p, half* %q) #0 {
   %a = load half, half* %p, align 2
   %b = load half, half* %q, align 2
   %r = call half @llvm.pow.f16(half %a, half %b)
+  store half %r, half* %p
+  ret void
+}
+
+; CHECK-FP16-LABEL: test_cbrt:
+; CHECK-FP16: vcvtb.f32.f16
+; CHECK-FP16: bl powf
+; CHECK-FP16: vcvtb.f16.f32
+; CHECK-LIBCALL-LABEL: test_cbrt:
+; CHECK-LIBCALL: bl __aeabi_h2f
+; CHECK-LIBCALL: bl powf
+; CHECK-LIBCALL: bl __aeabi_f2h
+define void @test_cbrt(half* %p) #0 {
+  %a = load half, half* %p, align 2
+  %r = call half @llvm.pow.f16(half %a, half 0x3FD5540000000000)
   store half %r, half* %p
   ret void
 }
@@ -642,17 +659,19 @@ define void @test_maxnum(half* %p, half* %q) #0 {
   ret void
 }
 
-; CHECK-ALL-LABEL: test_minnan:
+; CHECK-ALL-LABEL: test_minimum:
 ; CHECK-FP16: vmov.f32 s0, #1.000000e+00
 ; CHECK-FP16: vcvtb.f32.f16
 ; CHECK-LIBCALL: bl __aeabi_h2f
 ; CHECK-LIBCALL-VFP: vmov.f32 s{{[0-9]+}}, #1.000000e+00
 ; CHECK-NOVFP: mov r{{[0-9]+}}, #1065353216
-; CHECK-VFP: vmin.f32
+; CHECK-VFP: vcmp.f32
+; CHECK-VFP: vmrs
+; CHECK-VFP: vmovlt.f32
 ; CHECK-NOVFP: bl __aeabi_fcmpge
 ; CHECK-FP16: vcvtb.f16.f32
 ; CHECK-LIBCALL: bl __aeabi_f2h
-define void @test_minnan(half* %p) #0 {
+define void @test_minimum(half* %p) #0 {
   %a = load half, half* %p, align 2
   %c = fcmp ult half %a, 1.0
   %r = select i1 %c, half %a, half 1.0
@@ -660,17 +679,19 @@ define void @test_minnan(half* %p) #0 {
   ret void
 }
 
-; CHECK-ALL-LABEL: test_maxnan:
+; CHECK-ALL-LABEL: test_maximum:
 ; CHECK-FP16: vmov.f32 s0, #1.000000e+00
 ; CHECK-FP16: vcvtb.f32.f16
 ; CHECK-LIBCALL: bl __aeabi_h2f
 ; CHECK-LIBCALL-VFP: vmov.f32 s0, #1.000000e+00
 ; CHECK-NOVFP: mov r{{[0-9]+}}, #1065353216
-; CHECK-VFP: vmax.f32
+; CHECK-VFP: vcmp.f32
+; CHECK-VFP: vmrs
+; CHECK-VFP: vmovhi.f32
 ; CHECK-NOVFP: bl __aeabi_fcmple
 ; CHECK-FP16: vcvtb.f16.f32
 ; CHECK-LIBCALL: bl __aeabi_f2h
-define void @test_maxnan(half* %p) #0 {
+define void @test_maximum(half* %p) #0 {
   %a = load half, half* %p, align 2
   %c = fcmp ugt half %a, 1.0
   %r = select i1 %c, half %a, half 1.0
@@ -679,18 +700,44 @@ define void @test_maxnan(half* %p) #0 {
 }
 
 ; CHECK-FP16-LABEL: test_copysign:
-; CHECK-FP16: vcvtb.f32.f16
-; CHECK-FP16: vcvtb.f32.f16
-; CHECK-FP16: vbsl
-; CHECK-FP16: vcvtb.f16.f32
+; CHECK-FP16:         ldrh r2, [r0]
+; CHECK-FP16-NEXT:    vmov.i32 d16, #0x80000000
+; CHECK-FP16-NEXT:    ldrh r1, [r1]
+; CHECK-FP16-NEXT:    vmov s0, r2
+; CHECK-FP16-NEXT:    vmov s2, r1
+; CHECK-FP16-NEXT:    vcvtb.f32.f16 s0, s0
+; CHECK-FP16-NEXT:    vcvtb.f32.f16 s2, s2
+; CHECK-FP16-NEXT:    vbit d0, d1, d16
+; CHECK-FP16-NEXT:    vcvtb.f16.f32 s0, s0
+; CHECK-FP16-NEXT:    vmov r1, s0
+; CHECK-FP16-NEXT:    strh r1, [r0]
+; CHECK-FP16-NEXT:    bx lr
+
 ; CHECK-LIBCALL-LABEL: test_copysign:
+; CHECK-LIBCALL-VFP:         .fnstart
+; CHECK-LIBCALL-VFP-NEXT:    .save {r4, r5, r11, lr}
+; CHECK-LIBCALL-VFP-NEXT:    push {r4, r5, r11, lr}
+; CHECK-LIBCALL-VFP-NEXT:    .vsave {d8, d9}
+; CHECK-LIBCALL-VFP-NEXT:    vpush {d8, d9}
+; CHECK-LIBCALL-VFP-NEXT:    mov r5, r0
+; CHECK-LIBCALL-VFP-NEXT:    ldrh r0, [r0]
+; CHECK-LIBCALL-VFP-NEXT:    mov r4, r1
 ; CHECK-LIBCALL: bl __aeabi_h2f
+; CHECK-LIBCALL-VFP:         ldrh r1, [r4]
+; CHECK-LIBCALL-VFP-NEXT:    vmov s18, r0
+; CHECK-LIBCALL-VFP-NEXT:    vmov.i32 d8, #0x80000000
+; CHECK-LIBCALL-VFP-NEXT:    mov r0, r1
 ; CHECK-LIBCALL: bl __aeabi_h2f
-; CHECK-VFP-LIBCALL: vbsl
-; CHECK-NOVFP: bic
-; CHECK-NOVFP: and
-; CHECK-NOVFP: orr
+; CHECK-LIBCALL-VFP:         vmov s0, r0
+; CHECK-LIBCALL-VFP-NEXT:    vbif d0, d9, d8
+; CHECK-LIBCALL-VFP-NEXT:    vmov r0, s0
 ; CHECK-LIBCALL: bl __aeabi_f2h
+; CHECK-LIBCALL-VFP:         strh r0, [r5]
+; CHECK-LIBCALL-VFP-NEXT:    vpop {d8, d9}
+; CHECK-LIBCALL-VFP-NEXT:    pop {r4, r5, r11, pc}
+; CHECK-NOVFP: and
+; CHECK-NOVFP: bic
+; CHECK-NOVFP: orr
 define void @test_copysign(half* %p, half* %q) #0 {
   %a = load half, half* %p, align 2
   %b = load half, half* %q, align 2
@@ -799,7 +846,7 @@ define void @test_round(half* %p) {
 ; CHECK-LIBCALL: bl __aeabi_h2f
 ; CHECK-LIBCALL: bl __aeabi_h2f
 ; CHECK-LIBCALL: bl __aeabi_h2f
-; CHECK-VFP-LIBCALL: vmla.f32
+; CHECK-LIBCALL-VFP: vmla.f32
 ; CHECK-NOVFP: bl __aeabi_fmul
 ; CHECK-LIBCALL: bl __aeabi_f2h
 define void @test_fmuladd(half* %p, half* %q, half* %r) #0 {
@@ -817,26 +864,37 @@ define void @test_fmuladd(half* %p, half* %q, half* %r) #0 {
 
 ; CHECK-ALL-LABEL: test_insertelement:
 ; CHECK-ALL: sub sp, sp, #8
-; CHECK-ALL: ldrh
-; CHECK-ALL: strh
-; CHECK-ALL: ldrh
-; CHECK-ALL: strh
-; CHECK-ALL: ldrh
-; CHECK-ALL: strh
-; CHECK-ALL: ldrh
-; CHECK-ALL: strh
-; CHECK-ALL: mov
-; CHECK-ALL-DAG: ldrh
-; CHECK-ALL-DAG: orr
-; CHECK-ALL: strh
-; CHECK-ALL: ldrh
-; CHECK-ALL: strh
-; CHECK-ALL: ldrh
-; CHECK-ALL: strh
-; CHECK-ALL: ldrh
-; CHECK-ALL: strh
-; CHECK-ALL: ldrh
-; CHECK-ALL: strh
+
+; CHECK-VFP:	and	
+; CHECK-VFP:	mov	
+; CHECK-VFP:	ldrd	
+; CHECK-VFP:	orr	
+; CHECK-VFP:	ldrh	
+; CHECK-VFP:	stm	
+; CHECK-VFP:	strh	
+; CHECK-VFP:	ldm	
+; CHECK-VFP:	stm	
+
+; CHECK-NOVFP: ldrh
+; CHECK-NOVFP: ldrh
+; CHECK-NOVFP: ldrh
+; CHECK-NOVFP: ldrh
+; CHECK-NOVFP-DAG: strh
+; CHECK-NOVFP-DAG: strh
+; CHECK-NOVFP-DAG: mov
+; CHECK-NOVFP-DAG: ldrh
+; CHECK-NOVFP-DAG: orr
+; CHECK-NOVFP-DAG: strh
+; CHECK-NOVFP-DAG: strh
+; CHECK-NOVFP-DAG: strh
+; CHECK-NOVFP-DAG: ldrh
+; CHECK-NOVFP-DAG: ldrh
+; CHECK-NOVFP-DAG: ldrh
+; CHECK-NOVFP-DAG: strh
+; CHECK-NOVFP-DAG: strh
+; CHECK-NOVFP-DAG: strh
+; CHECK-NOVFP-DAG: strh
+
 ; CHECK-ALL: add sp, sp, #8
 define void @test_insertelement(half* %p, <4 x half>* %q, i32 %i) #0 {
   %a = load half, half* %p, align 2
@@ -901,7 +959,6 @@ define void @test_extractvalue(%struct.dummy* %p, half* %q) {
 }
 
 ; CHECK-ALL-LABEL: test_struct_return:
-; CHECK-FP16: vcvtb.f32.f16
 ; CHECK-VFP-LIBCALL: bl __aeabi_h2f
 ; CHECK-NOVFP-DAG: ldr
 ; CHECK-NOVFP-DAG: ldrh

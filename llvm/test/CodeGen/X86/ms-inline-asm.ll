@@ -1,4 +1,4 @@
-; RUN: llc < %s -march=x86 -mcpu=core2 -no-integrated-as | FileCheck %s
+; RUN: llc < %s -mtriple=i686-- -mcpu=core2 -no-integrated-as | FileCheck %s
 
 define i32 @t1() nounwind {
 entry:
@@ -92,7 +92,7 @@ entry:
 ; CHECK-LABEL: t30:
 ; CHECK: {{## InlineAsm Start|#APP}}
 ; CHECK: .intel_syntax
-; CHECK: lea edi, dword ptr [{{_?}}results]
+; CHECK: lea edi, dword ptr [offset {{_?}}results]
 ; CHECK: .att_syntax
 ; CHECK: {{## InlineAsm End|#NO_APP}}
 ; CHECK: {{## InlineAsm Start|#APP}}

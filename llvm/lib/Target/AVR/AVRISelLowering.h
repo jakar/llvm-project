@@ -1,9 +1,8 @@
 //===-- AVRISelLowering.h - AVR DAG Lowering Interface ----------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -16,7 +15,7 @@
 #define LLVM_AVR_ISEL_LOWERING_H
 
 #include "llvm/CodeGen/CallingConvLower.h"
-#include "llvm/Target/TargetLowering.h"
+#include "llvm/CodeGen/TargetLowering.h"
 
 namespace llvm {
 
@@ -37,8 +36,18 @@ enum NodeType {
   /// TargetExternalSymbol, and TargetGlobalAddress.
   WRAPPER,
   LSL,     ///< Logical shift left.
+  LSL4,    ///< Logical shift left 4 bits.
+  LSL8,    ///< Logical shift left 8 bits.
+  LSL12,   ///< Logical shift left 12 bits.
   LSR,     ///< Logical shift right.
+  LSR4,    ///< Logical shift right 4 bits.
+  LSR8,    ///< Logical shift right 8 bits.
+  LSR12,   ///< Logical shift right 12 bits.
   ASR,     ///< Arithmetic shift right.
+  ASR8,    ///< Arithmetic shift right 8 bits.
+  LSL7,    ///< Logical shift left 7 bits.
+  LSR7,    ///< Logical shift right 7 bits.
+  ASR7,    ///< Arithmetic shift right 7 bits.
   ROR,     ///< Bit rotate right.
   ROL,     ///< Bit rotate left.
   LSLLOOP, ///< A loop of single logical shift left instructions.
@@ -57,6 +66,8 @@ enum NodeType {
   CMPC,
   /// Test for zero or minus instruction.
   TST,
+  /// Swap Rd[7:4] <-> Rd[3:0].
+  SWAP,
   /// Operand 0 and operand 1 are selection variable, operand 2
   /// is condition code and operand 3 is flag operand.
   SELECT_CC
@@ -64,17 +75,24 @@ enum NodeType {
 
 } // end of namespace AVRISD
 
+class AVRSubtarget;
 class AVRTargetMachine;
 
 /// Performs target lowering for the AVR.
 class AVRTargetLowering : public TargetLowering {
 public:
-  explicit AVRTargetLowering(AVRTargetMachine &TM);
+  explicit AVRTargetLowering(const AVRTargetMachine &TM,
+                             const AVRSubtarget &STI);
 
 public:
   MVT getScalarShiftAmountTy(const DataLayout &, EVT LHSTy) const override {
     return MVT::i8;
   }
+
+  MVT::SimpleValueType getCmpLibcallReturnType() const override {
+    return MVT::i8;
+  }
+
   const char *getTargetNodeName(unsigned Opcode) const override;
 
   SDValue LowerOperation(SDValue Op, SelectionDAG &DAG) const override;
@@ -83,7 +101,8 @@ public:
                           SelectionDAG &DAG) const override;
 
   bool isLegalAddressingMode(const DataLayout &DL, const AddrMode &AM, Type *Ty,
-                             unsigned AS) const override;
+                             unsigned AS,
+                             Instruction *I = nullptr) const override;
 
   bool getPreIndexedAddressParts(SDNode *N, SDValue &Base, SDValue &Offset,
                                  ISD::MemIndexedMode &AM,
@@ -118,12 +137,19 @@ public:
                                     std::vector<SDValue> &Ops,
                                     SelectionDAG &DAG) const override;
 
-  unsigned getRegisterByName(const char* RegName, EVT VT,
-                             SelectionDAG &DAG) const override;
+  Register getRegisterByName(const char* RegName, LLT VT,
+                             const MachineFunction &MF) const override;
+
+  bool shouldSplitFunctionArgumentsAsLittleEndian(const DataLayout &DL)
+    const override {
+    return false;
+  }
 
 private:
   SDValue getAVRCmp(SDValue LHS, SDValue RHS, ISD::CondCode CC, SDValue &AVRcc,
                     SelectionDAG &DAG, SDLoc dl) const;
+  SDValue getAVRCmp(SDValue LHS, SDValue RHS, SelectionDAG &DAG,
+                    SDLoc dl) const;
   SDValue LowerShifts(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerDivRem(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerGlobalAddress(SDValue Op, SelectionDAG &DAG) const;
@@ -134,10 +160,8 @@ private:
   SDValue LowerSETCC(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerVASTART(SDValue Op, SelectionDAG &DAG) const;
 
-  CCAssignFn *CCAssignFnForReturn(CallingConv::ID CC) const;
-
-  bool CanLowerReturn(CallingConv::ID CallConv,
-                      MachineFunction &MF, bool isVarArg,
+  bool CanLowerReturn(CallingConv::ID CallConv, MachineFunction &MF,
+                      bool isVarArg,
                       const SmallVectorImpl<ISD::OutputArg> &Outs,
                       LLVMContext &Context) const override;
 
@@ -157,6 +181,10 @@ private:
                           const SmallVectorImpl<ISD::InputArg> &Ins,
                           const SDLoc &dl, SelectionDAG &DAG,
                           SmallVectorImpl<SDValue> &InVals) const;
+
+protected:
+
+  const AVRSubtarget &Subtarget;
 
 private:
   MachineBasicBlock *insertShift(MachineInstr &MI, MachineBasicBlock *BB) const;

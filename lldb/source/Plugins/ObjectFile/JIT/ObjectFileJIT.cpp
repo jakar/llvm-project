@@ -1,37 +1,35 @@
-//===-- ObjectFileJIT.cpp ---------------------------------------*- C++ -*-===//
+//===-- ObjectFileJIT.cpp -------------------------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
 #include "llvm/ADT/StringRef.h"
 
 #include "ObjectFileJIT.h"
-
-#include "lldb/Core/ArchSpec.h"
 #include "lldb/Core/Debugger.h"
 #include "lldb/Core/FileSpecList.h"
 #include "lldb/Core/Module.h"
 #include "lldb/Core/ModuleSpec.h"
 #include "lldb/Core/PluginManager.h"
-#include "lldb/Core/RangeMap.h"
 #include "lldb/Core/Section.h"
 #include "lldb/Core/StreamFile.h"
-#include "lldb/Core/Timer.h"
 #include "lldb/Host/Host.h"
 #include "lldb/Symbol/ObjectFile.h"
 #include "lldb/Target/Platform.h"
 #include "lldb/Target/Process.h"
 #include "lldb/Target/SectionLoadList.h"
 #include "lldb/Target/Target.h"
+#include "lldb/Utility/ArchSpec.h"
 #include "lldb/Utility/DataBuffer.h"
 #include "lldb/Utility/DataBufferHeap.h"
 #include "lldb/Utility/FileSpec.h"
 #include "lldb/Utility/Log.h"
+#include "lldb/Utility/RangeMap.h"
 #include "lldb/Utility/StreamString.h"
+#include "lldb/Utility/Timer.h"
 #include "lldb/Utility/UUID.h"
 
 #ifndef __APPLE__
@@ -40,6 +38,10 @@
 
 using namespace lldb;
 using namespace lldb_private;
+
+LLDB_PLUGIN_DEFINE(ObjectFileJIT)
+
+char ObjectFileJIT::ID;
 
 void ObjectFileJIT::Initialize() {
   PluginManager::RegisterPlugin(GetPluginNameStatic(),
@@ -66,18 +68,18 @@ ObjectFile *ObjectFileJIT::CreateInstance(const lldb::ModuleSP &module_sp,
                                           const FileSpec *file,
                                           lldb::offset_t file_offset,
                                           lldb::offset_t length) {
-  // JIT'ed object file is backed by the ObjectFileJITDelegate, never
-  // read from a file
-  return NULL;
+  // JIT'ed object file is backed by the ObjectFileJITDelegate, never read from
+  // a file
+  return nullptr;
 }
 
 ObjectFile *ObjectFileJIT::CreateMemoryInstance(const lldb::ModuleSP &module_sp,
                                                 DataBufferSP &data_sp,
                                                 const ProcessSP &process_sp,
                                                 lldb::addr_t header_addr) {
-  // JIT'ed object file is backed by the ObjectFileJITDelegate, never
-  // read from memory
-  return NULL;
+  // JIT'ed object file is backed by the ObjectFileJITDelegate, never read from
+  // memory
+  return nullptr;
 }
 
 size_t ObjectFileJIT::GetModuleSpecifications(
@@ -90,7 +92,7 @@ size_t ObjectFileJIT::GetModuleSpecifications(
 
 ObjectFileJIT::ObjectFileJIT(const lldb::ModuleSP &module_sp,
                              const ObjectFileJITDelegateSP &delegate_sp)
-    : ObjectFile(module_sp, NULL, 0, 0, DataBufferSP(), 0), m_delegate_wp() {
+    : ObjectFile(module_sp, nullptr, 0, 0, DataBufferSP(), 0), m_delegate_wp() {
   if (delegate_sp) {
     m_delegate_wp = delegate_sp;
     m_data.SetByteOrder(delegate_sp->GetByteOrder());
@@ -117,18 +119,18 @@ Symtab *ObjectFileJIT::GetSymtab() {
   ModuleSP module_sp(GetModule());
   if (module_sp) {
     std::lock_guard<std::recursive_mutex> guard(module_sp->GetMutex());
-    if (m_symtab_ap.get() == NULL) {
-      m_symtab_ap.reset(new Symtab(this));
+    if (m_symtab_up == nullptr) {
+      m_symtab_up = std::make_unique<Symtab>(this);
       std::lock_guard<std::recursive_mutex> symtab_guard(
-          m_symtab_ap->GetMutex());
+          m_symtab_up->GetMutex());
       ObjectFileJITDelegateSP delegate_sp(m_delegate_wp.lock());
       if (delegate_sp)
-        delegate_sp->PopulateSymtab(this, *m_symtab_ap);
+        delegate_sp->PopulateSymtab(this, *m_symtab_up);
       // TODO: get symbols from delegate
-      m_symtab_ap->Finalize();
+      m_symtab_up->Finalize();
     }
   }
-  return m_symtab_ap.get();
+  return m_symtab_up.get();
 }
 
 bool ObjectFileJIT::IsStripped() {
@@ -136,12 +138,12 @@ bool ObjectFileJIT::IsStripped() {
 }
 
 void ObjectFileJIT::CreateSections(SectionList &unified_section_list) {
-  if (!m_sections_ap.get()) {
-    m_sections_ap.reset(new SectionList());
+  if (!m_sections_up) {
+    m_sections_up = std::make_unique<SectionList>();
     ObjectFileJITDelegateSP delegate_sp(m_delegate_wp.lock());
     if (delegate_sp) {
-      delegate_sp->PopulateSectionList(this, *m_sections_ap);
-      unified_section_list = *m_sections_ap;
+      delegate_sp->PopulateSectionList(this, *m_sections_up);
+      unified_section_list = *m_sections_up;
     }
   }
 }
@@ -154,24 +156,24 @@ void ObjectFileJIT::Dump(Stream *s) {
     s->Indent();
     s->PutCString("ObjectFileJIT");
 
-    ArchSpec arch;
-    if (GetArchitecture(arch))
+    if (ArchSpec arch = GetArchitecture())
       *s << ", arch = " << arch.GetArchitectureName();
 
     s->EOL();
 
     SectionList *sections = GetSectionList();
     if (sections)
-      sections->Dump(s, NULL, true, UINT32_MAX);
+      sections->Dump(s->AsRawOstream(), s->GetIndentLevel(), nullptr, true,
+                     UINT32_MAX);
 
-    if (m_symtab_ap.get())
-      m_symtab_ap->Dump(s, NULL, eSortOrderNone);
+    if (m_symtab_up)
+      m_symtab_up->Dump(s, nullptr, eSortOrderNone);
   }
 }
 
-bool ObjectFileJIT::GetUUID(lldb_private::UUID *uuid) {
+UUID ObjectFileJIT::GetUUID() {
   // TODO: maybe get from delegate, not needed for first pass
-  return false;
+  return UUID();
 }
 
 uint32_t ObjectFileJIT::GetDependentModules(FileSpecList &files) {
@@ -185,22 +187,19 @@ lldb_private::Address ObjectFileJIT::GetEntryPointAddress() {
   return Address();
 }
 
-lldb_private::Address ObjectFileJIT::GetHeaderAddress() { return Address(); }
+lldb_private::Address ObjectFileJIT::GetBaseAddress() { return Address(); }
 
 ObjectFile::Type ObjectFileJIT::CalculateType() { return eTypeJIT; }
 
 ObjectFile::Strata ObjectFileJIT::CalculateStrata() { return eStrataJIT; }
 
-bool ObjectFileJIT::GetArchitecture(ArchSpec &arch) {
-  ObjectFileJITDelegateSP delegate_sp(m_delegate_wp.lock());
-  if (delegate_sp)
-    return delegate_sp->GetArchitecture(arch);
-  return false;
+ArchSpec ObjectFileJIT::GetArchitecture() {
+  if (ObjectFileJITDelegateSP delegate_sp = m_delegate_wp.lock())
+    return delegate_sp->GetArchitecture();
+  return ArchSpec();
 }
 
-//------------------------------------------------------------------
 // PluginInterface protocol
-//------------------------------------------------------------------
 lldb_private::ConstString ObjectFileJIT::GetPluginName() {
   return GetPluginNameStatic();
 }
@@ -215,12 +214,11 @@ bool ObjectFileJIT::SetLoadAddress(Target &target, lldb::addr_t value,
     const size_t num_sections = section_list->GetSize();
     // "value" is an offset to apply to each top level segment
     for (size_t sect_idx = 0; sect_idx < num_sections; ++sect_idx) {
-      // Iterate through the object file sections to find all
-      // of the sections that size on disk (to avoid __PAGEZERO)
-      // and load them
+      // Iterate through the object file sections to find all of the sections
+      // that size on disk (to avoid __PAGEZERO) and load them
       SectionSP section_sp(section_list->GetSectionAtIndex(sect_idx));
       if (section_sp && section_sp->GetFileSize() > 0 &&
-          section_sp->IsThreadSpecific() == false) {
+          !section_sp->IsThreadSpecific()) {
         if (target.GetSectionLoadList().SetSectionLoadAddress(
                 section_sp, section_sp->GetFileAddress() + value))
           ++num_loaded_sections;
@@ -230,9 +228,9 @@ bool ObjectFileJIT::SetLoadAddress(Target &target, lldb::addr_t value,
   return num_loaded_sections > 0;
 }
 
-size_t ObjectFileJIT::ReadSectionData(const lldb_private::Section *section,
+size_t ObjectFileJIT::ReadSectionData(lldb_private::Section *section,
                                       lldb::offset_t section_offset, void *dst,
-                                      size_t dst_len) const {
+                                      size_t dst_len) {
   lldb::offset_t file_size = section->GetFileSize();
   if (section_offset < file_size) {
     size_t src_len = file_size - section_offset;
@@ -248,19 +246,17 @@ size_t ObjectFileJIT::ReadSectionData(const lldb_private::Section *section,
 }
 
 size_t ObjectFileJIT::ReadSectionData(
-    const lldb_private::Section *section,
-    lldb_private::DataExtractor &section_data) const {
+    lldb_private::Section *section,
+    lldb_private::DataExtractor &section_data) {
   if (section->GetFileSize()) {
     const void *src = (void *)(uintptr_t)section->GetFileOffset();
 
-    DataBufferSP data_sp(
-        new lldb_private::DataBufferHeap(src, section->GetFileSize()));
-    if (data_sp) {
-      section_data.SetData(data_sp, 0, data_sp->GetByteSize());
-      section_data.SetByteOrder(GetByteOrder());
-      section_data.SetAddressByteSize(GetAddressByteSize());
-      return section_data.GetByteSize();
-    }
+    DataBufferSP data_sp =
+        std::make_shared<DataBufferHeap>(src, section->GetFileSize());
+    section_data.SetData(data_sp, 0, data_sp->GetByteSize());
+    section_data.SetByteOrder(GetByteOrder());
+    section_data.SetAddressByteSize(GetAddressByteSize());
+    return section_data.GetByteSize();
   }
   section_data.Clear();
   return 0;

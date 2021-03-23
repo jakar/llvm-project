@@ -1,13 +1,13 @@
 ; RUN: llc -march=amdgcn -mcpu=tonga -verify-machineinstrs < %s | FileCheck -check-prefix=CI -check-prefix=FUNC %s
 ; RUN: llc -march=amdgcn -mcpu=bonaire -verify-machineinstrs < %s | FileCheck -check-prefix=CI -check-prefix=FUNC %s
-; RUN: llc -march=amdgcn -mcpu=SI -verify-machineinstrs < %s | FileCheck -check-prefix=SI -check-prefix=FUNC %s
+; RUN: llc -march=amdgcn -mcpu=tahiti -verify-machineinstrs < %s | FileCheck -check-prefix=SI -check-prefix=FUNC %s
 
 ; FUNC-LABEL: {{^}}rint_f64:
 ; CI: v_rndne_f64_e32
 
 ; SI-DAG: v_add_f64
 ; SI-DAG: v_add_f64
-; SI-DAG v_cmp_gt_f64_e64
+; SI-DAG: v_cmp_gt_f64_e64
 ; SI: v_cndmask_b32
 ; SI: v_cndmask_b32
 ; SI: s_endpgm

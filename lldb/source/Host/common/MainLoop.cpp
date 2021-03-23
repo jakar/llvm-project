@@ -1,22 +1,23 @@
-//===-- MainLoop.cpp --------------------------------------------*- C++ -*-===//
+//===-- MainLoop.cpp ------------------------------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
 #include "llvm/Config/llvm-config.h"
+#include "lldb/Host/Config.h"
 
 #include "lldb/Host/MainLoop.h"
-#include "lldb/Utility/Error.h"
+#include "lldb/Host/PosixApi.h"
+#include "lldb/Utility/Status.h"
 #include <algorithm>
 #include <cassert>
 #include <cerrno>
 #include <csignal>
-#include <vector>
 #include <time.h>
+#include <vector>
 
 // Multiplexing is implemented using kqueue on systems that support it (BSD
 // variants including OSX). On linux we use ppoll, while android uses pselect
@@ -25,24 +26,22 @@
 
 #if HAVE_SYS_EVENT_H
 #include <sys/event.h>
-#elif defined(LLVM_ON_WIN32)
+#elif defined(_WIN32)
 #include <winsock2.h>
+#elif defined(__ANDROID__)
+#include <sys/syscall.h>
 #else
 #include <poll.h>
 #endif
 
-#ifdef LLVM_ON_WIN32
+#ifdef _WIN32
 #define POLL WSAPoll
 #else
 #define POLL poll
 #endif
 
-#ifdef __ANDROID__
-#define FORCE_PSELECT
-#endif
-
 #if SIGNAL_POLLING_UNSUPPORTED
-#ifdef LLVM_ON_WIN32
+#ifdef _WIN32
 typedef int sigset_t;
 typedef int siginfo_t;
 #endif
@@ -63,17 +62,19 @@ using namespace lldb_private;
 
 static sig_atomic_t g_signal_flags[NSIG];
 
+#ifndef SIGNAL_POLLING_UNSUPPORTED
 static void SignalHandler(int signo, siginfo_t *info, void *) {
   assert(signo < NSIG);
   g_signal_flags[signo] = 1;
 }
+#endif
 
 class MainLoop::RunImpl {
 public:
   RunImpl(MainLoop &loop);
   ~RunImpl() = default;
 
-  Error Poll();
+  Status Poll();
   void ProcessEvents();
 
 private:
@@ -85,7 +86,7 @@ private:
   int num_events = -1;
 
 #else
-#ifdef FORCE_PSELECT
+#ifdef __ANDROID__
   fd_set read_fd_set;
 #else
   std::vector<struct pollfd> read_fds;
@@ -100,7 +101,7 @@ MainLoop::RunImpl::RunImpl(MainLoop &loop) : loop(loop) {
   in_events.reserve(loop.m_read_fds.size());
 }
 
-Error MainLoop::RunImpl::Poll() {
+Status MainLoop::RunImpl::Poll() {
   in_events.resize(loop.m_read_fds.size());
   unsigned i = 0;
   for (auto &fd : loop.m_read_fds)
@@ -109,9 +110,15 @@ Error MainLoop::RunImpl::Poll() {
   num_events = kevent(loop.m_kqueue, in_events.data(), in_events.size(),
                       out_events, llvm::array_lengthof(out_events), nullptr);
 
-  if (num_events < 0)
-    return Error("kevent() failed with error %d\n", num_events);
-  return Error();
+  if (num_events < 0) {
+    if (errno == EINTR) {
+      // in case of EINTR, let the main loop run one iteration
+      // we need to zero num_events to avoid assertions failing
+      num_events = 0;
+    } else
+      return Status(errno, eErrorTypePOSIX);
+  }
+  return Status();
 }
 
 void MainLoop::RunImpl::ProcessEvents() {
@@ -133,28 +140,36 @@ void MainLoop::RunImpl::ProcessEvents() {
 }
 #else
 MainLoop::RunImpl::RunImpl(MainLoop &loop) : loop(loop) {
-#ifndef FORCE_PSELECT
+#ifndef __ANDROID__
   read_fds.reserve(loop.m_read_fds.size());
 #endif
 }
 
 sigset_t MainLoop::RunImpl::get_sigmask() {
-#if SIGNAL_POLLING_UNSUPPORTED
-  return 0;
-#else
   sigset_t sigmask;
+#if defined(_WIN32)
+  sigmask = 0;
+#elif SIGNAL_POLLING_UNSUPPORTED
+  sigemptyset(&sigmask);
+#else
   int ret = pthread_sigmask(SIG_SETMASK, nullptr, &sigmask);
   assert(ret == 0);
   (void) ret;
 
   for (const auto &sig : loop.m_signals)
     sigdelset(&sigmask, sig.first);
-  return sigmask;
 #endif
+  return sigmask;
 }
 
-#ifdef FORCE_PSELECT
-Error MainLoop::RunImpl::Poll() {
+#ifdef __ANDROID__
+Status MainLoop::RunImpl::Poll() {
+  // ppoll(2) is not supported on older all android versions. Also, older
+  // versions android (API <= 19) implemented pselect in a non-atomic way, as a
+  // combination of pthread_sigmask and select. This is not sufficient for us,
+  // as we rely on the atomicity to correctly implement signal polling, so we
+  // call the underlying syscall ourselves.
+
   FD_ZERO(&read_fd_set);
   int nfds = 0;
   for (const auto &fd : loop.m_read_fds) {
@@ -162,15 +177,26 @@ Error MainLoop::RunImpl::Poll() {
     nfds = std::max(nfds, fd.first + 1);
   }
 
-  sigset_t sigmask = get_sigmask();
-  if (pselect(nfds, &read_fd_set, nullptr, nullptr, nullptr, &sigmask) == -1 &&
-      errno != EINTR)
-    return Error(errno, eErrorTypePOSIX);
+  union {
+    sigset_t set;
+    uint64_t pad;
+  } kernel_sigset;
+  memset(&kernel_sigset, 0, sizeof(kernel_sigset));
+  kernel_sigset.set = get_sigmask();
 
-  return Error();
+  struct {
+    void *sigset_ptr;
+    size_t sigset_len;
+  } extra_data = {&kernel_sigset, sizeof(kernel_sigset)};
+  if (syscall(__NR_pselect6, nfds, &read_fd_set, nullptr, nullptr, nullptr,
+              &extra_data) == -1 &&
+      errno != EINTR)
+    return Status(errno, eErrorTypePOSIX);
+
+  return Status();
 }
 #else
-Error MainLoop::RunImpl::Poll() {
+Status MainLoop::RunImpl::Poll() {
   read_fds.clear();
 
   sigset_t sigmask = get_sigmask();
@@ -185,21 +211,27 @@ Error MainLoop::RunImpl::Poll() {
 
   if (ppoll(read_fds.data(), read_fds.size(), nullptr, &sigmask) == -1 &&
       errno != EINTR)
-    return Error(errno, eErrorTypePOSIX);
+    return Status(errno, eErrorTypePOSIX);
 
-  return Error();
+  return Status();
 }
 #endif
 
 void MainLoop::RunImpl::ProcessEvents() {
-#ifdef FORCE_PSELECT
-  for (const auto &fd : loop.m_read_fds) {
-    if (!FD_ISSET(fd.first, &read_fd_set))
-      continue;
-    IOObject::WaitableHandle handle = fd.first;
+#ifdef __ANDROID__
+  // Collect first all readable file descriptors into a separate vector and
+  // then iterate over it to invoke callbacks. Iterating directly over
+  // loop.m_read_fds is not possible because the callbacks can modify the
+  // container which could invalidate the iterator.
+  std::vector<IOObject::WaitableHandle> fds;
+  for (const auto &fd : loop.m_read_fds)
+    if (FD_ISSET(fd.first, &read_fd_set))
+      fds.push_back(fd.first);
+
+  for (const auto &handle : fds) {
 #else
   for (const auto &fd : read_fds) {
-    if ((fd.revents & POLLIN) == 0)
+    if ((fd.revents & (POLLIN | POLLHUP)) == 0)
       continue;
     IOObject::WaitableHandle handle = fd.fd;
 #endif
@@ -209,13 +241,16 @@ void MainLoop::RunImpl::ProcessEvents() {
     loop.ProcessReadObject(handle);
   }
 
-  for (const auto &entry : loop.m_signals) {
+  std::vector<int> signals;
+  for (const auto &entry : loop.m_signals)
+    if (g_signal_flags[entry.first] != 0)
+      signals.push_back(entry.first);
+
+  for (const auto &signal : signals) {
     if (loop.m_terminate_request)
       return;
-    if (g_signal_flags[entry.first] == 0)
-      continue; // No signal
-    g_signal_flags[entry.first] = 0;
-    loop.ProcessSignal(entry.first);
+    g_signal_flags[signal] = 0;
+    loop.ProcessSignal(signal);
   }
 }
 #endif
@@ -234,10 +269,10 @@ MainLoop::~MainLoop() {
   assert(m_signals.size() == 0);
 }
 
-MainLoop::ReadHandleUP
-MainLoop::RegisterReadObject(const IOObjectSP &object_sp,
-                                  const Callback &callback, Error &error) {
-#ifdef LLVM_ON_WIN32
+MainLoop::ReadHandleUP MainLoop::RegisterReadObject(const IOObjectSP &object_sp,
+                                                    const Callback &callback,
+                                                    Status &error) {
+#ifdef _WIN32
   if (object_sp->GetFdType() != IOObject:: eFDTypeSocket) {
     error.SetErrorString("MainLoop: non-socket types unsupported on Windows");
     return nullptr;
@@ -260,11 +295,9 @@ MainLoop::RegisterReadObject(const IOObjectSP &object_sp,
 }
 
 // We shall block the signal, then install the signal handler. The signal will
-// be unblocked in
-// the Run() function to check for signal delivery.
+// be unblocked in the Run() function to check for signal delivery.
 MainLoop::SignalHandleUP
-MainLoop::RegisterSignal(int signo, const Callback &callback,
-                              Error &error) {
+MainLoop::RegisterSignal(int signo, const Callback &callback, Status &error) {
 #ifdef SIGNAL_POLLING_UNSUPPORTED
   error.SetErrorString("Signal polling is not supported on this platform.");
   return nullptr;
@@ -286,8 +319,9 @@ MainLoop::RegisterSignal(int signo, const Callback &callback,
   g_signal_flags[signo] = 0;
 
   // Even if using kqueue, the signal handler will still be invoked, so it's
-  // important to replace it with our "bening" handler.
+  // important to replace it with our "benign" handler.
   int ret = sigaction(signo, &new_action, &info.old_action);
+  (void)ret;
   assert(ret == 0 && "sigaction failed");
 
 #if HAVE_SYS_EVENT_H
@@ -297,9 +331,9 @@ MainLoop::RegisterSignal(int signo, const Callback &callback,
   assert(ret == 0);
 #endif
 
-  // If we're using kqueue, the signal needs to be unblocked in order to recieve
-  // it. If using pselect/ppoll, we need to block it, and later unblock it as a
-  // part of the system call.
+  // If we're using kqueue, the signal needs to be unblocked in order to
+  // receive it. If using pselect/ppoll, we need to block it, and later unblock
+  // it as a part of the system call.
   ret = pthread_sigmask(HAVE_SYS_EVENT_H ? SIG_UNBLOCK : SIG_BLOCK,
                         &new_action.sa_mask, &old_set);
   assert(ret == 0 && "pthread_sigmask failed");
@@ -318,7 +352,7 @@ void MainLoop::UnregisterReadObject(IOObject::WaitableHandle handle) {
 
 void MainLoop::UnregisterSignal(int signo) {
 #if SIGNAL_POLLING_UNSUPPORTED
-  Error("Signal polling is not supported on this platform.");
+  Status("Signal polling is not supported on this platform.");
 #else
   auto it = m_signals.find(signo);
   assert(it != m_signals.end());
@@ -344,10 +378,10 @@ void MainLoop::UnregisterSignal(int signo) {
 #endif
 }
 
-Error MainLoop::Run() {
+Status MainLoop::Run() {
   m_terminate_request = false;
-  
-  Error error;
+
+  Status error;
   RunImpl impl(*this);
 
   // run until termination or until we run out of things to listen to
@@ -358,11 +392,8 @@ Error MainLoop::Run() {
       return error;
 
     impl.ProcessEvents();
-
-    if (m_terminate_request)
-      return Error();
   }
-  return Error();
+  return Status();
 }
 
 void MainLoop::ProcessSignal(int signo) {

@@ -1,9 +1,8 @@
-//===- SymbolRewriter.cpp - Symbol Rewriter ---------------------*- C++ -*-===//
+//===- SymbolRewriter.cpp - Symbol Rewriter -------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -57,25 +56,42 @@
 //
 //===----------------------------------------------------------------------===//
 
-#define DEBUG_TYPE "symbol-rewriter"
 #include "llvm/Transforms/Utils/SymbolRewriter.h"
-#include "llvm/Pass.h"
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallString.h"
-#include "llvm/IR/LegacyPassManager.h"
+#include "llvm/ADT/StringRef.h"
+#include "llvm/ADT/ilist.h"
+#include "llvm/ADT/iterator_range.h"
+#include "llvm/IR/Comdat.h"
+#include "llvm/IR/Function.h"
+#include "llvm/IR/GlobalAlias.h"
+#include "llvm/IR/GlobalObject.h"
+#include "llvm/IR/GlobalVariable.h"
+#include "llvm/IR/Module.h"
+#include "llvm/IR/Value.h"
+#include "llvm/InitializePasses.h"
+#include "llvm/Pass.h"
+#include "llvm/Support/Casting.h"
 #include "llvm/Support/CommandLine.h"
-#include "llvm/Support/Debug.h"
+#include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/ErrorOr.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/Regex.h"
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/YAMLParser.h"
-#include "llvm/Support/raw_ostream.h"
+#include <memory>
+#include <string>
+#include <vector>
 
 using namespace llvm;
 using namespace SymbolRewriter;
 
+#define DEBUG_TYPE "symbol-rewriter"
+
 static cl::list<std::string> RewriteMapFiles("rewrite-map-file",
                                              cl::desc("Symbol Rewrite Map"),
-                                             cl::value_desc("filename"));
+                                             cl::value_desc("filename"),
+                                             cl::Hidden);
 
 static void rewriteComdat(Module &M, GlobalObject *GO,
                           const std::string &Source,
@@ -92,16 +108,18 @@ static void rewriteComdat(Module &M, GlobalObject *GO,
 }
 
 namespace {
+
 template <RewriteDescriptor::Type DT, typename ValueType,
-          ValueType *(llvm::Module::*Get)(StringRef) const>
+          ValueType *(Module::*Get)(StringRef) const>
 class ExplicitRewriteDescriptor : public RewriteDescriptor {
 public:
   const std::string Source;
   const std::string Target;
 
   ExplicitRewriteDescriptor(StringRef S, StringRef T, const bool Naked)
-      : RewriteDescriptor(DT), Source(Naked ? StringRef("\01" + S.str()) : S),
-        Target(T) {}
+      : RewriteDescriptor(DT),
+        Source(std::string(Naked ? StringRef("\01" + S.str()) : S)),
+        Target(std::string(T)) {}
 
   bool performOnModule(Module &M) override;
 
@@ -110,8 +128,10 @@ public:
   }
 };
 
+} // end anonymous namespace
+
 template <RewriteDescriptor::Type DT, typename ValueType,
-          ValueType *(llvm::Module::*Get)(StringRef) const>
+          ValueType *(Module::*Get)(StringRef) const>
 bool ExplicitRewriteDescriptor<DT, ValueType, Get>::performOnModule(Module &M) {
   bool Changed = false;
   if (ValueType *S = (M.*Get)(Source)) {
@@ -128,17 +148,20 @@ bool ExplicitRewriteDescriptor<DT, ValueType, Get>::performOnModule(Module &M) {
   return Changed;
 }
 
+namespace {
+
 template <RewriteDescriptor::Type DT, typename ValueType,
-          ValueType *(llvm::Module::*Get)(StringRef) const,
+          ValueType *(Module::*Get)(StringRef) const,
           iterator_range<typename iplist<ValueType>::iterator>
-          (llvm::Module::*Iterator)()>
+          (Module::*Iterator)()>
 class PatternRewriteDescriptor : public RewriteDescriptor {
 public:
   const std::string Pattern;
   const std::string Transform;
 
   PatternRewriteDescriptor(StringRef P, StringRef T)
-    : RewriteDescriptor(DT), Pattern(P), Transform(T) { }
+      : RewriteDescriptor(DT), Pattern(std::string(P)),
+        Transform(std::string(T)) {}
 
   bool performOnModule(Module &M) override;
 
@@ -147,10 +170,12 @@ public:
   }
 };
 
+} // end anonymous namespace
+
 template <RewriteDescriptor::Type DT, typename ValueType,
-          ValueType *(llvm::Module::*Get)(StringRef) const,
+          ValueType *(Module::*Get)(StringRef) const,
           iterator_range<typename iplist<ValueType>::iterator>
-          (llvm::Module::*Iterator)()>
+          (Module::*Iterator)()>
 bool PatternRewriteDescriptor<DT, ValueType, Get, Iterator>::
 performOnModule(Module &M) {
   bool Changed = false;
@@ -166,7 +191,7 @@ performOnModule(Module &M) {
       continue;
 
     if (GlobalObject *GO = dyn_cast<GlobalObject>(&C))
-      rewriteComdat(M, GO, C.getName(), Name);
+      rewriteComdat(M, GO, std::string(C.getName()), Name);
 
     if (Value *V = (M.*Get)(Name))
       C.setValueName(V->getValueName());
@@ -178,55 +203,52 @@ performOnModule(Module &M) {
   return Changed;
 }
 
+namespace {
+
 /// Represents a rewrite for an explicitly named (function) symbol.  Both the
 /// source function name and target function name of the transformation are
 /// explicitly spelt out.
-typedef ExplicitRewriteDescriptor<RewriteDescriptor::Type::Function,
-                                  llvm::Function, &llvm::Module::getFunction>
-    ExplicitRewriteFunctionDescriptor;
+using ExplicitRewriteFunctionDescriptor =
+    ExplicitRewriteDescriptor<RewriteDescriptor::Type::Function, Function,
+                              &Module::getFunction>;
 
 /// Represents a rewrite for an explicitly named (global variable) symbol.  Both
 /// the source variable name and target variable name are spelt out.  This
 /// applies only to module level variables.
-typedef ExplicitRewriteDescriptor<RewriteDescriptor::Type::GlobalVariable,
-                                  llvm::GlobalVariable,
-                                  &llvm::Module::getGlobalVariable>
-    ExplicitRewriteGlobalVariableDescriptor;
+using ExplicitRewriteGlobalVariableDescriptor =
+    ExplicitRewriteDescriptor<RewriteDescriptor::Type::GlobalVariable,
+                              GlobalVariable, &Module::getGlobalVariable>;
 
 /// Represents a rewrite for an explicitly named global alias.  Both the source
 /// and target name are explicitly spelt out.
-typedef ExplicitRewriteDescriptor<RewriteDescriptor::Type::NamedAlias,
-                                  llvm::GlobalAlias,
-                                  &llvm::Module::getNamedAlias>
-    ExplicitRewriteNamedAliasDescriptor;
+using ExplicitRewriteNamedAliasDescriptor =
+    ExplicitRewriteDescriptor<RewriteDescriptor::Type::NamedAlias, GlobalAlias,
+                              &Module::getNamedAlias>;
 
 /// Represents a rewrite for a regular expression based pattern for functions.
 /// A pattern for the function name is provided and a transformation for that
 /// pattern to determine the target function name create the rewrite rule.
-typedef PatternRewriteDescriptor<RewriteDescriptor::Type::Function,
-                                 llvm::Function, &llvm::Module::getFunction,
-                                 &llvm::Module::functions>
-    PatternRewriteFunctionDescriptor;
+using PatternRewriteFunctionDescriptor =
+    PatternRewriteDescriptor<RewriteDescriptor::Type::Function, Function,
+                             &Module::getFunction, &Module::functions>;
 
 /// Represents a rewrite for a global variable based upon a matching pattern.
 /// Each global variable matching the provided pattern will be transformed as
 /// described in the transformation pattern for the target.  Applies only to
 /// module level variables.
-typedef PatternRewriteDescriptor<RewriteDescriptor::Type::GlobalVariable,
-                                 llvm::GlobalVariable,
-                                 &llvm::Module::getGlobalVariable,
-                                 &llvm::Module::globals>
-    PatternRewriteGlobalVariableDescriptor;
+using PatternRewriteGlobalVariableDescriptor =
+    PatternRewriteDescriptor<RewriteDescriptor::Type::GlobalVariable,
+                             GlobalVariable, &Module::getGlobalVariable,
+                             &Module::globals>;
 
 /// PatternRewriteNamedAliasDescriptor - represents a rewrite for global
 /// aliases which match a given pattern.  The provided transformation will be
 /// applied to each of the matching names.
-typedef PatternRewriteDescriptor<RewriteDescriptor::Type::NamedAlias,
-                                 llvm::GlobalAlias,
-                                 &llvm::Module::getNamedAlias,
-                                 &llvm::Module::aliases>
-    PatternRewriteNamedAliasDescriptor;
-} // namespace
+using PatternRewriteNamedAliasDescriptor =
+    PatternRewriteDescriptor<RewriteDescriptor::Type::NamedAlias, GlobalAlias,
+                             &Module::getNamedAlias, &Module::aliases>;
+
+} // end anonymous namespace
 
 bool RewriteMapParser::parse(const std::string &MapFile,
                              RewriteDescriptorList *DL) {
@@ -332,19 +354,19 @@ parseRewriteFunctionDescriptor(yaml::Stream &YS, yaml::ScalarNode *K,
     if (KeyValue.equals("source")) {
       std::string Error;
 
-      Source = Value->getValue(ValueStorage);
+      Source = std::string(Value->getValue(ValueStorage));
       if (!Regex(Source).isValid(Error)) {
         YS.printError(Field.getKey(), "invalid regex: " + Error);
         return false;
       }
     } else if (KeyValue.equals("target")) {
-      Target = Value->getValue(ValueStorage);
+      Target = std::string(Value->getValue(ValueStorage));
     } else if (KeyValue.equals("transform")) {
-      Transform = Value->getValue(ValueStorage);
+      Transform = std::string(Value->getValue(ValueStorage));
     } else if (KeyValue.equals("naked")) {
       std::string Undecorated;
 
-      Undecorated = Value->getValue(ValueStorage);
+      Undecorated = std::string(Value->getValue(ValueStorage));
       Naked = StringRef(Undecorated).lower() == "true" || Undecorated == "1";
     } else {
       YS.printError(Field.getKey(), "unknown key for function");
@@ -361,11 +383,11 @@ parseRewriteFunctionDescriptor(yaml::Stream &YS, yaml::ScalarNode *K,
   // TODO see if there is a more elegant solution to selecting the rewrite
   // descriptor type
   if (!Target.empty())
-    DL->push_back(llvm::make_unique<ExplicitRewriteFunctionDescriptor>(
+    DL->push_back(std::make_unique<ExplicitRewriteFunctionDescriptor>(
         Source, Target, Naked));
   else
     DL->push_back(
-        llvm::make_unique<PatternRewriteFunctionDescriptor>(Source, Transform));
+        std::make_unique<PatternRewriteFunctionDescriptor>(Source, Transform));
 
   return true;
 }
@@ -401,15 +423,15 @@ parseRewriteGlobalVariableDescriptor(yaml::Stream &YS, yaml::ScalarNode *K,
     if (KeyValue.equals("source")) {
       std::string Error;
 
-      Source = Value->getValue(ValueStorage);
+      Source = std::string(Value->getValue(ValueStorage));
       if (!Regex(Source).isValid(Error)) {
         YS.printError(Field.getKey(), "invalid regex: " + Error);
         return false;
       }
     } else if (KeyValue.equals("target")) {
-      Target = Value->getValue(ValueStorage);
+      Target = std::string(Value->getValue(ValueStorage));
     } else if (KeyValue.equals("transform")) {
-      Transform = Value->getValue(ValueStorage);
+      Transform = std::string(Value->getValue(ValueStorage));
     } else {
       YS.printError(Field.getKey(), "unknown Key for Global Variable");
       return false;
@@ -423,11 +445,11 @@ parseRewriteGlobalVariableDescriptor(yaml::Stream &YS, yaml::ScalarNode *K,
   }
 
   if (!Target.empty())
-    DL->push_back(llvm::make_unique<ExplicitRewriteGlobalVariableDescriptor>(
+    DL->push_back(std::make_unique<ExplicitRewriteGlobalVariableDescriptor>(
         Source, Target,
         /*Naked*/ false));
   else
-    DL->push_back(llvm::make_unique<PatternRewriteGlobalVariableDescriptor>(
+    DL->push_back(std::make_unique<PatternRewriteGlobalVariableDescriptor>(
         Source, Transform));
 
   return true;
@@ -464,15 +486,15 @@ parseRewriteGlobalAliasDescriptor(yaml::Stream &YS, yaml::ScalarNode *K,
     if (KeyValue.equals("source")) {
       std::string Error;
 
-      Source = Value->getValue(ValueStorage);
+      Source = std::string(Value->getValue(ValueStorage));
       if (!Regex(Source).isValid(Error)) {
         YS.printError(Field.getKey(), "invalid regex: " + Error);
         return false;
       }
     } else if (KeyValue.equals("target")) {
-      Target = Value->getValue(ValueStorage);
+      Target = std::string(Value->getValue(ValueStorage));
     } else if (KeyValue.equals("transform")) {
-      Transform = Value->getValue(ValueStorage);
+      Transform = std::string(Value->getValue(ValueStorage));
     } else {
       YS.printError(Field.getKey(), "unknown key for Global Alias");
       return false;
@@ -486,17 +508,18 @@ parseRewriteGlobalAliasDescriptor(yaml::Stream &YS, yaml::ScalarNode *K,
   }
 
   if (!Target.empty())
-    DL->push_back(llvm::make_unique<ExplicitRewriteNamedAliasDescriptor>(
+    DL->push_back(std::make_unique<ExplicitRewriteNamedAliasDescriptor>(
         Source, Target,
         /*Naked*/ false));
   else
-    DL->push_back(llvm::make_unique<PatternRewriteNamedAliasDescriptor>(
+    DL->push_back(std::make_unique<PatternRewriteNamedAliasDescriptor>(
         Source, Transform));
 
   return true;
 }
 
 namespace {
+
 class RewriteSymbolsLegacyPass : public ModulePass {
 public:
   static char ID; // Pass identification, replacement for typeid
@@ -510,10 +533,12 @@ private:
   RewriteSymbolPass Impl;
 };
 
+} // end anonymous namespace
+
 char RewriteSymbolsLegacyPass::ID = 0;
 
-RewriteSymbolsLegacyPass::RewriteSymbolsLegacyPass() : ModulePass(ID), Impl() {
-  initializeRewriteSymbolsLegacyPassPass(*PassRegistry::getPassRegistry());  
+RewriteSymbolsLegacyPass::RewriteSymbolsLegacyPass() : ModulePass(ID) {
+  initializeRewriteSymbolsLegacyPassPass(*PassRegistry::getPassRegistry());
 }
 
 RewriteSymbolsLegacyPass::RewriteSymbolsLegacyPass(
@@ -523,9 +548,7 @@ RewriteSymbolsLegacyPass::RewriteSymbolsLegacyPass(
 bool RewriteSymbolsLegacyPass::runOnModule(Module &M) {
   return Impl.runImpl(M);
 }
-}
 
-namespace llvm {
 PreservedAnalyses RewriteSymbolPass::run(Module &M, ModuleAnalysisManager &AM) {
   if (!runImpl(M))
     return PreservedAnalyses::all();
@@ -549,7 +572,6 @@ void RewriteSymbolPass::loadAndParseMapFiles() {
 
   for (const auto &MapFile : MapFiles)
     Parser.parse(MapFile, &Descriptors);
-}
 }
 
 INITIALIZE_PASS(RewriteSymbolsLegacyPass, "rewrite-symbols", "Rewrite Symbols",

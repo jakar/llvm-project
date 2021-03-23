@@ -1,9 +1,9 @@
-(* RUN: cp %s %T/executionengine.ml
- * RUN: %ocamlc -g -w +A -package llvm.executionengine -linkpkg %T/executionengine.ml -o %t
- * RUN: %t
- * RUN: %ocamlopt -g -w +A -package llvm.executionengine -linkpkg %T/executionengine.ml -o %t
- * RUN: %t
- * REQUIRES: native, object-emission
+(* RUN: rm -rf %t && mkdir -p %t && cp %s %t/executionengine.ml
+ * RUN: %ocamlc -g -w +A -thread -package llvm.executionengine -linkpkg %t/executionengine.ml -o %t/executable
+ * RUN: %t/executable
+ * RUN: %ocamlopt -g -w +A -thread -package llvm.executionengine -linkpkg %t/executionengine.ml -o %t/executable
+ * RUN: %t/executable
+ * REQUIRES: native
  * XFAIL: vg_leak
  *)
 

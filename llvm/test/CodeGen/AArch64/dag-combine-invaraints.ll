@@ -9,7 +9,7 @@ main_:
   %i32T = alloca i32, align 4
   %i32F = alloca i32, align 4
   %i32X = alloca i32, align 4
-  store i32 0, i32* %tmp
+  store i32 %argc, i32* %tmp
   store i32 15, i32* %i32T, align 4
   store i32 5, i32* %i32F, align 4
   %tmp6 = load i32, i32* %tmp, align 4
@@ -24,13 +24,13 @@ main_:
   ret i32 0
 
 ; CHECK: main:
-; CHECK-DAG: mov
-; CHECK-DAG: orr
+; CHECK-DAG: mov {{.*}}, #15
+; CHECK-DAG: mov {{.*}}, #5
 ; CHECK: csel
 }
 
 
 declare i32 @printf(i8*, ...) #1
 
-attributes #0 = { nounwind ssp "less-precise-fpmad"="false" "no-frame-pointer-elim"="true" "no-frame-pointer-elim-non-leaf" "no-infs-fp-math"="false" "no-nans-fp-math"="false" "stack-protector-buffer-size"="8" "unsafe-fp-math"="false" "use-soft-float"="false" }
-attributes #1 = { "less-precise-fpmad"="false" "no-frame-pointer-elim"="true" "no-frame-pointer-elim-non-leaf" "no-infs-fp-math"="false" "no-nans-fp-math"="false" "stack-protector-buffer-size"="8" "unsafe-fp-math"="false" "use-soft-float"="false" }
+attributes #0 = { nounwind ssp "less-precise-fpmad"="false" "frame-pointer"="all" "no-infs-fp-math"="false" "no-nans-fp-math"="false" "stack-protector-buffer-size"="8" "unsafe-fp-math"="false" "use-soft-float"="false" }
+attributes #1 = { "less-precise-fpmad"="false" "frame-pointer"="all" "no-infs-fp-math"="false" "no-nans-fp-math"="false" "stack-protector-buffer-size"="8" "unsafe-fp-math"="false" "use-soft-float"="false" }

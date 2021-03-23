@@ -1,18 +1,18 @@
 //===-- PPCELFObjectWriter.cpp - PPC ELF Writer ---------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
-#include "MCTargetDesc/PPCMCTargetDesc.h"
 #include "MCTargetDesc/PPCFixupKinds.h"
 #include "MCTargetDesc/PPCMCExpr.h"
+#include "MCTargetDesc/PPCMCTargetDesc.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/MC/MCELFObjectWriter.h"
 #include "llvm/MC/MCExpr.h"
+#include "llvm/MC/MCObjectWriter.h"
 #include "llvm/MC/MCSymbolELF.h"
 #include "llvm/MC/MCValue.h"
 #include "llvm/Support/ErrorHandling.h"
@@ -54,6 +54,10 @@ static MCSymbolRefExpr::VariantKind getAccessVariant(const MCValue &Target,
     return MCSymbolRefExpr::VK_PPC_HI;
   case PPCMCExpr::VK_PPC_HA:
     return MCSymbolRefExpr::VK_PPC_HA;
+  case PPCMCExpr::VK_PPC_HIGH:
+    return MCSymbolRefExpr::VK_PPC_HIGH;
+  case PPCMCExpr::VK_PPC_HIGHA:
+    return MCSymbolRefExpr::VK_PPC_HIGHA;
   case PPCMCExpr::VK_PPC_HIGHERA:
     return MCSymbolRefExpr::VK_PPC_HIGHERA;
   case PPCMCExpr::VK_PPC_HIGHER:
@@ -69,16 +73,20 @@ static MCSymbolRefExpr::VariantKind getAccessVariant(const MCValue &Target,
 unsigned PPCELFObjectWriter::getRelocType(MCContext &Ctx, const MCValue &Target,
                                           const MCFixup &Fixup,
                                           bool IsPCRel) const {
+  MCFixupKind Kind = Fixup.getKind();
+  if (Kind >= FirstLiteralRelocationKind)
+    return Kind - FirstLiteralRelocationKind;
   MCSymbolRefExpr::VariantKind Modifier = getAccessVariant(Target, Fixup);
 
   // determine the type of the relocation
   unsigned Type;
   if (IsPCRel) {
-    switch ((unsigned)Fixup.getKind()) {
+    switch (Fixup.getTargetKind()) {
     default:
       llvm_unreachable("Unimplemented");
     case PPC::fixup_ppc_br24:
     case PPC::fixup_ppc_br24abs:
+    case PPC::fixup_ppc_br24_notoc:
       switch (Modifier) {
       default: llvm_unreachable("Unsupported Modifier");
       case MCSymbolRefExpr::VK_None:
@@ -89,6 +97,9 @@ unsigned PPCELFObjectWriter::getRelocType(MCContext &Ctx, const MCValue &Target,
         break;
       case MCSymbolRefExpr::VK_PPC_LOCAL:
         Type = ELF::R_PPC_LOCAL24PC;
+        break;
+      case MCSymbolRefExpr::VK_PPC_NOTOC:
+        Type = ELF::R_PPC64_REL24_NOTOC;
         break;
       }
       break;
@@ -117,6 +128,27 @@ unsigned PPCELFObjectWriter::getRelocType(MCContext &Ctx, const MCValue &Target,
       Target.print(errs());
       errs() << '\n';
       report_fatal_error("Invalid PC-relative half16ds relocation");
+    case PPC::fixup_ppc_pcrel34:
+      switch (Modifier) {
+      default:
+        llvm_unreachable("Unsupported Modifier for fixup_ppc_pcrel34");
+      case MCSymbolRefExpr::VK_PCREL:
+        Type = ELF::R_PPC64_PCREL34;
+        break;
+      case MCSymbolRefExpr::VK_PPC_GOT_PCREL:
+        Type = ELF::R_PPC64_GOT_PCREL34;
+        break;
+      case MCSymbolRefExpr::VK_PPC_GOT_TLSGD_PCREL:
+        Type = ELF::R_PPC64_GOT_TLSGD_PCREL34;
+        break;
+      case MCSymbolRefExpr::VK_PPC_GOT_TLSLD_PCREL:
+        Type = ELF::R_PPC64_GOT_TLSLD_PCREL34;
+        break;
+      case MCSymbolRefExpr::VK_PPC_GOT_TPREL_PCREL:
+        Type = ELF::R_PPC64_GOT_TPREL_PCREL34;
+        break;
+      }
+      break;
     case FK_Data_4:
     case FK_PCRel_4:
       Type = ELF::R_PPC_REL32;
@@ -127,7 +159,7 @@ unsigned PPCELFObjectWriter::getRelocType(MCContext &Ctx, const MCValue &Target,
       break;
     }
   } else {
-    switch ((unsigned)Fixup.getKind()) {
+    switch (Fixup.getTargetKind()) {
       default: llvm_unreachable("invalid fixup kind!");
     case PPC::fixup_ppc_br24abs:
       Type = ELF::R_PPC_ADDR24;
@@ -149,6 +181,12 @@ unsigned PPCELFObjectWriter::getRelocType(MCContext &Ctx, const MCValue &Target,
         break;
       case MCSymbolRefExpr::VK_PPC_HA:
         Type = ELF::R_PPC_ADDR16_HA;
+        break;
+      case MCSymbolRefExpr::VK_PPC_HIGH:
+        Type = ELF::R_PPC64_ADDR16_HIGH;
+        break;
+      case MCSymbolRefExpr::VK_PPC_HIGHA:
+        Type = ELF::R_PPC64_ADDR16_HIGHA;
         break;
       case MCSymbolRefExpr::VK_PPC_HIGHER:
         Type = ELF::R_PPC64_ADDR16_HIGHER;
@@ -198,6 +236,12 @@ unsigned PPCELFObjectWriter::getRelocType(MCContext &Ctx, const MCValue &Target,
       case MCSymbolRefExpr::VK_PPC_TPREL_HA:
         Type = ELF::R_PPC_TPREL16_HA;
         break;
+      case MCSymbolRefExpr::VK_PPC_TPREL_HIGH:
+        Type = ELF::R_PPC64_TPREL16_HIGH;
+        break;
+      case MCSymbolRefExpr::VK_PPC_TPREL_HIGHA:
+        Type = ELF::R_PPC64_TPREL16_HIGHA;
+        break;
       case MCSymbolRefExpr::VK_PPC_TPREL_HIGHER:
         Type = ELF::R_PPC64_TPREL16_HIGHER;
         break;
@@ -221,6 +265,12 @@ unsigned PPCELFObjectWriter::getRelocType(MCContext &Ctx, const MCValue &Target,
         break;
       case MCSymbolRefExpr::VK_PPC_DTPREL_HA:
         Type = ELF::R_PPC64_DTPREL16_HA;
+        break;
+      case MCSymbolRefExpr::VK_PPC_DTPREL_HIGH:
+        Type = ELF::R_PPC64_DTPREL16_HIGH;
+        break;
+      case MCSymbolRefExpr::VK_PPC_DTPREL_HIGHA:
+        Type = ELF::R_PPC64_DTPREL16_HIGHA;
         break;
       case MCSymbolRefExpr::VK_PPC_DTPREL_HIGHER:
         Type = ELF::R_PPC64_DTPREL16_HIGHER;
@@ -366,6 +416,21 @@ unsigned PPCELFObjectWriter::getRelocType(MCContext &Ctx, const MCValue &Target,
         else
           Type = ELF::R_PPC_TLS;
         break;
+      case MCSymbolRefExpr::VK_PPC_TLS_PCREL:
+        Type = ELF::R_PPC64_TLS;
+        break;
+      }
+      break;
+    case PPC::fixup_ppc_imm34:
+      switch (Modifier) {
+      default:
+        report_fatal_error("Unsupported Modifier for fixup_ppc_imm34.");
+      case MCSymbolRefExpr::VK_DTPREL:
+        Type = ELF::R_PPC64_DTPREL34;
+        break;
+      case MCSymbolRefExpr::VK_TPREL:
+        Type = ELF::R_PPC64_TPREL34;
+        break;
       }
       break;
     case FK_Data_8:
@@ -406,6 +471,7 @@ bool PPCELFObjectWriter::needsRelocateWithSymbol(const MCSymbol &Sym,
       return false;
 
     case ELF::R_PPC_REL24:
+    case ELF::R_PPC64_REL24_NOTOC:
       // If the target symbol has a local entry point, we must keep the
       // target symbol to preserve that information for the linker.
       // The "other" values are stored in the last 6 bits of the second byte.
@@ -416,10 +482,7 @@ bool PPCELFObjectWriter::needsRelocateWithSymbol(const MCSymbol &Sym,
   }
 }
 
-MCObjectWriter *llvm::createPPCELFObjectWriter(raw_pwrite_stream &OS,
-                                               bool Is64Bit,
-                                               bool IsLittleEndian,
-                                               uint8_t OSABI) {
-  MCELFObjectTargetWriter *MOTW = new PPCELFObjectWriter(Is64Bit, OSABI);
-  return createELFObjectWriter(MOTW, OS, IsLittleEndian);
+std::unique_ptr<MCObjectTargetWriter>
+llvm::createPPCELFObjectWriter(bool Is64Bit, uint8_t OSABI) {
+  return std::make_unique<PPCELFObjectWriter>(Is64Bit, OSABI);
 }

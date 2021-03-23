@@ -1,4 +1,4 @@
-; RUN: opt -basicaa -gvn -S < %s | FileCheck %s
+; RUN: opt -basic-aa -gvn -S < %s | FileCheck %s
 
 target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64"
 target triple = "x86_64-apple-macosx10.7.0"
@@ -208,14 +208,14 @@ define void @fence_seq_cst(i32* %P1, i32* %P2) {
   ret void
 }
 
-; Can't DSE across a full singlethread fence
+; Can't DSE across a full syncscope("singlethread") fence
 define void @fence_seq_cst_st(i32* %P1, i32* %P2) {
 ; CHECK-LABEL: @fence_seq_cst_st(
 ; CHECK: store
-; CHECK: fence singlethread seq_cst
+; CHECK: fence syncscope("singlethread") seq_cst
 ; CHECK: store
   store i32 0, i32* %P1, align 4
-  fence singlethread seq_cst
+  fence syncscope("singlethread") seq_cst
   store i32 0, i32* %P1, align 4
   ret void
 }

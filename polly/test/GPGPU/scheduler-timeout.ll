@@ -27,11 +27,7 @@ target triple = "x86_64-unknown-linux-gnu"
 ;     D[i][j] += tmp[i][k] * C[k][j];
 ;       }
 
-; CODE:Code
-; CODE-NEXT:====
-; CODE-NEXT:# host
-; CODE-NEXT: {
-; CODE-NEXT:   cudaCheckReturn(cudaMemcpy(dev_MemRef_A, MemRef_A, (4096) * (4096) * sizeof(float), cudaMemcpyHostToDevice));
+; CODE:        cudaCheckReturn(cudaMemcpy(dev_MemRef_A, MemRef_A, (4096) * (4096) * sizeof(float), cudaMemcpyHostToDevice));
 ; CODE-NEXT:   cudaCheckReturn(cudaMemcpy(dev_MemRef_B, MemRef_B, (4096) * (4096) * sizeof(float), cudaMemcpyHostToDevice));
 ; CODE-NEXT:   cudaCheckReturn(cudaMemcpy(dev_MemRef_D, MemRef_D, (4096) * (4096) * sizeof(float), cudaMemcpyHostToDevice));
 ; CODE-NEXT:   cudaCheckReturn(cudaMemcpy(dev_MemRef_C, MemRef_C, (4096) * (4096) * sizeof(float), cudaMemcpyHostToDevice));
@@ -51,7 +47,6 @@ target triple = "x86_64-unknown-linux-gnu"
 
 ; CODE:   cudaCheckReturn(cudaMemcpy(MemRef_tmp, dev_MemRef_tmp, (4096) * (4096) * sizeof(float), cudaMemcpyDeviceToHost));
 ; CODE-NEXT:   cudaCheckReturn(cudaMemcpy(MemRef_D, dev_MemRef_D, (4096) * (4096) * sizeof(float), cudaMemcpyDeviceToHost));
-; CODE-NEXT: }
 
 ; CODE: # kernel0
 ; CODE-NEXT: for (int c2 = 0; c2 <= 127; c2 += 1)
@@ -168,7 +163,7 @@ for.end67:                                        ; preds = %for.inc65
 declare void @llvm.lifetime.end(i64, i8* nocapture) #0
 
 attributes #0 = { argmemonly nounwind }
-attributes #1 = { nounwind uwtable "disable-tail-calls"="false" "less-precise-fpmad"="false" "no-frame-pointer-elim"="false" "no-infs-fp-math"="false" "no-jump-tables"="false" "no-nans-fp-math"="false" "no-signed-zeros-fp-math"="false" "stack-protector-buffer-size"="8" "target-cpu"="x86-64" "target-features"="+fxsr,+mmx,+sse,+sse2,+x87" "unsafe-fp-math"="false" "use-soft-float"="false" }
+attributes #1 = { nounwind uwtable "disable-tail-calls"="false" "less-precise-fpmad"="false" "frame-pointer"="none" "no-infs-fp-math"="false" "no-jump-tables"="false" "no-nans-fp-math"="false" "no-signed-zeros-fp-math"="false" "stack-protector-buffer-size"="8" "target-cpu"="x86-64" "target-features"="+fxsr,+mmx,+sse,+sse2,+x87" "unsafe-fp-math"="false" "use-soft-float"="false" }
 
 !llvm.ident = !{!0}
 

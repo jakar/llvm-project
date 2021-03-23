@@ -5,8 +5,10 @@ FileHeader:
 Sections:
   - Type:            TYPE
     Signatures:
-      - ReturnType:      I32
+      - Index:           0
         ParamTypes:
+          - I32
+        ReturnTypes:
           - I32
   - Type:            IMPORT
     Imports:
@@ -23,25 +25,26 @@ Sections:
         Field:           imported_memory
         Kind:            MEMORY
         Memory:
-          Flags:           0x00000001
+          Flags:           [ HAS_MAX ]
           Initial:         0x00000010
           Maximum:         0x00000011
       - Module:          foo
         Field:           imported_table
         Kind:            TABLE
         Table:
-          ElemType:      ANYFUNC
+          Index:         0
+          ElemType:      FUNCREF
           Limits:
-            Flags:           0x00000001
+            Flags:           [ HAS_MAX ]
             Initial:         0x00000020
             Maximum:         0x00000022
 ...
 # CHECK: --- !WASM
 # CHECK: FileHeader:
-# CHECK:   Version:           0x00000001
+# CHECK:   Version:           0x1
 # CHECK: Sections:
 # CHECK:   - Type:            IMPORT
-# CHECK:     Imports:         
+# CHECK:     Imports:
 # CHECK:       - Module:          foo
 # CHECK:         Field:           imported_function
 # CHECK:         Kind:            FUNCTION
@@ -55,16 +58,16 @@ Sections:
 # CHECK:         Field:           imported_memory
 # CHECK:         Kind:            MEMORY
 # CHECK:         Memory:
-# CHECK:           Flags:           0x00000001
-# CHECK:           Initial:         0x00000010
-# CHECK:           Maximum:         0x00000011
+# CHECK:           Flags:           [ HAS_MAX ]
+# CHECK:           Initial:         0x10
+# CHECK:           Maximum:         0x11
 # CHECK:       - Module:          foo
 # CHECK:         Field:           imported_table
 # CHECK:         Kind:            TABLE
 # CHECK:         Table:
-# CHECK:           ElemType:      ANYFUNC
+# CHECK:           ElemType:      FUNCREF
 # CHECK:           Limits:
-# CHECK:             Flags:           0x00000001
-# CHECK:             Initial:         0x00000020
-# CHECK:             Maximum:         0x00000022
+# CHECK:             Flags:           [ HAS_MAX ]
+# CHECK:             Initial:         0x20
+# CHECK:             Maximum:         0x22
 # CHECK: ...

@@ -5,10 +5,10 @@
 #include <isl/union_map_type.h>
 #include <isl/schedule_type.h>
 #include <isl/aff_type.h>
-#include <isl/band.h>
-#include <isl/space.h>
+#include <isl/space_type.h>
 #include <isl/set_type.h>
 #include <isl/list.h>
+#include <isl/printer_type.h>
 
 #if defined(__cplusplus)
 extern "C" {
@@ -47,21 +47,30 @@ int isl_options_get_schedule_serialize_sccs(isl_ctx *ctx);
 isl_stat isl_options_set_schedule_whole_component(isl_ctx *ctx, int val);
 int isl_options_get_schedule_whole_component(isl_ctx *ctx);
 
+isl_stat isl_options_set_schedule_carry_self_first(isl_ctx *ctx, int val);
+int isl_options_get_schedule_carry_self_first(isl_ctx *ctx);
+
 __isl_give isl_schedule_constraints *isl_schedule_constraints_copy(
 	__isl_keep isl_schedule_constraints *sc);
+__isl_export
 __isl_give isl_schedule_constraints *isl_schedule_constraints_on_domain(
 	__isl_take isl_union_set *domain);
+__isl_export
 __isl_give isl_schedule_constraints *isl_schedule_constraints_set_context(
 	__isl_take isl_schedule_constraints *sc, __isl_take isl_set *context);
+__isl_export
 __isl_give isl_schedule_constraints *isl_schedule_constraints_set_validity(
 	__isl_take isl_schedule_constraints *sc,
 	__isl_take isl_union_map *validity);
+__isl_export
 __isl_give isl_schedule_constraints *isl_schedule_constraints_set_coincidence(
 	__isl_take isl_schedule_constraints *sc,
 	__isl_take isl_union_map *coincidence);
+__isl_export
 __isl_give isl_schedule_constraints *isl_schedule_constraints_set_proximity(
 	__isl_take isl_schedule_constraints *sc,
 	__isl_take isl_union_map *proximity);
+__isl_export
 __isl_give isl_schedule_constraints *
 isl_schedule_constraints_set_conditional_validity(
 	__isl_take isl_schedule_constraints *sc,
@@ -110,6 +119,7 @@ void isl_schedule_constraints_dump(__isl_keep isl_schedule_constraints *sc);
 __isl_give char *isl_schedule_constraints_to_str(
 	__isl_keep isl_schedule_constraints *sc);
 
+__isl_export
 __isl_give isl_schedule *isl_schedule_constraints_compute_schedule(
 	__isl_take isl_schedule_constraints *sc);
 
@@ -119,6 +129,7 @@ __isl_give isl_schedule *isl_union_set_compute_schedule(
 	__isl_take isl_union_map *proximity);
 
 __isl_give isl_schedule *isl_schedule_empty(__isl_take isl_space *space);
+__isl_export
 __isl_give isl_schedule *isl_schedule_from_domain(
 	__isl_take isl_union_set *domain);
 __isl_give isl_schedule *isl_schedule_copy(__isl_keep isl_schedule *sched);
@@ -133,6 +144,7 @@ isl_bool isl_schedule_plain_is_equal(__isl_keep isl_schedule *schedule1,
 __isl_export
 __isl_give isl_schedule_node *isl_schedule_get_root(
 	__isl_keep isl_schedule *schedule);
+__isl_export
 __isl_give isl_union_set *isl_schedule_get_domain(
 	__isl_keep isl_schedule *schedule);
 
@@ -173,9 +185,6 @@ __isl_give isl_schedule *isl_schedule_expand(__isl_take isl_schedule *schedule,
 	__isl_take isl_union_pw_multi_aff *contraction,
 	__isl_take isl_schedule *expansion);
 
-__isl_give isl_band_list *isl_schedule_get_band_forest(
-	__isl_keep isl_schedule *schedule);
-
 __isl_give isl_schedule *isl_schedule_read_from_file(isl_ctx *ctx, FILE *input);
 __isl_constructor
 __isl_give isl_schedule *isl_schedule_read_from_str(isl_ctx *ctx,
@@ -184,9 +193,6 @@ __isl_give isl_printer *isl_printer_print_schedule(__isl_take isl_printer *p,
 	__isl_keep isl_schedule *schedule);
 void isl_schedule_dump(__isl_keep isl_schedule *schedule);
 __isl_give char *isl_schedule_to_str(__isl_keep isl_schedule *schedule);
-
-int isl_schedule_foreach_band(__isl_keep isl_schedule *sched,
-	int (*fn)(__isl_keep isl_band *band, void *user), void *user);
 
 #if defined(__cplusplus)
 }

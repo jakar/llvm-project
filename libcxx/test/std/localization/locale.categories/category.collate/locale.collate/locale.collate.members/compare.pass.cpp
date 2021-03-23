@@ -1,9 +1,8 @@
 //===----------------------------------------------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is dual licensed under the MIT and the University of Illinois Open
-// Source Licenses. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -14,10 +13,14 @@
 // int compare(const charT* low1, const charT* high1,
 //             const charT* low2, const charT* high2) const;
 
+// XFAIL: LIBCXX-WINDOWS-FIXME
+
 #include <locale>
 #include <cassert>
 
-int main()
+#include "test_macros.h"
+
+int main(int, char**)
 {
     std::locale l = std::locale::classic();
     {
@@ -46,4 +49,6 @@ int main()
         assert(f.compare(ib+1, ib+3, ia, ia+sa) == 1);
         assert(f.compare(ia, ia+3, ib, ib+3) == 0);
     }
+
+  return 0;
 }

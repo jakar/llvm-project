@@ -1,31 +1,23 @@
-//===-- OptionValueEnumeration.cpp ------------------------------*- C++ -*-===//
+//===-- OptionValueEnumeration.cpp ----------------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
 #include "lldb/Interpreter/OptionValueEnumeration.h"
 
-// C Includes
-// C++ Includes
-// Other libraries and framework includes
-// Project includes
 #include "lldb/Utility/StringList.h"
 
 using namespace lldb;
 using namespace lldb_private;
 
 OptionValueEnumeration::OptionValueEnumeration(
-    const OptionEnumValueElement *enumerators, enum_type value)
-    : OptionValue(), m_current_value(value), m_default_value(value),
-      m_enumerations() {
+    const OptionEnumValues &enumerators, enum_type value)
+    : m_current_value(value), m_default_value(value) {
   SetEnumerations(enumerators);
 }
-
-OptionValueEnumeration::~OptionValueEnumeration() {}
 
 void OptionValueEnumeration::DumpValue(const ExecutionContext *exe_ctx,
                                        Stream &strm, uint32_t dump_mask) {
@@ -45,9 +37,9 @@ void OptionValueEnumeration::DumpValue(const ExecutionContext *exe_ctx,
   }
 }
 
-Error OptionValueEnumeration::SetValueFromString(llvm::StringRef value,
-                                                 VarSetOperationType op) {
-  Error error;
+Status OptionValueEnumeration::SetValueFromString(llvm::StringRef value,
+                                                  VarSetOperationType op) {
+  Status error;
   switch (op) {
   case eVarSetOperationClear:
     Clear();
@@ -91,41 +83,28 @@ Error OptionValueEnumeration::SetValueFromString(llvm::StringRef value,
 }
 
 void OptionValueEnumeration::SetEnumerations(
-    const OptionEnumValueElement *enumerators) {
+    const OptionEnumValues &enumerators) {
   m_enumerations.Clear();
-  if (enumerators) {
-    for (size_t i = 0; enumerators[i].string_value != nullptr; ++i) {
-      ConstString const_enumerator_name(enumerators[i].string_value);
-      EnumeratorInfo enumerator_info = {enumerators[i].value,
-                                        enumerators[i].usage};
-      m_enumerations.Append(const_enumerator_name,
-                            enumerator_info);
-    }
-    m_enumerations.Sort();
+
+  for (const auto &enumerator : enumerators) {
+    ConstString const_enumerator_name(enumerator.string_value);
+    EnumeratorInfo enumerator_info = {enumerator.value, enumerator.usage};
+    m_enumerations.Append(const_enumerator_name, enumerator_info);
   }
+
+  m_enumerations.Sort();
 }
 
-lldb::OptionValueSP OptionValueEnumeration::DeepCopy() const {
-  return OptionValueSP(new OptionValueEnumeration(*this));
-}
-
-size_t OptionValueEnumeration::AutoComplete(
-    CommandInterpreter &interpreter, llvm::StringRef s, int match_start_point,
-    int max_return_elements, bool &word_complete, StringList &matches) {
-  word_complete = false;
-  matches.Clear();
-
+void OptionValueEnumeration::AutoComplete(CommandInterpreter &interpreter,
+                                          CompletionRequest &request) {
   const uint32_t num_enumerators = m_enumerations.GetSize();
-  if (!s.empty()) {
+  if (!request.GetCursorArgumentPrefix().empty()) {
     for (size_t i = 0; i < num_enumerators; ++i) {
       llvm::StringRef name = m_enumerations.GetCStringAtIndex(i).GetStringRef();
-      if (name.startswith(s))
-        matches.AppendString(name);
+      request.TryCompleteCurrentArg(name);
     }
-  } else {
-    // only suggest "true" or "false" by default
-    for (size_t i = 0; i < num_enumerators; ++i)
-      matches.AppendString(m_enumerations.GetCStringAtIndex(i).GetStringRef());
+    return;
   }
-  return matches.GetSize();
+    for (size_t i = 0; i < num_enumerators; ++i)
+      request.AddCompletion(m_enumerations.GetCStringAtIndex(i).GetStringRef());
 }

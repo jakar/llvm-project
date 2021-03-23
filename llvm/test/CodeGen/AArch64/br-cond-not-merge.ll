@@ -1,5 +1,5 @@
 ; RUN: llc -mtriple=aarch64 -verify-machineinstrs < %s | FileCheck --check-prefix=CHECK --check-prefix=OPT %s
-; RUN: llc -mtriple=aarch64 -verify-machineinstrs -O0 -fast-isel=0 < %s | FileCheck --check-prefix=CHECK --check-prefix=NOOPT %s
+; RUN: llc -mtriple=aarch64 -verify-machineinstrs -O0 -fast-isel=0 -global-isel=false < %s | FileCheck --check-prefix=CHECK --check-prefix=NOOPT %s
 
 declare void @foo()
 
@@ -64,9 +64,9 @@ bb3:
 ; OPT: b.gt [[L:\.LBB[0-9_]+]]
 ; OPT: tbz w1, #0, [[L]]
 ;
+; NOOPT: str w1, [sp, #[[SLOT2:[0-9]+]]]
 ; NOOPT: subs w{{[0-9]+}}, w{{[0-9]+}}, #0
 ; NOOPT: cset [[R1:w[0-9]+]], gt
-; NOOPT: str w1, [sp, #[[SLOT2:[0-9]+]]]
 ; NOOPT: str [[R1]], [sp, #[[SLOT1:[0-9]+]]]
 ; NOOPT: b .LBB
 ; NOOPT: ldr [[R2:w[0-9]+]], [sp, #[[SLOT1]]]

@@ -10,7 +10,7 @@ results in less verbose and potentially more efficient code.
 Right now the check doesn't support ``push_front`` and ``insert``.
 It also doesn't support ``insert`` functions for associative containers
 because replacing ``insert`` with ``emplace`` may result in
-`speed regression <http://htmlpreview.github.io/?https://github.com/HowardHinnant/papers/blob/master/insert_vs_emplace.html>`_, but it might get support with some addition flag in the future.
+`speed regression <https://htmlpreview.github.io/?https://github.com/HowardHinnant/papers/blob/master/insert_vs_emplace.html>`_, but it might get support with some addition flag in the future.
 
 By default only ``std::vector``, ``std::deque``, ``std::list`` are considered.
 This list can be modified using the :option:`ContainersWithPushBack` option.
@@ -37,6 +37,12 @@ After:
     std::vector<std::pair<int, int>> w;
     w.emplace_back(21, 37);
     w.emplace_back(21L, 37L);
+
+By default, the check is able to remove unnecessary ``std::make_pair`` and
+``std::make_tuple`` calls from ``push_back`` calls on containers of
+``std::pair`` and ``std::tuple``. Custom tuple-like types can be modified by
+the :option:`TupleTypes` option; custom make functions can be modified by the
+:option:`TupleMakeFunctions` option.
 
 The other situation is when we pass arguments that will be converted to a type
 inside a container.
@@ -96,6 +102,46 @@ Options
    Semicolon-separated list of class names of custom containers that support
    ``push_back``.
 
+.. option:: IgnoreImplicitConstructors
+
+    When `true`, the check will ignore implicitly constructed arguments of
+    ``push_back``, e.g.
+
+    .. code-block:: c++
+
+        std::vector<std::string> v;
+        v.push_back("a"); // Ignored when IgnoreImplicitConstructors is `true`.
+
+    Default is `false`.
+
 .. option:: SmartPointers
 
    Semicolon-separated list of class names of custom smart pointers.
+
+.. option:: TupleTypes
+
+    Semicolon-separated list of ``std::tuple``-like class names.
+
+.. option:: TupleMakeFunctions
+
+    Semicolon-separated list of ``std::make_tuple``-like function names. Those
+    function calls will be removed from ``push_back`` calls and turned into
+    ``emplace_back``.
+
+Example
+^^^^^^^
+
+.. code-block:: c++
+
+  std::vector<MyTuple<int, bool, char>> x;
+  x.push_back(MakeMyTuple(1, false, 'x'));
+
+transforms to:
+
+.. code-block:: c++
+
+  std::vector<MyTuple<int, bool, char>> x;
+  x.emplace_back(1, false, 'x');
+
+when :option:`TupleTypes` is set to ``MyTuple`` and :option:`TupleMakeFunctions`
+is set to ``MakeMyTuple``.

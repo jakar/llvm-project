@@ -6,6 +6,8 @@ struct A {
   A(const A&);
   ~A();
 
+  operator bool();
+
   int arr[10];
 };
 
@@ -17,7 +19,7 @@ void g() {
   // CHECK: %[[A:.*]] = alloca
   // CHECK-NOT: alloca
   // CHECK-NOT: call
-  // CHECK: call {{.*}} @_Z1fv({{.*}}* sret %[[A]])
+  // CHECK: call {{.*}} @_Z1fv({{.*}}* sret({{.*}}) align 4 %[[A]])
   A a = A( A{ f() } );
   // CHECK-NOT: call
 
@@ -25,7 +27,7 @@ void g() {
   h();
   // CHECK-NOT: call
 
-  // CHECK: call void @_ZN1AD1Ev({{.*}}* %[[A]])
+  // CHECK: call void @_ZN1AD1Ev({{.*}}* {{[^,]*}} %[[A]])
   // CHECK-NOT: call
   // CHECK-LABEL: }
 }
@@ -38,12 +40,12 @@ void h() {
   // CHECK-NOT: alloca
   // CHECK-NOT: call
 
-  // CHECK: call {{.*}} @_Z1fv({{.*}}* sret %[[A]])
+  // CHECK: call {{.*}} @_Z1fv({{.*}}* sret({{.*}}) align 4 %[[A]])
   // CHECK-NOT: call
   // CHECK: call {{.*}} @_Z1f1A({{.*}}* %[[A]])
   f(f());
   // CHECK-NOT: call
-  // CHECK: call void @_ZN1AD1Ev({{.*}}* %[[A]])
+  // CHECK: call void @_ZN1AD1Ev({{.*}}* {{[^,]*}} %[[A]])
 
   // CHECK: call void @_Z1hv(
   h();
@@ -78,4 +80,28 @@ void i() {
   fB(fB());
 
   // CHECK-LABEL: }
+}
+
+// CHECK-LABEL: define {{.*}} @_Z1jv(
+void j() {
+  // CHECK:   alloca %{{.*}}*
+  // CHECK:   %[[OUTERTEMP:.*]] = alloca %{{.*}}
+  // CHECK:   %[[INNERTEMP:.*]] = alloca %{{.*}}
+  // CHECK:   call void @_ZN1AC1Ei(%{{.*}} %[[INNERTEMP]], i32 1)
+  // CHECK:   call zeroext i1 @_ZN1AcvbEv(%{{.*}} %[[INNERTEMP]])
+  // CHECK:   br i1
+  //
+  // CHECK:   call void @_ZN1AC1EOS_(%{{.*}} %[[OUTERTEMP]], %{{.*}} %[[INNERTEMP]])
+  // CHECK:   br label
+  //
+  // CHECK:   call void @_ZN1AC1Ei(%{{.*}} %[[OUTERTEMP]], i32 2)
+  // CHECK:   br label
+  //
+  // CHECK:   call void @_ZN1AD1Ev(%{{.*}} %[[INNERTEMP]])
+  A &&a = A(1) ?: A(2);
+
+  // CHECK:   call void @_Z1iv()
+  i();
+
+  // CHECK:   call void @_ZN1AD1Ev(%{{.*}} %[[OUTERTEMP]])
 }

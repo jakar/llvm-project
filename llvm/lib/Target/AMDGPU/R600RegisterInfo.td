@@ -147,15 +147,19 @@ def PRED_SEL_OFF: R600Reg<"Pred_sel_off", 0>;
 def PRED_SEL_ZERO : R600Reg<"Pred_sel_zero", 2>;
 def PRED_SEL_ONE : R600Reg<"Pred_sel_one", 3>;
 def AR_X : R600Reg<"AR.x", 0>;
+def INDIRECT_BASE_ADDR : R600Reg <"INDIRECT_BASE_ADDR", 0>;
 
 def R600_ArrayBase : RegisterClass <"AMDGPU", [f32, i32], 32,
-                          (add (sequence "ArrayBase%u", 448, 480))>;
+                          (add (sequence "ArrayBase%u", 448, 480))> {
+  let Weight = 0;
+}
 // special registers for ALU src operands
 // const buffer reference, SRCx_SEL contains index
 def ALU_CONST : R600Reg<"CBuf", 0>;
 // interpolation param reference, SRCx_SEL contains index
 def ALU_PARAM : R600Reg<"Param", 0>;
 
+let Weight = 0 in {
 let isAllocatable = 0 in {
 
 def R600_Addr : RegisterClass <"AMDGPU", [i32], 32, (add (sequence "Addr%u_X", 0, 127))>;
@@ -226,7 +230,7 @@ def R600_Reg32 : RegisterClass <"AMDGPU", [f32, i32], 32, (add
     R600_Addr,
     R600_KC0, R600_KC1,
     ZERO, HALF, ONE, ONE_INT, PV_X, ALU_LITERAL_X, NEG_ONE, NEG_HALF,
-    ALU_CONST, ALU_PARAM, OQAP
+    ALU_CONST, ALU_PARAM, OQAP, INDIRECT_BASE_ADDR
     )>;
 
 def R600_Predicate : RegisterClass <"AMDGPU", [i32], 32, (add
@@ -244,9 +248,10 @@ def R600_Reg128Vertical : RegisterClass<"AMDGPU", [v4f32, v4i32], 128,
   (add V0123_W, V0123_Z, V0123_Y, V0123_X)
 >;
 
-def R600_Reg64 : RegisterClass<"AMDGPU", [v2f32, v2i32], 64,
+def R600_Reg64 : RegisterClass<"AMDGPU", [v2f32, v2i32, i64, f64], 64,
                                 (add (sequence "T%u_XY", 0, 63))>;
 
 def R600_Reg64Vertical : RegisterClass<"AMDGPU", [v2f32, v2i32], 64,
                                       (add V01_X, V01_Y, V01_Z, V01_W,
                                            V23_X, V23_Y, V23_Z, V23_W)>;
+} // End let Weight = 0

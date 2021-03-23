@@ -155,7 +155,7 @@ using alias = T;
 // CHECK-LOAD: index-templates.cpp:36:44: DeclRefExpr=OneDimension:35:16 Extent=[36:44 - 36:56]
 // CHECK-LOAD: index-templates.cpp:40:8: ClassTemplate=storage:40:8 (Definition) Extent=[39:1 - 40:19]
 // CHECK-LOAD: index-templates.cpp:39:45: TemplateTemplateParameter=DataStructure:39:45 (Definition) Extent=[39:10 - 39:66]
-// CHECK-LOAD: index-templates.cpp:39:19: TemplateTypeParameter=:39:19 (Definition) Extent=[39:19 - 39:27]
+// CHECK-LOAD: index-templates.cpp:39:27: TemplateTypeParameter=:39:27 (Definition) Extent=[39:19 - 39:27]
 // CHECK-LOAD: index-templates.cpp:39:37: NonTypeTemplateParameter=:39:37 (Definition) Extent=[39:29 - 39:37]
 // CHECK-LOAD: index-templates.cpp:39:61: TemplateRef=array:37:8 Extent=[39:61 - 39:66]
 // CHECK-LOAD: index-templates.cpp:42:18: TypedefDecl=Unsigned:42:18 (Definition) Extent=[42:1 - 42:26]
@@ -219,6 +219,6 @@ using alias = T;
 // CHECK-USRS: index-templates.cpp c:@ST>2#T#T@Y Extent=[27:1 - 31:2]
 // CHECK-USRS: index-templates.cpp c:index-templates.cpp@443 Extent=[27:10 - 27:20]
 // CHECK-USRS: index-templates.cpp c:index-templates.cpp@455 Extent=[27:22 - 27:32]
-// CHECK-USRS-NOT: type
+// CHECK-USRS: index-templates.cpp c:index-templates.cpp@ST>2#T#T@Y@UUT@T::type Extent=[29:3 - 29:25]
 // CHECK-USRS: index-templates.cpp c:@S@Z3 Extent=[33:1 - 33:14]
 // CHECK-USRS: index-templates.cpp c:@F@f#$@S@map>#$@S@Z4#$@S@Pair>#I#S1_#$@S@compare>#$@S@Pair>#S1_#S2_#$@S@allocator>#S4_#

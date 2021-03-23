@@ -1,9 +1,8 @@
-//==-- llvm/CodeGen/SelectionDAGTargetInfo.h - SelectionDAG Info -*- C++ -*-==//
+//==- llvm/CodeGen/SelectionDAGTargetInfo.h - SelectionDAG Info --*- C++ -*-==//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -16,21 +15,24 @@
 #ifndef LLVM_CODEGEN_SELECTIONDAGTARGETINFO_H
 #define LLVM_CODEGEN_SELECTIONDAGTARGETINFO_H
 
+#include "llvm/CodeGen/MachineMemOperand.h"
 #include "llvm/CodeGen/SelectionDAGNodes.h"
 #include "llvm/Support/CodeGen.h"
+#include <utility>
 
 namespace llvm {
+
+class SelectionDAG;
 
 //===----------------------------------------------------------------------===//
 /// Targets can subclass this to parameterize the
 /// SelectionDAG lowering and instruction selection process.
 ///
 class SelectionDAGTargetInfo {
-  SelectionDAGTargetInfo(const SelectionDAGTargetInfo &) = delete;
-  void operator=(const SelectionDAGTargetInfo &) = delete;
-
 public:
   explicit SelectionDAGTargetInfo() = default;
+  SelectionDAGTargetInfo(const SelectionDAGTargetInfo &) = delete;
+  SelectionDAGTargetInfo &operator=(const SelectionDAGTargetInfo &) = delete;
   virtual ~SelectionDAGTargetInfo();
 
   /// Emit target-specific code that performs a memcpy.
@@ -49,7 +51,7 @@ public:
   virtual SDValue EmitTargetCodeForMemcpy(SelectionDAG &DAG, const SDLoc &dl,
                                           SDValue Chain, SDValue Op1,
                                           SDValue Op2, SDValue Op3,
-                                          unsigned Align, bool isVolatile,
+                                          Align Alignment, bool isVolatile,
                                           bool AlwaysInline,
                                           MachinePointerInfo DstPtrInfo,
                                           MachinePointerInfo SrcPtrInfo) const {
@@ -64,7 +66,7 @@ public:
   /// lowering strategy should be used.
   virtual SDValue EmitTargetCodeForMemmove(
       SelectionDAG &DAG, const SDLoc &dl, SDValue Chain, SDValue Op1,
-      SDValue Op2, SDValue Op3, unsigned Align, bool isVolatile,
+      SDValue Op2, SDValue Op3, Align Alignment, bool isVolatile,
       MachinePointerInfo DstPtrInfo, MachinePointerInfo SrcPtrInfo) const {
     return SDValue();
   }
@@ -78,12 +80,12 @@ public:
   virtual SDValue EmitTargetCodeForMemset(SelectionDAG &DAG, const SDLoc &dl,
                                           SDValue Chain, SDValue Op1,
                                           SDValue Op2, SDValue Op3,
-                                          unsigned Align, bool isVolatile,
+                                          Align Alignment, bool isVolatile,
                                           MachinePointerInfo DstPtrInfo) const {
     return SDValue();
   }
 
-  /// Emit target-specific code that performs a memcmp, in cases where that is
+  /// Emit target-specific code that performs a memcmp/bcmp, in cases where that is
   /// faster than a libcall. The first returned SDValue is the result of the
   /// memcmp and the second is the chain. Both SDValues can be null if a normal
   /// libcall should be used.
@@ -144,13 +146,21 @@ public:
                            MachinePointerInfo SrcPtrInfo) const {
     return std::make_pair(SDValue(), SDValue());
   }
-  // Return true when the decision to generate FMA's (or FMS, FMLA etc) rather
-  // than FMUL and ADD is delegated to the machine combiner.
-  virtual bool generateFMAsInMachineCombiner(CodeGenOpt::Level OptLevel) const {
+
+  virtual SDValue EmitTargetCodeForSetTag(SelectionDAG &DAG, const SDLoc &dl,
+                                          SDValue Chain, SDValue Addr,
+                                          SDValue Size,
+                                          MachinePointerInfo DstPtrInfo,
+                                          bool ZeroData) const {
+    return SDValue();
+  }
+
+  // Return true if the DAG Combiner should disable generic combines.
+  virtual bool disableGenericCombines(CodeGenOpt::Level OptLevel) const {
     return false;
   }
 };
 
-} // end llvm namespace
+} // end namespace llvm
 
-#endif
+#endif // LLVM_CODEGEN_SELECTIONDAGTARGETINFO_H

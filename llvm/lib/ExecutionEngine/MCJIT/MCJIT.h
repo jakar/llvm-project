@@ -1,9 +1,8 @@
 //===-- MCJIT.h - Class definition for the MCJIT ----------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -13,24 +12,23 @@
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
-#include "llvm/ExecutionEngine/ObjectCache.h"
-#include "llvm/ExecutionEngine/ObjectMemoryBuffer.h"
 #include "llvm/ExecutionEngine/RTDyldMemoryManager.h"
 #include "llvm/ExecutionEngine/RuntimeDyld.h"
-#include "llvm/IR/Module.h"
 
 namespace llvm {
 class MCJIT;
+class Module;
+class ObjectCache;
 
 // This is a helper class that the MCJIT execution engine uses for linking
 // functions across modules that it owns.  It aggregates the memory manager
 // that is passed in to the MCJIT constructor and defers most functionality
 // to that object.
-class LinkingSymbolResolver : public JITSymbolResolver {
+class LinkingSymbolResolver : public LegacyJITSymbolResolver {
 public:
   LinkingSymbolResolver(MCJIT &Parent,
-                        std::shared_ptr<JITSymbolResolver> Resolver)
-    : ParentEngine(Parent), ClientResolver(std::move(Resolver)) {}
+                        std::shared_ptr<LegacyJITSymbolResolver> Resolver)
+      : ParentEngine(Parent), ClientResolver(std::move(Resolver)) {}
 
   JITSymbol findSymbol(const std::string &Name) override;
 
@@ -41,7 +39,8 @@ public:
 
 private:
   MCJIT &ParentEngine;
-  std::shared_ptr<JITSymbolResolver> ClientResolver;
+  std::shared_ptr<LegacyJITSymbolResolver> ClientResolver;
+  void anchor() override;
 };
 
 // About Module states: added->loaded->finalized.
@@ -67,7 +66,7 @@ private:
 class MCJIT : public ExecutionEngine {
   MCJIT(std::unique_ptr<Module> M, std::unique_ptr<TargetMachine> tm,
         std::shared_ptr<MCJITMemoryManager> MemMgr,
-        std::shared_ptr<JITSymbolResolver> Resolver);
+        std::shared_ptr<LegacyJITSymbolResolver> Resolver);
 
   typedef llvm::SmallPtrSet<Module *, 4> ModulePtrSet;
 
@@ -103,22 +102,22 @@ class MCJIT : public ExecutionEngine {
     }
 
     bool hasModuleBeenAddedButNotLoaded(Module *M) {
-      return AddedModules.count(M) != 0;
+      return AddedModules.contains(M);
     }
 
     bool hasModuleBeenLoaded(Module *M) {
       // If the module is in either the "loaded" or "finalized" sections it
       // has been loaded.
-      return (LoadedModules.count(M) != 0 ) || (FinalizedModules.count(M) != 0);
+      return LoadedModules.contains(M) || FinalizedModules.contains(M);
     }
 
     bool hasModuleBeenFinalized(Module *M) {
-      return FinalizedModules.count(M) != 0;
+      return FinalizedModules.contains(M);
     }
 
     bool ownsModule(Module* M) {
-      return (AddedModules.count(M) != 0) || (LoadedModules.count(M) != 0) ||
-             (FinalizedModules.count(M) != 0);
+      return AddedModules.contains(M) || LoadedModules.contains(M) ||
+             FinalizedModules.contains(M);
     }
 
     void markModuleAsLoaded(Module *M) {
@@ -300,11 +299,10 @@ public:
     MCJITCtor = createJIT;
   }
 
-  static ExecutionEngine*
-  createJIT(std::unique_ptr<Module> M,
-            std::string *ErrorStr,
+  static ExecutionEngine *
+  createJIT(std::unique_ptr<Module> M, std::string *ErrorStr,
             std::shared_ptr<MCJITMemoryManager> MemMgr,
-            std::shared_ptr<JITSymbolResolver> Resolver,
+            std::shared_ptr<LegacyJITSymbolResolver> Resolver,
             std::unique_ptr<TargetMachine> TM);
 
   // @}
@@ -331,9 +329,9 @@ protected:
   /// the future.
   std::unique_ptr<MemoryBuffer> emitObject(Module *M);
 
-  void NotifyObjectEmitted(const object::ObjectFile& Obj,
-                           const RuntimeDyld::LoadedObjectInfo &L);
-  void NotifyFreeingObject(const object::ObjectFile& Obj);
+  void notifyObjectLoaded(const object::ObjectFile &Obj,
+                          const RuntimeDyld::LoadedObjectInfo &L);
+  void notifyFreeingObject(const object::ObjectFile &Obj);
 
   JITSymbol findExistingSymbol(const std::string &Name);
   Module *findModuleForSymbol(const std::string &Name, bool CheckFunctionsOnly);

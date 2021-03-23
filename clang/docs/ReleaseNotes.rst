@@ -1,43 +1,42 @@
-=======================================
-Clang 5.0.0 (In-Progress) Release Notes
-=======================================
+========================================
+Clang 13.0.0 (In-Progress) Release Notes
+========================================
 
 .. contents::
    :local:
    :depth: 2
 
-Written by the `LLVM Team <http://llvm.org/>`_
+Written by the `LLVM Team <https://llvm.org/>`_
 
 .. warning::
 
-   These are in-progress notes for the upcoming Clang 5 release.
+   These are in-progress notes for the upcoming Clang 13 release.
    Release notes for previous releases can be found on
-   `the Download Page <http://releases.llvm.org/download.html>`_.
+   `the Download Page <https://releases.llvm.org/download.html>`_.
 
 Introduction
 ============
 
 This document contains the release notes for the Clang C/C++/Objective-C
-frontend, part of the LLVM Compiler Infrastructure, release 5.0.0. Here we
+frontend, part of the LLVM Compiler Infrastructure, release 13.0.0. Here we
 describe the status of Clang in some detail, including major
 improvements from the previous release and new feature work. For the
 general LLVM release notes, see `the LLVM
-documentation <http://llvm.org/docs/ReleaseNotes.html>`_. All LLVM
+documentation <https://llvm.org/docs/ReleaseNotes.html>`_. All LLVM
 releases may be downloaded from the `LLVM releases web
-site <http://llvm.org/releases/>`_.
+site <https://llvm.org/releases/>`_.
 
-For more information about Clang or LLVM, including information about
-the latest release, please check out the main please see the `Clang Web
-Site <http://clang.llvm.org>`_ or the `LLVM Web
-Site <http://llvm.org>`_.
+For more information about Clang or LLVM, including information about the
+latest release, please see the `Clang Web Site <https://clang.llvm.org>`_ or the
+`LLVM Web Site <https://llvm.org>`_.
 
-Note that if you are reading this file from a Subversion checkout or the
+Note that if you are reading this file from a Git checkout or the
 main Clang web page, this document applies to the *next* release, not
 the current one. To see the release notes for a specific release, please
-see the `releases page <http://llvm.org/releases/>`_.
+see the `releases page <https://llvm.org/releases/>`_.
 
-What's New in Clang 5.0.0?
-==========================
+What's New in Clang 13.0.0?
+===========================
 
 Some of the major new features and improvements to Clang are listed
 here. Generic improvements to Clang as a whole or to its underlying
@@ -47,145 +46,190 @@ sections with improvements to Clang's support for those languages.
 Major New Features
 ------------------
 
--  ...
+- ...
 
 Improvements to Clang's diagnostics
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
--  -Wunused-lambda-capture warns when a variable explicitly captured
-   by a lambda is not used in the body of the lambda.
+- ...
+
+Non-comprehensive list of changes in this release
+-------------------------------------------------
+
+- ...
 
 New Compiler Flags
 ------------------
 
-The option ....
+- ...
 
-New Pragmas in Clang
+Deprecated Compiler Flags
+-------------------------
+
+- ...
+
+Modified Compiler Flags
 -----------------------
 
-Clang now supports the ...
+- -Wshadow now also checks for shadowed structured bindings
+- ``-B <prefix>`` (when ``<prefix>`` is a directory) was overloaded to additionally
+  detect GCC installations under ``<prefix>`` (``lib{,32,64}/gcc{,-cross}/$triple``).
+  This behavior was incompatible with GCC, caused interop issues with
+  ``--gcc-toolchain``, and was thus dropped. Specify ``--gcc-toolchain=<dir>``
+  instead. ``-B``'s other GCC-compatible semantics are preserved:
+  ``$prefix/$triple-$file`` and ``$prefix$file`` are searched for executables,
+  libraries, includes, and data files used by the compiler.
 
+Removed Compiler Flags
+-------------------------
+
+- The clang-cl ``/fallback`` flag, which made clang-cl invoke Microsoft Visual
+  C++ on files it couldn't compile itself, has been removed.
+
+- ``-Wreturn-std-move-in-c++11``, which checked whether an entity is affected by
+  `CWG1579 <https://wg21.link/CWG1579>`_ to become implicitly movable, has been
+  removed.
+
+New Pragmas in Clang
+--------------------
+
+- ...
 
 Attribute Changes in Clang
 --------------------------
 
--  ...
+- ...
 
 Windows Support
 ---------------
-
-Clang's support for building native Windows programs ...
-
 
 C Language Changes in Clang
 ---------------------------
 
 - ...
 
-...
-
-C11 Feature Support
-^^^^^^^^^^^^^^^^^^^
-
-...
-
 C++ Language Changes in Clang
 -----------------------------
 
-...
+- ...
 
 C++1z Feature Support
 ^^^^^^^^^^^^^^^^^^^^^
-
 ...
 
 Objective-C Language Changes in Clang
 -------------------------------------
-
-...
 
 OpenCL C Language Changes in Clang
 ----------------------------------
 
 ...
 
-OpenMP Support in Clang
-----------------------------------
+ABI Changes in Clang
+--------------------
 
-...
+OpenMP Support in Clang
+-----------------------
+
+- ...
+
+CUDA Support in Clang
+---------------------
+
+- ...
+
+X86 Support in Clang
+--------------------
+
+- ...
 
 Internal API Changes
 --------------------
 
-These are major API changes that have happened since the 4.0.0 release of
+These are major API changes that have happened since the 12.0.0 release of
 Clang. If upgrading an external codebase that uses Clang as a library,
 this section should help get you past the largest hurdles of upgrading.
 
--  ...
+- ...
+
+Build System Changes
+--------------------
+
+These are major changes to the build system that have happened since the 12.0.0
+release of Clang. Users of the build system should adjust accordingly.
+
+- The option ``LIBCLANG_INCLUDE_CLANG_TOOLS_EXTRA`` no longer exists. There were
+  two releases with that flag forced off, and no uses were added that forced it
+  on. The recommended replacement is clangd.
+
+- ...
 
 AST Matchers
 ------------
 
-...
-
+- ...
 
 clang-format
 ------------
 
-* Option **BreakBeforeInheritanceComma** added to break before ``:`` and ``,``  in case of
-  multiple inheritance in a class declaration. Enabled by default in the Mozilla coding style.
+- Option ``SpacesInLineCommentPrefix`` has been added to control the
+  number of spaces in a line comments prefix.
 
-  +---------------------+----------------------------------------+
-  | true                | false                                  |
-  +=====================+========================================+
-  | .. code-block:: c++ | .. code-block:: c++                    |
-  |                     |                                        |
-  |   class MyClass     |   class MyClass : public X, public Y { |
-  |       : public X    |   };                                   |
-  |       , public Y {  |                                        |
-  |   };                |                                        |
-  +---------------------+----------------------------------------+
+- Option ``SortIncludes`` has been updated from a ``bool`` to an
+  ``enum`` with backwards compatibility. In addition to the previous
+  ``true``/``false`` states (now ``CaseSensitive``/``Never``), a third
+  state has been added (``CaseInsensitive``) which causes an alphabetical sort
+  with case used as a tie-breaker.
 
-* Align block comment decorations.
+  .. code-block:: c++
 
-  +----------------------+---------------------+
-  | Before               | After               |
-  +======================+=====================+
-  |  .. code-block:: c++ | .. code-block:: c++ |
-  |                      |                     |
-  |    /* line 1         |   /* line 1         |
-  |      * line 2        |    * line 2         |
-  |     */               |    */               |
-  +----------------------+---------------------+
+    // Never (previously false)
+    #include "B/A.h"
+    #include "A/B.h"
+    #include "a/b.h"
+    #include "A/b.h"
+    #include "B/a.h"
 
-* The :doc:`ClangFormatStyleOptions` documentation provides detailed examples for most options.
+    // CaseSensitive (previously true)
+    #include "A/B.h"
+    #include "A/b.h"
+    #include "B/A.h"
+    #include "B/a.h"
+    #include "a/b.h"
 
-* Namespace end comments are now added or updated automatically.
+    // CaseInsensitive
+    #include "A/B.h"
+    #include "A/b.h"
+    #include "a/b.h"
+    #include "B/A.h"
+    #include "B/a.h"
 
-  +---------------------+---------------------+
-  | Before              | After               |
-  +=====================+=====================+
-  | .. code-block:: c++ | .. code-block:: c++ |
-  |                     |                     |
-  |   namespace A {     |   namespace A {     |
-  |   int i;            |   int i;            |
-  |   int j;            |   int j;            |
-  |   }                 |   }                 |
-  +---------------------+---------------------+
+- ``BasedOnStyle: InheritParentConfig`` allows to use the ``.clang-format`` of
+  the parent directories to overwrite only parts of it.
 
-* Comment reflow support added. Overly long comment lines will now be reflown with the rest of
-  the paragraph instead of just broken. Option **ReflowComments** added and enabled by default.
+- Option ``IndentAccessModifiers`` has been added to be able to give access
+  modifiers their own indentation level inside records.
+
+- Option ``ShortNamespaceLines`` has been added to give better control
+  over ``FixNamespaceComments`` when determining a namespace length.
+
+- Support for Whitesmiths has been improved, with fixes for ``namespace`` blocks
+  and ``case`` blocks and labels.
 
 libclang
 --------
 
-...
-
+- ...
 
 Static Analyzer
 ---------------
 
-...
+- ...
+
+.. _release-notes-ubsan:
+
+Undefined Behavior Sanitizer (UBSan)
+------------------------------------
 
 Core Analysis Improvements
 ==========================
@@ -211,12 +255,12 @@ Additional Information
 ======================
 
 A wide variety of additional information is available on the `Clang web
-page <http://clang.llvm.org/>`_. The web page contains versions of the
-API documentation which are up-to-date with the Subversion version of
+page <https://clang.llvm.org/>`_. The web page contains versions of the
+API documentation which are up-to-date with the Git version of
 the source code. You can access versions of these documents specific to
 this release by going into the "``clang/docs/``" directory in the Clang
 tree.
 
 If you have any questions or comments about Clang, please feel free to
 contact us via the `mailing
-list <http://lists.llvm.org/mailman/listinfo/cfe-dev>`_.
+list <https://lists.llvm.org/mailman/listinfo/cfe-dev>`_.

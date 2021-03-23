@@ -1,20 +1,15 @@
-//===-- OptionValueArray.cpp ------------------------------------*- C++ -*-===//
+//===-- OptionValueArray.cpp ----------------------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
 #include "lldb/Interpreter/OptionValueArray.h"
 
-// C Includes
-// C++ Includes
-// Other libraries and framework includes
-// Project includes
 #include "lldb/Host/StringConvert.h"
-#include "lldb/Interpreter/Args.h"
+#include "lldb/Utility/Args.h"
 #include "lldb/Utility/Stream.h"
 
 using namespace lldb;
@@ -31,13 +26,17 @@ void OptionValueArray::DumpValue(const ExecutionContext *exe_ctx, Stream &strm,
       strm.Printf("(%s)", GetTypeAsCString());
   }
   if (dump_mask & eDumpOptionValue) {
-    if (dump_mask & eDumpOptionType)
-      strm.Printf(" =%s", (m_values.size() > 0) ? "\n" : "");
-    strm.IndentMore();
+    const bool one_line = dump_mask & eDumpOptionCommand;
     const uint32_t size = m_values.size();
+    if (dump_mask & eDumpOptionType)
+      strm.Printf(" =%s", (m_values.size() > 0 && !one_line) ? "\n" : "");
+    if (!one_line)
+      strm.IndentMore();
     for (uint32_t i = 0; i < size; ++i) {
-      strm.Indent();
-      strm.Printf("[%u]: ", i);
+      if (!one_line) {
+        strm.Indent();
+        strm.Printf("[%u]: ", i);
+      }
       const uint32_t extra_dump_options = m_raw_value_dump ? eDumpOptionRaw : 0;
       switch (array_element_type) {
       default:
@@ -53,6 +52,7 @@ void OptionValueArray::DumpValue(const ExecutionContext *exe_ctx, Stream &strm,
       case eTypeChar:
       case eTypeEnum:
       case eTypeFileSpec:
+      case eTypeFileLineColumn:
       case eTypeFormat:
       case eTypeSInt64:
       case eTypeString:
@@ -63,25 +63,32 @@ void OptionValueArray::DumpValue(const ExecutionContext *exe_ctx, Stream &strm,
                                                   extra_dump_options);
         break;
       }
-      if (i < (size - 1))
-        strm.EOL();
+
+      if (!one_line) {
+        if (i < (size - 1))
+          strm.EOL();
+      } else {
+        strm << ' ';
+      }
     }
-    strm.IndentLess();
+    if (!one_line)
+      strm.IndentLess();
   }
 }
 
-Error OptionValueArray::SetValueFromString(llvm::StringRef value,
-                                           VarSetOperationType op) {
+Status OptionValueArray::SetValueFromString(llvm::StringRef value,
+                                            VarSetOperationType op) {
   Args args(value.str());
-  Error error = SetArgs(args, op);
+  Status error = SetArgs(args, op);
   if (error.Success())
     NotifyValueChanged();
   return error;
 }
 
 lldb::OptionValueSP
-OptionValueArray::GetSubValue(const ExecutionContext *exe_ctx, llvm::StringRef name,
-                              bool will_modify, Error &error) const {
+OptionValueArray::GetSubValue(const ExecutionContext *exe_ctx,
+                              llvm::StringRef name, bool will_modify,
+                              Status &error) const {
   if (name.empty() || name.front() != '[') {
     error.SetErrorStringWithFormat(
       "invalid value path '%s', %s values only support '[<index>]' subvalues "
@@ -149,8 +156,8 @@ size_t OptionValueArray::GetArgs(Args &args) const {
   return args.GetArgumentCount();
 }
 
-Error OptionValueArray::SetArgs(const Args &args, VarSetOperationType op) {
-  Error error;
+Status OptionValueArray::SetArgs(const Args &args, VarSetOperationType op) {
+  Status error;
   const size_t argc = args.GetArgumentCount();
   switch (op) {
   case eVarSetOperationInvalid:
@@ -214,7 +221,7 @@ Error OptionValueArray::SetArgs(const Args &args, VarSetOperationType op) {
         if (num_remove_indexes) {
           // Sort and then erase in reverse so indexes are always valid
           if (num_remove_indexes > 1) {
-            std::sort(remove_indexes.begin(), remove_indexes.end());
+            llvm::sort(remove_indexes.begin(), remove_indexes.end());
             for (std::vector<int>::const_reverse_iterator
                      pos = remove_indexes.rbegin(),
                      end = remove_indexes.rend();
@@ -296,15 +303,16 @@ Error OptionValueArray::SetArgs(const Args &args, VarSetOperationType op) {
   return error;
 }
 
-lldb::OptionValueSP OptionValueArray::DeepCopy() const {
-  OptionValueArray *copied_array =
-      new OptionValueArray(m_type_mask, m_raw_value_dump);
-  lldb::OptionValueSP copied_value_sp(copied_array);
-  *static_cast<OptionValue *>(copied_array) = *this;
-  copied_array->m_callback = m_callback;
-  const uint32_t size = m_values.size();
-  for (uint32_t i = 0; i < size; ++i) {
-    copied_array->AppendValue(m_values[i]->DeepCopy());
-  }
-  return copied_value_sp;
+OptionValueSP
+OptionValueArray::DeepCopy(const OptionValueSP &new_parent) const {
+  auto copy_sp = OptionValue::DeepCopy(new_parent);
+  // copy_sp->GetAsArray cannot be used here as it doesn't work for derived
+  // types that override GetType returning a different value.
+  auto *array_value_ptr = static_cast<OptionValueArray *>(copy_sp.get());
+  lldbassert(array_value_ptr);
+
+  for (auto &value : array_value_ptr->m_values)
+    value = value->DeepCopy(copy_sp);
+
+  return copy_sp;
 }

@@ -1,15 +1,15 @@
 //===- Win32/Signals.cpp - Win32 Signals Implementation ---------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
 // This file provides the Win32 specific implementation of the Signals class.
 //
 //===----------------------------------------------------------------------===//
+#include "llvm/Support/ConvertUTF.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/Process.h"
@@ -23,7 +23,7 @@
 #include "llvm/Support/raw_ostream.h"
 
 // The Windows.h header must be after LLVM and standard headers.
-#include "WindowsSupport.h"
+#include "llvm/Support/Windows/WindowsSupport.h"
 
 #ifdef __MINGW32__
  #include <imagehlp.h>
@@ -36,9 +36,6 @@
 #ifdef _MSC_VER
  #pragma comment(lib, "psapi.lib")
 #elif __MINGW32__
- #if (HAVE_LIBPSAPI != 1)
-  #error "libpsapi.a should be present"
- #endif
  // The version of g++ that comes with MinGW does *not* properly understand
  // the ll format specifier for printf. However, MinGW passes the format
  // specifiers on to the MSVCRT entirely, and the CRT understands the ll
@@ -193,7 +190,7 @@ using namespace llvm;
 static LONG WINAPI LLVMUnhandledExceptionFilter(LPEXCEPTION_POINTERS ep);
 static BOOL WINAPI LLVMConsoleCtrlHandler(DWORD dwCtrlType);
 
-// InterruptFunction - The function to call if ctrl-c is pressed.
+// The function to call if ctrl-c is pressed.
 static void (*InterruptFunction)() = 0;
 
 static std::vector<std::string> *FilesToRemove = NULL;
@@ -212,8 +209,14 @@ static StringRef Argv0;
 enum {
 #if defined(_M_X64)
   NativeMachineType = IMAGE_FILE_MACHINE_AMD64
-#else
+#elif defined(_M_ARM64)
+  NativeMachineType = IMAGE_FILE_MACHINE_ARM64
+#elif defined(_M_IX86)
   NativeMachineType = IMAGE_FILE_MACHINE_I386
+#elif defined(_M_ARM)
+  NativeMachineType = IMAGE_FILE_MACHINE_ARMNT
+#else
+  NativeMachineType = IMAGE_FILE_MACHINE_UNKNOWN
 #endif
 };
 
@@ -318,18 +321,18 @@ static void PrintStackTraceForThread(llvm::raw_ostream &OS, HANDLE hProcess,
     using namespace llvm;
     // Print the PC in hexadecimal.
     DWORD64 PC = StackFrame.AddrPC.Offset;
-#if defined(_M_X64)
+#if defined(_M_X64) || defined(_M_ARM64)
     OS << format("0x%016llX", PC);
-#elif defined(_M_IX86)
+#elif defined(_M_IX86) || defined(_M_ARM)
     OS << format("0x%08lX", static_cast<DWORD>(PC));
 #endif
 
 // Print the parameters.  Assume there are four.
-#if defined(_M_X64)
+#if defined(_M_X64) || defined(_M_ARM64)
     OS << format(" (0x%016llX 0x%016llX 0x%016llX 0x%016llX)",
             StackFrame.Params[0], StackFrame.Params[1], StackFrame.Params[2],
             StackFrame.Params[3]);
-#elif defined(_M_IX86)
+#elif defined(_M_IX86) || defined(_M_ARM)
     OS << format(" (0x%08lX 0x%08lX 0x%08lX 0x%08lX)",
             static_cast<DWORD>(StackFrame.Params[0]),
             static_cast<DWORD>(StackFrame.Params[1]),
@@ -384,9 +387,9 @@ namespace llvm {
 //===----------------------------------------------------------------------===//
 
 #ifdef _MSC_VER
-/// AvoidMessageBoxHook - Emulates hitting "retry" from an "abort, retry,
-/// ignore" CRT debug report dialog.  "retry" raises an exception which
-/// ultimately triggers our stack dumper.
+/// Emulates hitting "retry" from an "abort, retry, ignore" CRT debug report
+/// dialog. "retry" raises an exception which ultimately triggers our stack
+/// dumper.
 static LLVM_ATTRIBUTE_UNUSED int
 AvoidMessageBoxHook(int ReportType, char *Message, int *Return) {
   // Set *Return to the retry code for the return value of _CrtDbgReport:
@@ -444,7 +447,7 @@ static void RegisterHandler() {
   // else multi-threading problems will ensue.
 }
 
-// RemoveFileOnSignal - The public API
+// The public API
 bool sys::RemoveFileOnSignal(StringRef Filename, std::string* ErrMsg) {
   RegisterHandler();
 
@@ -457,13 +460,13 @@ bool sys::RemoveFileOnSignal(StringRef Filename, std::string* ErrMsg) {
   if (FilesToRemove == NULL)
     FilesToRemove = new std::vector<std::string>;
 
-  FilesToRemove->push_back(Filename);
+  FilesToRemove->push_back(std::string(Filename));
 
   LeaveCriticalSection(&CriticalSection);
   return false;
 }
 
-// DontRemoveFileOnSignal - The public API
+// The public API
 void sys::DontRemoveFileOnSignal(StringRef Filename) {
   if (FilesToRemove == NULL)
     return;
@@ -497,8 +500,8 @@ void sys::DisableSystemDialogsOnCrash() {
   _set_error_mode(_OUT_TO_STDERR);
 }
 
-/// PrintStackTraceOnErrorSignal - When an error signal (such as SIBABRT or
-/// SIGSEGV) is delivered to the process, print a stack trace and then exit.
+/// When an error signal (such as SIGABRT or SIGSEGV) is delivered to the
+/// process, print a stack trace and then exit.
 void sys::PrintStackTraceOnErrorSignal(StringRef Argv0,
                                        bool DisableCrashReporting) {
   ::Argv0 = Argv0;
@@ -518,26 +521,41 @@ void sys::PrintStackTraceOnErrorSignal(StringRef Argv0,
 extern "C" VOID WINAPI RtlCaptureContext(PCONTEXT ContextRecord);
 #endif
 
-void llvm::sys::PrintStackTrace(raw_ostream &OS) {
-  STACKFRAME64 StackFrame = {};
-  CONTEXT Context = {};
-  ::RtlCaptureContext(&Context);
+static void LocalPrintStackTrace(raw_ostream &OS, PCONTEXT C) {
+  STACKFRAME64 StackFrame{};
+  CONTEXT Context{};
+  if (!C) {
+    ::RtlCaptureContext(&Context);
+    C = &Context;
+  }
 #if defined(_M_X64)
   StackFrame.AddrPC.Offset = Context.Rip;
   StackFrame.AddrStack.Offset = Context.Rsp;
   StackFrame.AddrFrame.Offset = Context.Rbp;
-#else
+#elif defined(_M_IX86)
   StackFrame.AddrPC.Offset = Context.Eip;
   StackFrame.AddrStack.Offset = Context.Esp;
   StackFrame.AddrFrame.Offset = Context.Ebp;
+#elif defined(_M_ARM64)
+  StackFrame.AddrPC.Offset = Context.Pc;
+  StackFrame.AddrStack.Offset = Context.Sp;
+  StackFrame.AddrFrame.Offset = Context.Fp;
+#elif defined(_M_ARM)
+  StackFrame.AddrPC.Offset = Context.Pc;
+  StackFrame.AddrStack.Offset = Context.Sp;
+  StackFrame.AddrFrame.Offset = Context.R11;
 #endif
   StackFrame.AddrPC.Mode = AddrModeFlat;
   StackFrame.AddrStack.Mode = AddrModeFlat;
   StackFrame.AddrFrame.Mode = AddrModeFlat;
   PrintStackTraceForThread(OS, GetCurrentProcess(), GetCurrentThread(),
-                           StackFrame, &Context);
+                           StackFrame, C);
 }
 
+void llvm::sys::PrintStackTrace(raw_ostream &OS, int Depth) {
+  // FIXME: Handle "Depth" parameter to print stack trace upto specified Depth
+  LocalPrintStackTrace(OS, nullptr);
+}
 
 void llvm::sys::SetInterruptFunction(void (*IF)()) {
   RegisterHandler();
@@ -545,17 +563,29 @@ void llvm::sys::SetInterruptFunction(void (*IF)()) {
   LeaveCriticalSection(&CriticalSection);
 }
 
+void llvm::sys::SetInfoSignalFunction(void (*Handler)()) {
+  // Unimplemented.
+}
 
-/// AddSignalHandler - Add a function to be called when a signal is delivered
-/// to the process.  The handler can have a cookie passed to it to identify
-/// what instance of the handler it is.
-void llvm::sys::AddSignalHandler(void (*FnPtr)(void *), void *Cookie) {
-  CallBacksToRun->push_back(std::make_pair(FnPtr, Cookie));
+void llvm::sys::SetOneShotPipeSignalFunction(void (*Handler)()) {
+  // Unimplemented.
+}
+
+void llvm::sys::DefaultOneShotPipeSignalHandler() {
+  // Unimplemented.
+}
+
+/// Add a function to be called when a signal is delivered to the process. The
+/// handler can have a cookie passed to it to identify what instance of the
+/// handler it is.
+void llvm::sys::AddSignalHandler(sys::SignalHandlerCallback FnPtr,
+                                 void *Cookie) {
+  insertSignalHandler(FnPtr, Cookie);
   RegisterHandler();
   LeaveCriticalSection(&CriticalSection);
 }
 
-static void Cleanup() {
+static void Cleanup(bool ExecuteSignalHandlers) {
   if (CleanupExecuted)
     return;
 
@@ -571,7 +601,10 @@ static void Cleanup() {
       llvm::sys::fs::remove(FilesToRemove->back());
       FilesToRemove->pop_back();
     }
-  llvm::sys::RunSignalHandlers();
+
+  if (ExecuteSignalHandlers)
+    llvm::sys::RunSignalHandlers();
+
   LeaveCriticalSection(&CriticalSection);
 }
 
@@ -581,10 +614,10 @@ void llvm::sys::RunInterruptHandlers() {
   // error handler). We must ensure that the critical section is properly
   // initialized.
   InitializeThreading();
-  Cleanup();
+  Cleanup(true);
 }
 
-/// \brief Find the Windows Registry Key for a given location.
+/// Find the Windows Registry Key for a given location.
 ///
 /// \returns a valid HKEY if the location exists, else NULL.
 static HKEY FindWERKey(const llvm::Twine &RegistryLocation) {
@@ -597,7 +630,7 @@ static HKEY FindWERKey(const llvm::Twine &RegistryLocation) {
   return Key;
 }
 
-/// \brief Populate ResultDirectory with the value for "DumpFolder" for a given
+/// Populate ResultDirectory with the value for "DumpFolder" for a given
 /// Windows Registry key.
 ///
 /// \returns true if a valid value for DumpFolder exists, false otherwise.
@@ -638,7 +671,7 @@ static bool GetDumpFolder(HKEY Key,
   return true;
 }
 
-/// \brief Populate ResultType with a valid MINIDUMP_TYPE based on the value of
+/// Populate ResultType with a valid MINIDUMP_TYPE based on the value of
 /// "DumpType" for a given Windows Registry key.
 ///
 /// According to
@@ -685,7 +718,7 @@ static bool GetDumpType(HKEY Key, MINIDUMP_TYPE &ResultType) {
   return true;
 }
 
-/// \brief Write a Windows dump file containing process information that can be
+/// Write a Windows dump file containing process information that can be
 /// used for post-mortem debugging.
 ///
 /// \returns zero error code if a mini dump created, actual error code
@@ -769,8 +802,12 @@ WriteWindowsDumpFile(PMINIDUMP_EXCEPTION_INFORMATION ExceptionInfo) {
   return std::error_code();
 }
 
+void sys::CleanupOnSignal(uintptr_t Context) {
+  LLVMUnhandledExceptionFilter((LPEXCEPTION_POINTERS)Context);
+}
+
 static LONG WINAPI LLVMUnhandledExceptionFilter(LPEXCEPTION_POINTERS ep) {
-  Cleanup();
+  Cleanup(true);
 
   // We'll automatically write a Minidump file here to help diagnose
   // the nasty sorts of crashes that aren't 100% reproducible from a set of
@@ -787,37 +824,24 @@ static LONG WINAPI LLVMUnhandledExceptionFilter(LPEXCEPTION_POINTERS ep) {
                    << "\n";
   }
 
-  // Initialize the STACKFRAME structure.
-  STACKFRAME64 StackFrame = {};
+  // Stack unwinding appears to modify the context. Copy it to preserve the
+  // caller's context.
+  CONTEXT ContextCopy;
+  if (ep)
+    memcpy(&ContextCopy, ep->ContextRecord, sizeof(ContextCopy));
 
-#if defined(_M_X64)
-  StackFrame.AddrPC.Offset = ep->ContextRecord->Rip;
-  StackFrame.AddrPC.Mode = AddrModeFlat;
-  StackFrame.AddrStack.Offset = ep->ContextRecord->Rsp;
-  StackFrame.AddrStack.Mode = AddrModeFlat;
-  StackFrame.AddrFrame.Offset = ep->ContextRecord->Rbp;
-  StackFrame.AddrFrame.Mode = AddrModeFlat;
-#elif defined(_M_IX86)
-  StackFrame.AddrPC.Offset = ep->ContextRecord->Eip;
-  StackFrame.AddrPC.Mode = AddrModeFlat;
-  StackFrame.AddrStack.Offset = ep->ContextRecord->Esp;
-  StackFrame.AddrStack.Mode = AddrModeFlat;
-  StackFrame.AddrFrame.Offset = ep->ContextRecord->Ebp;
-  StackFrame.AddrFrame.Mode = AddrModeFlat;
-#endif
+  LocalPrintStackTrace(llvm::errs(), ep ? &ContextCopy : nullptr);
 
-  HANDLE hProcess = GetCurrentProcess();
-  HANDLE hThread = GetCurrentThread();
-  PrintStackTraceForThread(llvm::errs(), hProcess, hThread, StackFrame,
-                           ep->ContextRecord);
-
-  _exit(ep->ExceptionRecord->ExceptionCode);
+  return EXCEPTION_EXECUTE_HANDLER;
 }
 
 static BOOL WINAPI LLVMConsoleCtrlHandler(DWORD dwCtrlType) {
   // We are running in our very own thread, courtesy of Windows.
   EnterCriticalSection(&CriticalSection);
-  Cleanup();
+  // This function is only ever called when a CTRL-C or similar control signal
+  // is fired. Killing a process in this way is normal, so don't trigger the
+  // signal handlers.
+  Cleanup(false);
 
   // If an interrupt function has been set, go and run one it; otherwise,
   // the process dies.
@@ -845,3 +869,5 @@ static BOOL WINAPI LLVMConsoleCtrlHandler(DWORD dwCtrlType) {
  #pragma GCC diagnostic warning "-Wformat"
  #pragma GCC diagnostic warning "-Wformat-extra-args"
 #endif
+
+void sys::unregisterHandlers() {}

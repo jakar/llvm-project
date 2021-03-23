@@ -1,9 +1,8 @@
 //===- llvm/SymbolTableListTraits.h - Traits for iplist ---------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -48,7 +47,7 @@ class ValueSymbolTable;
 template <typename NodeTy> struct SymbolTableListParentType {};
 
 #define DEFINE_SYMBOL_TABLE_PARENT_TYPE(NODE, PARENT)                          \
-  template <> struct SymbolTableListParentType<NODE> { typedef PARENT type; };
+  template <> struct SymbolTableListParentType<NODE> { using type = PARENT; };
 DEFINE_SYMBOL_TABLE_PARENT_TYPE(Instruction, BasicBlock)
 DEFINE_SYMBOL_TABLE_PARENT_TYPE(BasicBlock, Function)
 DEFINE_SYMBOL_TABLE_PARENT_TYPE(Argument, Function)
@@ -65,10 +64,10 @@ template <typename NodeTy> class SymbolTableList;
 //
 template <typename ValueSubClass>
 class SymbolTableListTraits : public ilist_alloc_traits<ValueSubClass> {
-  typedef SymbolTableList<ValueSubClass> ListTy;
-  typedef typename simple_ilist<ValueSubClass>::iterator iterator;
-  typedef
-      typename SymbolTableListParentType<ValueSubClass>::type ItemParentClass;
+  using ListTy = SymbolTableList<ValueSubClass>;
+  using iterator = typename simple_ilist<ValueSubClass>::iterator;
+  using ItemParentClass =
+      typename SymbolTableListParentType<ValueSubClass>::type;
 
 public:
   SymbolTableListTraits() = default;
@@ -77,9 +76,11 @@ private:
   /// getListOwner - Return the object that owns this list.  If this is a list
   /// of instructions, it returns the BasicBlock that owns them.
   ItemParentClass *getListOwner() {
-    size_t Offset(size_t(&((ItemParentClass*)nullptr->*ItemParentClass::
-                           getSublistAccess(static_cast<ValueSubClass*>(nullptr)))));
-    ListTy *Anchor(static_cast<ListTy *>(this));
+    size_t Offset = reinterpret_cast<size_t>(
+        &((ItemParentClass *)nullptr->*ItemParentClass::getSublistAccess(
+                                           static_cast<ValueSubClass *>(
+                                               nullptr))));
+    ListTy *Anchor = static_cast<ListTy *>(this);
     return reinterpret_cast<ItemParentClass*>(reinterpret_cast<char*>(Anchor)-
                                               Offset);
   }

@@ -1,9 +1,8 @@
 //===- llvm/ADT/BitVector.h - Bit vectors -----------------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -15,6 +14,8 @@
 #define LLVM_ADT_BITVECTOR_H
 
 #include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/DenseMapInfo.h"
+#include "llvm/ADT/iterator_range.h"
 #include "llvm/Support/MathExtras.h"
 #include <algorithm>
 #include <cassert>
@@ -26,8 +27,52 @@
 
 namespace llvm {
 
+/// ForwardIterator for the bits that are set.
+/// Iterators get invalidated when resize / reserve is called.
+template <typename BitVectorT> class const_set_bits_iterator_impl {
+  const BitVectorT &Parent;
+  int Current = 0;
+
+  void advance() {
+    assert(Current != -1 && "Trying to advance past end.");
+    Current = Parent.find_next(Current);
+  }
+
+public:
+  const_set_bits_iterator_impl(const BitVectorT &Parent, int Current)
+      : Parent(Parent), Current(Current) {}
+  explicit const_set_bits_iterator_impl(const BitVectorT &Parent)
+      : const_set_bits_iterator_impl(Parent, Parent.find_first()) {}
+  const_set_bits_iterator_impl(const const_set_bits_iterator_impl &) = default;
+
+  const_set_bits_iterator_impl operator++(int) {
+    auto Prev = *this;
+    advance();
+    return Prev;
+  }
+
+  const_set_bits_iterator_impl &operator++() {
+    advance();
+    return *this;
+  }
+
+  unsigned operator*() const { return Current; }
+
+  bool operator==(const const_set_bits_iterator_impl &Other) const {
+    assert(&Parent == &Other.Parent &&
+           "Comparing iterators from different BitVectors");
+    return Current == Other.Current;
+  }
+
+  bool operator!=(const const_set_bits_iterator_impl &Other) const {
+    assert(&Parent == &Other.Parent &&
+           "Comparing iterators from different BitVectors");
+    return Current != Other.Current;
+  }
+};
+
 class BitVector {
-  typedef unsigned long BitWord;
+  typedef uintptr_t BitWord;
 
   enum { BITWORD_SIZE = (unsigned)sizeof(BitWord) * CHAR_BIT };
 
@@ -73,6 +118,18 @@ public:
     }
   };
 
+  typedef const_set_bits_iterator_impl<BitVector> const_set_bits_iterator;
+  typedef const_set_bits_iterator set_iterator;
+
+  const_set_bits_iterator set_bits_begin() const {
+    return const_set_bits_iterator(*this);
+  }
+  const_set_bits_iterator set_bits_end() const {
+    return const_set_bits_iterator(*this, -1);
+  }
+  iterator_range<const_set_bits_iterator> set_bits() const {
+    return make_range(set_bits_begin(), set_bits_end());
+  }
 
   /// BitVector default ctor - Creates an empty bitvector.
   BitVector() : Size(0) {}
@@ -131,12 +188,12 @@ public:
   /// all - Returns true if all bits are set.
   bool all() const {
     for (unsigned i = 0; i < Size / BITWORD_SIZE; ++i)
-      if (Bits[i] != ~0UL)
+      if (Bits[i] != ~BitWord(0))
         return false;
 
     // If bits remain check that they are ones. The unused bits are always zero.
     if (unsigned Remainder = Size % BITWORD_SIZE)
-      return Bits[Size / BITWORD_SIZE] == (1UL << Remainder) - 1;
+      return Bits[Size / BITWORD_SIZE] == (BitWord(1) << Remainder) - 1;
 
     return true;
   }
@@ -146,138 +203,146 @@ public:
     return !any();
   }
 
-  /// find_first - Returns the index of the first set bit, -1 if none
-  /// of the bits are set.
-  int find_first() const {
-    for (unsigned i = 0; i < NumBitWords(size()); ++i)
-      if (Bits[i] != 0)
-        return i * BITWORD_SIZE + countTrailingZeros(Bits[i]);
+  /// find_first_in - Returns the index of the first set / unset bit,
+  /// depending on \p Set, in the range [Begin, End).
+  /// Returns -1 if all bits in the range are unset / set.
+  int find_first_in(unsigned Begin, unsigned End, bool Set = true) const {
+    assert(Begin <= End && End <= Size);
+    if (Begin == End)
+      return -1;
+
+    unsigned FirstWord = Begin / BITWORD_SIZE;
+    unsigned LastWord = (End - 1) / BITWORD_SIZE;
+
+    // Check subsequent words.
+    // The code below is based on search for the first _set_ bit. If
+    // we're searching for the first _unset_, we just take the
+    // complement of each word before we use it and apply
+    // the same method.
+    for (unsigned i = FirstWord; i <= LastWord; ++i) {
+      BitWord Copy = Bits[i];
+      if (!Set)
+        Copy = ~Copy;
+
+      if (i == FirstWord) {
+        unsigned FirstBit = Begin % BITWORD_SIZE;
+        Copy &= maskTrailingZeros<BitWord>(FirstBit);
+      }
+
+      if (i == LastWord) {
+        unsigned LastBit = (End - 1) % BITWORD_SIZE;
+        Copy &= maskTrailingOnes<BitWord>(LastBit + 1);
+      }
+      if (Copy != 0)
+        return i * BITWORD_SIZE + countTrailingZeros(Copy);
+    }
     return -1;
   }
+
+  /// find_last_in - Returns the index of the last set bit in the range
+  /// [Begin, End).  Returns -1 if all bits in the range are unset.
+  int find_last_in(unsigned Begin, unsigned End) const {
+    assert(Begin <= End && End <= Size);
+    if (Begin == End)
+      return -1;
+
+    unsigned LastWord = (End - 1) / BITWORD_SIZE;
+    unsigned FirstWord = Begin / BITWORD_SIZE;
+
+    for (unsigned i = LastWord + 1; i >= FirstWord + 1; --i) {
+      unsigned CurrentWord = i - 1;
+
+      BitWord Copy = Bits[CurrentWord];
+      if (CurrentWord == LastWord) {
+        unsigned LastBit = (End - 1) % BITWORD_SIZE;
+        Copy &= maskTrailingOnes<BitWord>(LastBit + 1);
+      }
+
+      if (CurrentWord == FirstWord) {
+        unsigned FirstBit = Begin % BITWORD_SIZE;
+        Copy &= maskTrailingZeros<BitWord>(FirstBit);
+      }
+
+      if (Copy != 0)
+        return (CurrentWord + 1) * BITWORD_SIZE - countLeadingZeros(Copy) - 1;
+    }
+
+    return -1;
+  }
+
+  /// find_first_unset_in - Returns the index of the first unset bit in the
+  /// range [Begin, End).  Returns -1 if all bits in the range are set.
+  int find_first_unset_in(unsigned Begin, unsigned End) const {
+    return find_first_in(Begin, End, /* Set = */ false);
+  }
+
+  /// find_last_unset_in - Returns the index of the last unset bit in the
+  /// range [Begin, End).  Returns -1 if all bits in the range are set.
+  int find_last_unset_in(unsigned Begin, unsigned End) const {
+    assert(Begin <= End && End <= Size);
+    if (Begin == End)
+      return -1;
+
+    unsigned LastWord = (End - 1) / BITWORD_SIZE;
+    unsigned FirstWord = Begin / BITWORD_SIZE;
+
+    for (unsigned i = LastWord + 1; i >= FirstWord + 1; --i) {
+      unsigned CurrentWord = i - 1;
+
+      BitWord Copy = Bits[CurrentWord];
+      if (CurrentWord == LastWord) {
+        unsigned LastBit = (End - 1) % BITWORD_SIZE;
+        Copy |= maskTrailingZeros<BitWord>(LastBit + 1);
+      }
+
+      if (CurrentWord == FirstWord) {
+        unsigned FirstBit = Begin % BITWORD_SIZE;
+        Copy |= maskTrailingOnes<BitWord>(FirstBit);
+      }
+
+      if (Copy != ~BitWord(0)) {
+        unsigned Result =
+            (CurrentWord + 1) * BITWORD_SIZE - countLeadingOnes(Copy) - 1;
+        return Result < Size ? Result : -1;
+      }
+    }
+    return -1;
+  }
+
+  /// find_first - Returns the index of the first set bit, -1 if none
+  /// of the bits are set.
+  int find_first() const { return find_first_in(0, Size); }
 
   /// find_last - Returns the index of the last set bit, -1 if none of the bits
   /// are set.
-  int find_last() const {
-    if (Size == 0)
-      return -1;
-
-    unsigned N = NumBitWords(size());
-    assert(N > 0);
-
-    unsigned i = N - 1;
-    while (i > 0 && Bits[i] == BitWord(0))
-      --i;
-
-    return int((i + 1) * BITWORD_SIZE - countLeadingZeros(Bits[i])) - 1;
-  }
-
-  /// find_first_unset - Returns the index of the first unset bit, -1 if all
-  /// of the bits are set.
-  int find_first_unset() const {
-    for (unsigned i = 0; i < NumBitWords(size()); ++i)
-      if (Bits[i] != ~0UL) {
-        unsigned Result = i * BITWORD_SIZE + countTrailingOnes(Bits[i]);
-        return Result < size() ? Result : -1;
-      }
-    return -1;
-  }
-
-  /// find_last_unset - Returns the index of the last unset bit, -1 if all of
-  /// the bits are set.
-  int find_last_unset() const {
-    if (Size == 0)
-      return -1;
-
-    const unsigned N = NumBitWords(size());
-    assert(N > 0);
-
-    unsigned i = N - 1;
-    BitWord W = Bits[i];
-
-    // The last word in the BitVector has some unused bits, so we need to set
-    // them all to 1 first.  Set them all to 1 so they don't get treated as
-    // valid unset bits.
-    unsigned UnusedCount = BITWORD_SIZE - size() % BITWORD_SIZE;
-    W |= maskLeadingOnes<BitWord>(UnusedCount);
-
-    while (W == ~BitWord(0) && --i > 0)
-      W = Bits[i];
-
-    return int((i + 1) * BITWORD_SIZE - countLeadingOnes(W)) - 1;
-  }
+  int find_last() const { return find_last_in(0, Size); }
 
   /// find_next - Returns the index of the next set bit following the
   /// "Prev" bit. Returns -1 if the next set bit is not found.
-  int find_next(unsigned Prev) const {
-    ++Prev;
-    if (Prev >= Size)
-      return -1;
+  int find_next(unsigned Prev) const { return find_first_in(Prev + 1, Size); }
 
-    unsigned WordPos = Prev / BITWORD_SIZE;
-    unsigned BitPos = Prev % BITWORD_SIZE;
-    BitWord Copy = Bits[WordPos];
-    // Mask off previous bits.
-    Copy &= maskTrailingZeros<BitWord>(BitPos);
+  /// find_prev - Returns the index of the first set bit that precedes the
+  /// the bit at \p PriorTo.  Returns -1 if all previous bits are unset.
+  int find_prev(unsigned PriorTo) const { return find_last_in(0, PriorTo); }
 
-    if (Copy != 0)
-      return WordPos * BITWORD_SIZE + countTrailingZeros(Copy);
-
-    // Check subsequent words.
-    for (unsigned i = WordPos+1; i < NumBitWords(size()); ++i)
-      if (Bits[i] != 0)
-        return i * BITWORD_SIZE + countTrailingZeros(Bits[i]);
-    return -1;
-  }
+  /// find_first_unset - Returns the index of the first unset bit, -1 if all
+  /// of the bits are set.
+  int find_first_unset() const { return find_first_unset_in(0, Size); }
 
   /// find_next_unset - Returns the index of the next unset bit following the
   /// "Prev" bit.  Returns -1 if all remaining bits are set.
   int find_next_unset(unsigned Prev) const {
-    ++Prev;
-    if (Prev >= Size)
-      return -1;
-
-    unsigned WordPos = Prev / BITWORD_SIZE;
-    unsigned BitPos = Prev % BITWORD_SIZE;
-    BitWord Copy = Bits[WordPos];
-    // Mask in previous bits.
-    BitWord Mask = (1 << BitPos) - 1;
-    Copy |= Mask;
-
-    if (Copy != ~0UL)
-      return next_unset_in_word(WordPos, Copy);
-
-    // Check subsequent words.
-    for (unsigned i = WordPos + 1; i < NumBitWords(size()); ++i)
-      if (Bits[i] != ~0UL)
-        return next_unset_in_word(i, Bits[i]);
-    return -1;
+    return find_first_unset_in(Prev + 1, Size);
   }
 
-  /// find_prev - Returns the index of the first set bit that precedes the
-  /// the bit at \p PriorTo.  Returns -1 if all previous bits are unset.
-  int find_prev(unsigned PriorTo) const {
-    if (PriorTo == 0)
-      return -1;
+  /// find_last_unset - Returns the index of the last unset bit, -1 if all of
+  /// the bits are set.
+  int find_last_unset() const { return find_last_unset_in(0, Size); }
 
-    --PriorTo;
-
-    unsigned WordPos = PriorTo / BITWORD_SIZE;
-    unsigned BitPos = PriorTo % BITWORD_SIZE;
-    BitWord Copy = Bits[WordPos];
-    // Mask off next bits.
-    Copy &= maskTrailingOnes<BitWord>(BitPos + 1);
-
-    if (Copy != 0)
-      return (WordPos + 1) * BITWORD_SIZE - countLeadingZeros(Copy) - 1;
-
-    // Check previous words.
-    for (unsigned i = 1; i <= WordPos; ++i) {
-      unsigned Index = WordPos - i;
-      if (Bits[Index] == 0)
-        continue;
-      return (Index + 1) * BITWORD_SIZE - countLeadingZeros(Bits[Index]) - 1;
-    }
-    return -1;
+  /// find_prev_unset - Returns the index of the first unset bit that precedes
+  /// the bit at \p PriorTo.  Returns -1 if all previous bits are set.
+  int find_prev_unset(unsigned PriorTo) {
+    return find_last_unset_in(0, PriorTo);
   }
 
   /// clear - Removes all bits from the bitvector. Does not change capacity.
@@ -332,21 +397,21 @@ public:
     if (I == E) return *this;
 
     if (I / BITWORD_SIZE == E / BITWORD_SIZE) {
-      BitWord EMask = 1UL << (E % BITWORD_SIZE);
-      BitWord IMask = 1UL << (I % BITWORD_SIZE);
+      BitWord EMask = BitWord(1) << (E % BITWORD_SIZE);
+      BitWord IMask = BitWord(1) << (I % BITWORD_SIZE);
       BitWord Mask = EMask - IMask;
       Bits[I / BITWORD_SIZE] |= Mask;
       return *this;
     }
 
-    BitWord PrefixMask = ~0UL << (I % BITWORD_SIZE);
+    BitWord PrefixMask = ~BitWord(0) << (I % BITWORD_SIZE);
     Bits[I / BITWORD_SIZE] |= PrefixMask;
     I = alignTo(I, BITWORD_SIZE);
 
     for (; I + BITWORD_SIZE <= E; I += BITWORD_SIZE)
-      Bits[I / BITWORD_SIZE] = ~0UL;
+      Bits[I / BITWORD_SIZE] = ~BitWord(0);
 
-    BitWord PostfixMask = (1UL << (E % BITWORD_SIZE)) - 1;
+    BitWord PostfixMask = (BitWord(1) << (E % BITWORD_SIZE)) - 1;
     if (I < E)
       Bits[I / BITWORD_SIZE] |= PostfixMask;
 
@@ -371,21 +436,21 @@ public:
     if (I == E) return *this;
 
     if (I / BITWORD_SIZE == E / BITWORD_SIZE) {
-      BitWord EMask = 1UL << (E % BITWORD_SIZE);
-      BitWord IMask = 1UL << (I % BITWORD_SIZE);
+      BitWord EMask = BitWord(1) << (E % BITWORD_SIZE);
+      BitWord IMask = BitWord(1) << (I % BITWORD_SIZE);
       BitWord Mask = EMask - IMask;
       Bits[I / BITWORD_SIZE] &= ~Mask;
       return *this;
     }
 
-    BitWord PrefixMask = ~0UL << (I % BITWORD_SIZE);
+    BitWord PrefixMask = ~BitWord(0) << (I % BITWORD_SIZE);
     Bits[I / BITWORD_SIZE] &= ~PrefixMask;
     I = alignTo(I, BITWORD_SIZE);
 
     for (; I + BITWORD_SIZE <= E; I += BITWORD_SIZE)
-      Bits[I / BITWORD_SIZE] = 0UL;
+      Bits[I / BITWORD_SIZE] = BitWord(0);
 
-    BitWord PostfixMask = (1UL << (E % BITWORD_SIZE)) - 1;
+    BitWord PostfixMask = (BitWord(1) << (E % BITWORD_SIZE)) - 1;
     if (I < E)
       Bits[I / BITWORD_SIZE] &= ~PostfixMask;
 
@@ -420,6 +485,23 @@ public:
     return (*this)[Idx];
   }
 
+  // Push single bit to end of vector.
+  void push_back(bool Val) {
+    unsigned OldSize = Size;
+    unsigned NewSize = Size + 1;
+
+    // Resize, which will insert zeros.
+    // If we already fit then the unused bits will be already zero.
+    if (NewSize > getBitCapacity())
+      resize(NewSize, false);
+    else
+      Size = NewSize;
+
+    // If true, set single bit.
+    if (Val)
+      set(OldSize);
+  }
+
   /// Test if any common bits are set.
   bool anyCommon(const BitVector &RHS) const {
     unsigned ThisWords = NumBitWords(size());
@@ -432,24 +514,10 @@ public:
 
   // Comparison operators.
   bool operator==(const BitVector &RHS) const {
-    unsigned ThisWords = NumBitWords(size());
-    unsigned RHSWords  = NumBitWords(RHS.size());
-    unsigned i;
-    for (i = 0; i != std::min(ThisWords, RHSWords); ++i)
-      if (Bits[i] != RHS.Bits[i])
-        return false;
-
-    // Verify that any extra words are all zeros.
-    if (i != ThisWords) {
-      for (; i != ThisWords; ++i)
-        if (Bits[i])
-          return false;
-    } else if (i != RHSWords) {
-      for (; i != RHSWords; ++i)
-        if (RHS.Bits[i])
-          return false;
-    }
-    return true;
+    if (size() != RHS.size())
+      return false;
+    unsigned NumWords = NumBitWords(size());
+    return Bits.take_front(NumWords) == RHS.Bits.take_front(NumWords);
   }
 
   bool operator!=(const BitVector &RHS) const {
@@ -620,6 +688,14 @@ public:
     if (this == &RHS) return *this;
 
     Size = RHS.size();
+
+    // Handle tombstone when the BitVector is a key of a DenseHash.
+    if (RHS.isInvalid()) {
+      std::free(Bits.data());
+      Bits = None;
+      return *this;
+    }
+
     unsigned RHSWords = NumBitWords(Size);
     if (Size <= getBitCapacity()) {
       if (Size)
@@ -659,6 +735,16 @@ public:
     std::swap(Size, RHS.Size);
   }
 
+  void invalid() {
+    assert(!Size && Bits.empty());
+    Size = (unsigned)-1;
+  }
+  bool isInvalid() const { return Size == (unsigned)-1; }
+
+  ArrayRef<BitWord> getData() const {
+    return Bits.take_front(NumBitWords(size()));
+  }
+
   //===--------------------------------------------------------------------===//
   // Portable bit mask operations.
   //===--------------------------------------------------------------------===//
@@ -696,7 +782,7 @@ public:
   }
 
 private:
-  /// \brief Perform a logical left shift of \p Count words by moving everything
+  /// Perform a logical left shift of \p Count words by moving everything
   /// \p Count words to the right in memory.
   ///
   /// While confusing, words are stored from least significant at Bits[0] to
@@ -727,7 +813,7 @@ private:
     clear_unused_bits();
   }
 
-  /// \brief Perform a logical right shift of \p Count words by moving those
+  /// Perform a logical right shift of \p Count words by moving those
   /// words to the left in memory.  See wordShl for more information.
   ///
   void wordShr(uint32_t Count) {
@@ -745,7 +831,8 @@ private:
   }
 
   MutableArrayRef<BitWord> allocate(size_t NumWords) {
-    BitWord *RawBits = (BitWord *)std::malloc(NumWords * sizeof(BitWord));
+    BitWord *RawBits = static_cast<BitWord *>(
+        safe_malloc(NumWords * sizeof(BitWord)));
     return MutableArrayRef<BitWord>(RawBits, NumWords);
   }
 
@@ -768,7 +855,7 @@ private:
     //  Then set any stray high bits of the last used word.
     unsigned ExtraBits = Size % BITWORD_SIZE;
     if (ExtraBits) {
-      BitWord ExtraBitMask = ~0UL << ExtraBits;
+      BitWord ExtraBitMask = ~BitWord(0) << ExtraBits;
       if (t)
         Bits[UsedWords-1] |= ExtraBitMask;
       else
@@ -784,8 +871,8 @@ private:
   void grow(unsigned NewSize) {
     size_t NewCapacity = std::max<size_t>(NumBitWords(NewSize), Bits.size() * 2);
     assert(NewCapacity > 0 && "realloc-ing zero space");
-    BitWord *NewBits =
-        (BitWord *)std::realloc(Bits.data(), NewCapacity * sizeof(BitWord));
+    BitWord *NewBits = static_cast<BitWord *>(
+        safe_realloc(Bits.data(), NewCapacity * sizeof(BitWord)));
     Bits = MutableArrayRef<BitWord>(NewBits, NewCapacity);
     clear_unused_bits();
   }
@@ -828,10 +915,27 @@ public:
   size_t getBitCapacity() const { return Bits.size() * BITWORD_SIZE; }
 };
 
-static inline size_t capacity_in_bytes(const BitVector &X) {
+inline size_t capacity_in_bytes(const BitVector &X) {
   return X.getMemorySize();
 }
 
+template <> struct DenseMapInfo<BitVector> {
+  static inline BitVector getEmptyKey() { return BitVector(); }
+  static inline BitVector getTombstoneKey() {
+    BitVector V;
+    V.invalid();
+    return V;
+  }
+  static unsigned getHashValue(const BitVector &V) {
+    return DenseMapInfo<std::pair<unsigned, ArrayRef<uintptr_t>>>::getHashValue(
+        std::make_pair(V.size(), V.getData()));
+  }
+  static bool isEqual(const BitVector &LHS, const BitVector &RHS) {
+    if (LHS.isInvalid() || RHS.isInvalid())
+      return LHS.isInvalid() == RHS.isInvalid();
+    return LHS == RHS;
+  }
+};
 } // end namespace llvm
 
 namespace std {

@@ -1,16 +1,16 @@
 //===-- SparcAsmParser.cpp - Parse Sparc assembly to MCInst instructions --===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
 #include "MCTargetDesc/SparcMCExpr.h"
 #include "MCTargetDesc/SparcMCTargetDesc.h"
-#include "llvm/ADT/SmallVector.h"
+#include "TargetInfo/SparcTargetInfo.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/Triple.h"
 #include "llvm/MC/MCContext.h"
@@ -28,8 +28,8 @@
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/SMLoc.h"
-#include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/TargetRegistry.h"
+#include "llvm/Support/raw_ostream.h"
 #include <algorithm>
 #include <cassert>
 #include <cstdint>
@@ -68,6 +68,8 @@ class SparcAsmParser : public MCTargetAsmParser {
                                uint64_t &ErrorInfo,
                                bool MatchingInlineAsm) override;
   bool ParseRegister(unsigned &RegNo, SMLoc &StartLoc, SMLoc &EndLoc) override;
+  OperandMatchResultTy tryParseRegister(unsigned &RegNo, SMLoc &StartLoc,
+                                        SMLoc &EndLoc) override;
   bool ParseInstruction(ParseInstructionInfo &Info, StringRef Name,
                         SMLoc NameLoc, OperandVector &Operands) override;
   bool ParseDirective(AsmToken DirectiveID) override;
@@ -77,6 +79,13 @@ class SparcAsmParser : public MCTargetAsmParser {
 
   // Custom parse functions for Sparc specific operands.
   OperandMatchResultTy parseMEMOperand(OperandVector &Operands);
+
+  OperandMatchResultTy parseMembarTag(OperandVector &Operands);
+
+  template <unsigned N>
+  OperandMatchResultTy parseShiftAmtImm(OperandVector &Operands);
+
+  OperandMatchResultTy parseCallTarget(OperandVector &Operands);
 
   OperandMatchResultTy parseOperand(OperandVector &Operands, StringRef Name);
 
@@ -95,7 +104,6 @@ class SparcAsmParser : public MCTargetAsmParser {
                          unsigned &RegKind);
 
   bool matchSparcAsmModifiers(const MCExpr *&EVal, SMLoc &EndLoc);
-  bool parseDirectiveWord(unsigned Size, SMLoc L);
 
   bool is64Bit() const {
     return getSTI().getTargetTriple().getArch() == Triple::sparcv9;
@@ -108,7 +116,15 @@ public:
   SparcAsmParser(const MCSubtargetInfo &sti, MCAsmParser &parser,
                 const MCInstrInfo &MII,
                 const MCTargetOptions &Options)
-      : MCTargetAsmParser(Options, sti), Parser(parser) {
+      : MCTargetAsmParser(Options, sti, MII), Parser(parser) {
+    Parser.addAliasForDirective(".half", ".2byte");
+    Parser.addAliasForDirective(".uahalf", ".2byte");
+    Parser.addAliasForDirective(".word", ".4byte");
+    Parser.addAliasForDirective(".uaword", ".4byte");
+    Parser.addAliasForDirective(".nword", is64Bit() ? ".8byte" : ".4byte");
+    if (is64Bit())
+      Parser.addAliasForDirective(".xword", ".8byte");
+
     // Initialize the set of available features.
     setAvailableFeatures(ComputeAvailableFeatures(getSTI().getFeatureBits()));
   }
@@ -183,7 +199,7 @@ public:
     Sparc::C8_C9,   Sparc::C10_C11, Sparc::C12_C13, Sparc::C14_C15,
     Sparc::C16_C17, Sparc::C18_C19, Sparc::C20_C21, Sparc::C22_C23,
     Sparc::C24_C25, Sparc::C26_C27, Sparc::C28_C29, Sparc::C30_C31};
-  
+
 namespace {
 
 /// SparcOperand - Instances of this class represent a parsed Sparc machine
@@ -249,6 +265,37 @@ public:
   bool isMem() const override { return isMEMrr() || isMEMri(); }
   bool isMEMrr() const { return Kind == k_MemoryReg; }
   bool isMEMri() const { return Kind == k_MemoryImm; }
+  bool isMembarTag() const { return Kind == k_Immediate; }
+
+  bool isCallTarget() const {
+    if (!isImm())
+      return false;
+
+    if (const MCConstantExpr *CE = dyn_cast<MCConstantExpr>(Imm.Val))
+      return CE->getValue() % 4 == 0;
+
+    return true;
+  }
+
+  bool isShiftAmtImm5() const {
+    if (!isImm())
+      return false;
+
+    if (const MCConstantExpr *CE = dyn_cast<MCConstantExpr>(Imm.Val))
+      return isUInt<5>(CE->getValue());
+
+    return false;
+  }
+
+  bool isShiftAmtImm6() const {
+    if (!isImm())
+      return false;
+
+    if (const MCConstantExpr *CE = dyn_cast<MCConstantExpr>(Imm.Val))
+      return isUInt<6>(CE->getValue());
+
+    return false;
+  }
 
   bool isIntReg() const {
     return (Kind == k_Register && Reg.Kind == rk_IntReg);
@@ -331,6 +378,15 @@ public:
     addExpr(Inst, Expr);
   }
 
+  void addShiftAmtImm5Operands(MCInst &Inst, unsigned N) const {
+    assert(N == 1 && "Invalid number of operands!");
+    addExpr(Inst, getImm());
+  }
+  void addShiftAmtImm6Operands(MCInst &Inst, unsigned N) const {
+    assert(N == 1 && "Invalid number of operands!");
+    addExpr(Inst, getImm());
+  }
+
   void addExpr(MCInst &Inst, const MCExpr *Expr) const{
     // Add as immediate when possible.  Null MCExpr = 0.
     if (!Expr)
@@ -359,8 +415,19 @@ public:
     addExpr(Inst, Expr);
   }
 
+  void addMembarTagOperands(MCInst &Inst, unsigned N) const {
+    assert(N == 1 && "Invalid number of operands!");
+    const MCExpr *Expr = getImm();
+    addExpr(Inst, Expr);
+  }
+
+  void addCallTargetOperands(MCInst &Inst, unsigned N) const {
+    assert(N == 1 && "Invalid number of operands!");
+    addExpr(Inst, getImm());
+  }
+
   static std::unique_ptr<SparcOperand> CreateToken(StringRef Str, SMLoc S) {
-    auto Op = make_unique<SparcOperand>(k_Token);
+    auto Op = std::make_unique<SparcOperand>(k_Token);
     Op->Tok.Data = Str.data();
     Op->Tok.Length = Str.size();
     Op->StartLoc = S;
@@ -370,7 +437,7 @@ public:
 
   static std::unique_ptr<SparcOperand> CreateReg(unsigned RegNum, unsigned Kind,
                                                  SMLoc S, SMLoc E) {
-    auto Op = make_unique<SparcOperand>(k_Register);
+    auto Op = std::make_unique<SparcOperand>(k_Register);
     Op->Reg.RegNum = RegNum;
     Op->Reg.Kind   = (SparcOperand::RegisterKind)Kind;
     Op->StartLoc = S;
@@ -380,7 +447,7 @@ public:
 
   static std::unique_ptr<SparcOperand> CreateImm(const MCExpr *Val, SMLoc S,
                                                  SMLoc E) {
-    auto Op = make_unique<SparcOperand>(k_Immediate);
+    auto Op = std::make_unique<SparcOperand>(k_Immediate);
     Op->Imm.Val = Val;
     Op->StartLoc = S;
     Op->EndLoc = E;
@@ -452,7 +519,7 @@ public:
     Op.Reg.Kind = rk_CoprocPairReg;
     return true;
   }
-  
+
   static std::unique_ptr<SparcOperand>
   MorphToMEMrr(unsigned Base, std::unique_ptr<SparcOperand> Op) {
     unsigned offsetReg = Op->getReg();
@@ -465,7 +532,7 @@ public:
 
   static std::unique_ptr<SparcOperand>
   CreateMEMr(unsigned Base, SMLoc S, SMLoc E) {
-    auto Op = make_unique<SparcOperand>(k_MemoryReg);
+    auto Op = std::make_unique<SparcOperand>(k_MemoryReg);
     Op->Mem.Base = Base;
     Op->Mem.OffsetReg = Sparc::G0;  // always 0
     Op->Mem.Off = nullptr;
@@ -584,7 +651,7 @@ bool SparcAsmParser::MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
     }
 
     for (const MCInst &I : Instructions) {
-      Out.EmitInstruction(I, getSTI());
+      Out.emitInstruction(I, getSTI());
     }
     return false;
   }
@@ -614,23 +681,33 @@ bool SparcAsmParser::MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
 
 bool SparcAsmParser::ParseRegister(unsigned &RegNo, SMLoc &StartLoc,
                                    SMLoc &EndLoc) {
+  if (tryParseRegister(RegNo, StartLoc, EndLoc) != MatchOperand_Success)
+    return Error(StartLoc, "invalid register name");
+  return false;
+}
+
+OperandMatchResultTy SparcAsmParser::tryParseRegister(unsigned &RegNo,
+                                                      SMLoc &StartLoc,
+                                                      SMLoc &EndLoc) {
   const AsmToken &Tok = Parser.getTok();
   StartLoc = Tok.getLoc();
   EndLoc = Tok.getEndLoc();
   RegNo = 0;
   if (getLexer().getKind() != AsmToken::Percent)
-    return false;
+    return MatchOperand_NoMatch;
   Parser.Lex();
   unsigned regKind = SparcOperand::rk_None;
   if (matchRegisterName(Tok, RegNo, regKind)) {
     Parser.Lex();
-    return false;
+    return MatchOperand_Success;
   }
 
-  return Error(StartLoc, "invalid register name");
+  getLexer().UnLex(Tok);
+  return MatchOperand_NoMatch;
 }
 
-static void applyMnemonicAliases(StringRef &Mnemonic, uint64_t Features,
+static void applyMnemonicAliases(StringRef &Mnemonic,
+                                 const FeatureBitset &Features,
                                  unsigned VariantID);
 
 bool SparcAsmParser::ParseInstruction(ParseInstructionInfo &Info,
@@ -682,21 +759,6 @@ ParseDirective(AsmToken DirectiveID)
 {
   StringRef IDVal = DirectiveID.getString();
 
-  if (IDVal == ".byte")
-    return parseDirectiveWord(1, DirectiveID.getLoc());
-
-  if (IDVal == ".half")
-    return parseDirectiveWord(2, DirectiveID.getLoc());
-
-  if (IDVal == ".word")
-    return parseDirectiveWord(4, DirectiveID.getLoc());
-
-  if (IDVal == ".nword")
-    return parseDirectiveWord(is64Bit() ? 8 : 4, DirectiveID.getLoc());
-
-  if (is64Bit() && IDVal == ".xword")
-    return parseDirectiveWord(8, DirectiveID.getLoc());
-
   if (IDVal == ".register") {
     // For now, ignore .register directive.
     Parser.eatToEndOfStatement();
@@ -713,62 +775,150 @@ ParseDirective(AsmToken DirectiveID)
   return true;
 }
 
-bool SparcAsmParser:: parseDirectiveWord(unsigned Size, SMLoc L) {
-  if (getLexer().isNot(AsmToken::EndOfStatement)) {
-    while (true) {
-      const MCExpr *Value;
-      if (getParser().parseExpression(Value))
-        return true;
-
-      getParser().getStreamer().EmitValue(Value, Size);
-
-      if (getLexer().is(AsmToken::EndOfStatement))
-        break;
-
-      // FIXME: Improve diagnostic.
-      if (getLexer().isNot(AsmToken::Comma))
-        return Error(L, "unexpected token in directive");
-      Parser.Lex();
-    }
-  }
-  Parser.Lex();
-  return false;
-}
-
 OperandMatchResultTy
 SparcAsmParser::parseMEMOperand(OperandVector &Operands) {
   SMLoc S, E;
-  unsigned BaseReg = 0;
 
-  if (ParseRegister(BaseReg, S, E)) {
+  std::unique_ptr<SparcOperand> LHS;
+  if (parseSparcAsmOperand(LHS) != MatchOperand_Success)
     return MatchOperand_NoMatch;
+
+  // Single immediate operand
+  if (LHS->isImm()) {
+    Operands.push_back(SparcOperand::MorphToMEMri(Sparc::G0, std::move(LHS)));
+    return MatchOperand_Success;
   }
+
+  if (!LHS->isIntReg()) {
+    Error(LHS->getStartLoc(), "invalid register kind for this operand");
+    return MatchOperand_ParseFail;
+  }
+
+  AsmToken Tok = getLexer().getTok();
+  // The plus token may be followed by a register or an immediate value, the
+  // minus one is always interpreted as sign for the immediate value
+  if (Tok.is(AsmToken::Plus) || Tok.is(AsmToken::Minus)) {
+    (void)Parser.parseOptionalToken(AsmToken::Plus);
+
+    std::unique_ptr<SparcOperand> RHS;
+    if (parseSparcAsmOperand(RHS) != MatchOperand_Success)
+      return MatchOperand_NoMatch;
+
+    if (RHS->isReg() && !RHS->isIntReg()) {
+      Error(RHS->getStartLoc(), "invalid register kind for this operand");
+      return MatchOperand_ParseFail;
+    }
+
+    Operands.push_back(
+        RHS->isImm()
+            ? SparcOperand::MorphToMEMri(LHS->getReg(), std::move(RHS))
+            : SparcOperand::MorphToMEMrr(LHS->getReg(), std::move(RHS)));
+
+    return MatchOperand_Success;
+  }
+
+  Operands.push_back(SparcOperand::CreateMEMr(LHS->getReg(), S, E));
+  return MatchOperand_Success;
+}
+
+template <unsigned N>
+OperandMatchResultTy SparcAsmParser::parseShiftAmtImm(OperandVector &Operands) {
+  SMLoc S = Parser.getTok().getLoc();
+  SMLoc E = SMLoc::getFromPointer(S.getPointer() - 1);
+
+  // This is a register, not an immediate
+  if (getLexer().getKind() == AsmToken::Percent)
+    return MatchOperand_NoMatch;
+
+  const MCExpr *Expr;
+  if (getParser().parseExpression(Expr))
+    return MatchOperand_ParseFail;
+
+  const MCConstantExpr *CE = dyn_cast<MCConstantExpr>(Expr);
+  if (!CE) {
+    Error(S, "constant expression expected");
+    return MatchOperand_ParseFail;
+  }
+
+  if (!isUInt<N>(CE->getValue())) {
+    Error(S, "immediate shift value out of range");
+    return MatchOperand_ParseFail;
+  }
+
+  Operands.push_back(SparcOperand::CreateImm(Expr, S, E));
+  return MatchOperand_Success;
+}
+
+OperandMatchResultTy SparcAsmParser::parseMembarTag(OperandVector &Operands) {
+  SMLoc S = Parser.getTok().getLoc();
+  const MCExpr *EVal;
+  int64_t ImmVal = 0;
+
+  std::unique_ptr<SparcOperand> Mask;
+  if (parseSparcAsmOperand(Mask) == MatchOperand_Success) {
+    if (!Mask->isImm() || !Mask->getImm()->evaluateAsAbsolute(ImmVal) ||
+        ImmVal < 0 || ImmVal > 127) {
+      Error(S, "invalid membar mask number");
+      return MatchOperand_ParseFail;
+    }
+  }
+
+  while (getLexer().getKind() == AsmToken::Hash) {
+    SMLoc TagStart = getLexer().getLoc();
+    Parser.Lex(); // Eat the '#'.
+    unsigned MaskVal = StringSwitch<unsigned>(Parser.getTok().getString())
+      .Case("LoadLoad", 0x1)
+      .Case("StoreLoad", 0x2)
+      .Case("LoadStore", 0x4)
+      .Case("StoreStore", 0x8)
+      .Case("Lookaside", 0x10)
+      .Case("MemIssue", 0x20)
+      .Case("Sync", 0x40)
+      .Default(0);
+
+    Parser.Lex(); // Eat the identifier token.
+
+    if (!MaskVal) {
+      Error(TagStart, "unknown membar tag");
+      return MatchOperand_ParseFail;
+    }
+
+    ImmVal |= MaskVal;
+
+    if (getLexer().getKind() == AsmToken::Pipe)
+      Parser.Lex(); // Eat the '|'.
+  }
+
+  EVal = MCConstantExpr::create(ImmVal, getContext());
+  SMLoc E = SMLoc::getFromPointer(Parser.getTok().getLoc().getPointer() - 1);
+  Operands.push_back(SparcOperand::CreateImm(EVal, S, E));
+  return MatchOperand_Success;
+}
+
+OperandMatchResultTy SparcAsmParser::parseCallTarget(OperandVector &Operands) {
+  SMLoc S = Parser.getTok().getLoc();
+  SMLoc E = SMLoc::getFromPointer(S.getPointer() - 1);
 
   switch (getLexer().getKind()) {
-  default: return MatchOperand_NoMatch;
-
-  case AsmToken::Comma:
-  case AsmToken::RBrac:
-  case AsmToken::EndOfStatement:
-    Operands.push_back(SparcOperand::CreateMEMr(BaseReg, S, E));
-    return MatchOperand_Success;
-
-  case AsmToken:: Plus:
-    Parser.Lex(); // Eat the '+'
-    break;
-  case AsmToken::Minus:
+  default:
+    return MatchOperand_NoMatch;
+  case AsmToken::LParen:
+  case AsmToken::Integer:
+  case AsmToken::Identifier:
+  case AsmToken::Dot:
     break;
   }
 
-  std::unique_ptr<SparcOperand> Offset;
-  OperandMatchResultTy ResTy = parseSparcAsmOperand(Offset);
-  if (ResTy != MatchOperand_Success || !Offset)
+  const MCExpr *DestValue;
+  if (getParser().parseExpression(DestValue))
     return MatchOperand_NoMatch;
 
-  Operands.push_back(
-      Offset->isImm() ? SparcOperand::MorphToMEMri(BaseReg, std::move(Offset))
-                      : SparcOperand::MorphToMEMrr(BaseReg, std::move(Offset)));
+  bool IsPic = getContext().getObjectFileInfo()->isPositionIndependent();
+  SparcMCExpr::VariantKind Kind =
+      IsPic ? SparcMCExpr::VK_Sparc_WPLT30 : SparcMCExpr::VK_Sparc_WDISP30;
 
+  const MCExpr *DestExpr = SparcMCExpr::create(Kind, DestValue, getContext());
+  Operands.push_back(SparcOperand::CreateImm(DestExpr, S, E));
   return MatchOperand_Success;
 }
 
@@ -899,29 +1049,29 @@ SparcAsmParser::parseSparcAsmOperand(std::unique_ptr<SparcOperand> &Op,
     }
     break;
 
+  case AsmToken::Plus:
   case AsmToken::Minus:
   case AsmToken::Integer:
   case AsmToken::LParen:
   case AsmToken::Dot:
-    if (!getParser().parseExpression(EVal, E))
-      Op = SparcOperand::CreateImm(EVal, S, E);
-    break;
+  case AsmToken::Identifier:
+    if (getParser().parseExpression(EVal, E))
+      break;
 
-  case AsmToken::Identifier: {
-    StringRef Identifier;
-    if (!getParser().parseIdentifier(Identifier)) {
-      E = SMLoc::getFromPointer(Parser.getTok().getLoc().getPointer() - 1);
-      MCSymbol *Sym = getContext().getOrCreateSymbol(Identifier);
+    int64_t Res;
+    if (!EVal->evaluateAsAbsolute(Res)) {
+      SparcMCExpr::VariantKind Kind = SparcMCExpr::VK_Sparc_13;
 
-      const MCExpr *Res = MCSymbolRefExpr::create(Sym, MCSymbolRefExpr::VK_None,
-                                                  getContext());
-      if (isCall && getContext().getObjectFileInfo()->isPositionIndependent())
-        Res = SparcMCExpr::create(SparcMCExpr::VK_Sparc_WPLT30, Res,
-                                  getContext());
-      Op = SparcOperand::CreateImm(Res, S, E);
+      if (getContext().getObjectFileInfo()->isPositionIndependent()) {
+        if (isCall)
+          Kind = SparcMCExpr::VK_Sparc_WPLT30;
+        else
+          Kind = SparcMCExpr::VK_Sparc_GOT13;
+      }
+      EVal = SparcMCExpr::create(Kind, EVal, getContext());
     }
+    Op = SparcOperand::CreateImm(EVal, S, E);
     break;
-  }
   }
   return (Op) ? MatchOperand_Success : MatchOperand_ParseFail;
 }
@@ -1022,7 +1172,7 @@ bool SparcAsmParser::matchRegisterName(const AsmToken &Tok, unsigned &RegNo,
       RegKind = SparcOperand::rk_Special;
       return true;
     }
-    
+
     if (name.equals("wim")) {
       RegNo = Sparc::WIM;
       RegKind = SparcOperand::rk_Special;
@@ -1115,7 +1265,7 @@ bool SparcAsmParser::matchRegisterName(const AsmToken &Tok, unsigned &RegNo,
       RegKind = SparcOperand::rk_CoprocReg;
       return true;
     }
-    
+
     if (name.equals("tpc")) {
       RegNo = Sparc::TPC;
       RegKind = SparcOperand::rk_Special;
@@ -1227,7 +1377,7 @@ const SparcMCExpr *
 SparcAsmParser::adjustPICRelocation(SparcMCExpr::VariantKind VK,
                                     const MCExpr *subExpr) {
   // When in PIC mode, "%lo(...)" and "%hi(...)" behave differently.
-  // If the expression refers contains _GLOBAL_OFFSETE_TABLE, it is
+  // If the expression refers contains _GLOBAL_OFFSET_TABLE, it is
   // actually a %pc10 or %pc22 relocation. Otherwise, they are interpreted
   // as %got10 or %got22 relocation.
 
@@ -1274,7 +1424,7 @@ bool SparcAsmParser::matchSparcAsmModifiers(const MCExpr *&EVal,
   return true;
 }
 
-extern "C" void LLVMInitializeSparcAsmParser() {
+extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeSparcAsmParser() {
   RegisterMCAsmParser<SparcAsmParser> A(getTheSparcTarget());
   RegisterMCAsmParser<SparcAsmParser> B(getTheSparcV9Target());
   RegisterMCAsmParser<SparcAsmParser> C(getTheSparcelTarget());

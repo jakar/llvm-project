@@ -1,33 +1,39 @@
-add_llvm_library(LLVMScalarOpts
+add_llvm_component_library(LLVMScalarOpts
   ADCE.cpp
   AlignmentFromAssumptions.cpp
+  AnnotationRemarks.cpp
   BDCE.cpp
+  CallSiteSplitting.cpp
   ConstantHoisting.cpp
-  ConstantProp.cpp
+  ConstraintElimination.cpp
   CorrelatedValuePropagation.cpp
   DCE.cpp
   DeadStoreElimination.cpp
+  DivRemPairs.cpp
   EarlyCSE.cpp
   FlattenCFGPass.cpp
   Float2Int.cpp
   GuardWidening.cpp
   GVN.cpp
   GVNHoist.cpp
+  GVNSink.cpp
   IVUsersPrinter.cpp
   InductiveRangeCheckElimination.cpp
   IndVarSimplify.cpp
   InferAddressSpaces.cpp
+  InstSimplifyPass.cpp
   JumpThreading.cpp
   LICM.cpp
   LoopAccessAnalysisPrinter.cpp
   LoopSink.cpp
-  LoadCombine.cpp
   LoopDeletion.cpp
   LoopDataPrefetch.cpp
   LoopDistribute.cpp
+  LoopFuse.cpp
   LoopIdiomRecognize.cpp
   LoopInstSimplify.cpp
   LoopInterchange.cpp
+  LoopFlatten.cpp
   LoopLoadElimination.cpp
   LoopPassManager.cpp
   LoopPredication.cpp
@@ -36,12 +42,18 @@ add_llvm_library(LLVMScalarOpts
   LoopSimplifyCFG.cpp
   LoopStrengthReduce.cpp
   LoopUnrollPass.cpp
+  LoopUnrollAndJamPass.cpp
   LoopUnswitch.cpp
   LoopVersioningLICM.cpp
   LowerAtomic.cpp
+  LowerConstantIntrinsics.cpp
   LowerExpectIntrinsic.cpp
   LowerGuardIntrinsic.cpp
+  LowerMatrixIntrinsics.cpp
+  LowerWidenableCondition.cpp
+  MakeGuardsExplicit.cpp
   MemCpyOptimizer.cpp
+  MergeICmps.cpp
   MergedLoadStoreMotion.cpp
   NaryReassociate.cpp
   NewGVN.cpp
@@ -54,14 +66,17 @@ add_llvm_library(LLVMScalarOpts
   SROA.cpp
   Scalar.cpp
   Scalarizer.cpp
+  ScalarizeMaskedMemIntrin.cpp
   SeparateConstOffsetFromGEP.cpp
   SimpleLoopUnswitch.cpp
   SimplifyCFGPass.cpp
   Sink.cpp
   SpeculativeExecution.cpp
+  SpeculateAroundPHIs.cpp
   StraightLineStrengthReduce.cpp
   StructurizeCFG.cpp
   TailRecursionElimination.cpp
+  WarnMissedTransforms.cpp
 
   ADDITIONAL_HEADER_DIRS
   ${LLVM_MAIN_INCLUDE_DIR}/llvm/Transforms
@@ -69,4 +84,15 @@ add_llvm_library(LLVMScalarOpts
 
   DEPENDS
   intrinsics_gen
+
+  COMPONENT_NAME
+  Scalar
+
+  LINK_COMPONENTS
+  AggressiveInstCombine
+  Analysis
+  Core
+  InstCombine
+  Support
+  TransformUtils
   )

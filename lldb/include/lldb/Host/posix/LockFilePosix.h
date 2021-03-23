@@ -1,14 +1,13 @@
 //===-- LockFilePosix.h -----------------------------------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef liblldb_Host_posix_LockFilePosix_h_
-#define liblldb_Host_posix_LockFilePosix_h_
+#ifndef LLDB_HOST_POSIX_LOCKFILEPOSIX_H
+#define LLDB_HOST_POSIX_LOCKFILEPOSIX_H
 
 #include "lldb/Host/LockFileBase.h"
 
@@ -20,17 +19,17 @@ public:
   ~LockFilePosix() override;
 
 protected:
-  Error DoWriteLock(const uint64_t start, const uint64_t len) override;
+  Status DoWriteLock(const uint64_t start, const uint64_t len) override;
 
-  Error DoTryWriteLock(const uint64_t start, const uint64_t len) override;
+  Status DoTryWriteLock(const uint64_t start, const uint64_t len) override;
 
-  Error DoReadLock(const uint64_t start, const uint64_t len) override;
+  Status DoReadLock(const uint64_t start, const uint64_t len) override;
 
-  Error DoTryReadLock(const uint64_t start, const uint64_t len) override;
+  Status DoTryReadLock(const uint64_t start, const uint64_t len) override;
 
-  Error DoUnlock() override;
+  Status DoUnlock() override;
 };
 
 } // namespace lldb_private
 
-#endif // liblldb_Host_posix_LockFilePosix_h_
+#endif // LLDB_HOST_POSIX_LOCKFILEPOSIX_H

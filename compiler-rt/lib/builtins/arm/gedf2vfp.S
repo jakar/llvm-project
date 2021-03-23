@@ -1,9 +1,8 @@
 //===-- gedf2vfp.S - Implement gedf2vfp -----------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is dual licensed under the MIT and the University of Illinois Open
-// Source Licenses. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -13,7 +12,7 @@
 // extern int __gedf2vfp(double a, double b);
 //
 // Returns one iff a >= b and neither is NaN.
-// Uses Darwin calling convention where double precision arguments are passsed 
+// Uses Darwin calling convention where double precision arguments are passsed
 // like in GPR pairs.
 //
 	.syntax unified
@@ -27,6 +26,7 @@ DEFINE_COMPILERRT_FUNCTION(__gedf2vfp)
 	vcmp.f64 d6, d7
 #endif
 	vmrs	apsr_nzcv, fpscr
+	ITE(ge)
 	movge	r0, #1      // set result register to 1 if greater than or equal
 	movlt	r0, #0
 	bx	lr

@@ -1,14 +1,13 @@
 //===-- SBBreakpointLocation.h ----------------------------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLDB_SBBreakpointLocation_h_
-#define LLDB_SBBreakpointLocation_h_
+#ifndef LLDB_API_SBBREAKPOINTLOCATION_H
+#define LLDB_API_SBBREAKPOINTLOCATION_H
 
 #include "lldb/API/SBBreakpoint.h"
 #include "lldb/API/SBDefines.h"
@@ -28,6 +27,8 @@ public:
 
   break_id_t GetID();
 
+  explicit operator bool() const;
+
   bool IsValid() const;
 
   lldb::SBAddress GetAddress();
@@ -38,6 +39,8 @@ public:
 
   bool IsEnabled();
 
+  uint32_t GetHitCount();
+
   uint32_t GetIgnoreCount();
 
   void SetIgnoreCount(uint32_t n);
@@ -45,11 +48,22 @@ public:
   void SetCondition(const char *condition);
 
   const char *GetCondition();
+   
+  void SetAutoContinue(bool auto_continue);
+
+  bool GetAutoContinue();
 
   void SetScriptCallbackFunction(const char *callback_function_name);
 
-  SBError SetScriptCallbackBody(const char *script_body_text);
+  SBError SetScriptCallbackFunction(const char *callback_function_name,
+                                    lldb::SBStructuredData &extra_args);
 
+  SBError SetScriptCallbackBody(const char *script_body_text);
+  
+  void SetCommandLineCommands(lldb::SBStringList &commands);
+
+  bool GetCommandLineCommands(lldb::SBStringList &commands);
+ 
   void SetThreadID(lldb::tid_t sb_thread_id);
 
   lldb::tid_t GetThreadID();
@@ -76,6 +90,7 @@ public:
 
 private:
   friend class SBBreakpoint;
+  friend class SBBreakpointCallbackBaton;
 
   void SetLocation(const lldb::BreakpointLocationSP &break_loc_sp);
   BreakpointLocationSP GetSP() const;
@@ -85,4 +100,4 @@ private:
 
 } // namespace lldb
 
-#endif // LLDB_SBBreakpointLocation_h_
+#endif // LLDB_API_SBBREAKPOINTLOCATION_H

@@ -1,9 +1,8 @@
 //===------ CGGPUBuiltin.cpp - Codegen for GPU builtins -------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -17,6 +16,7 @@
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/Instruction.h"
 #include "llvm/Support/MathExtras.h"
+#include "llvm/Transforms/Utils/AMDGPUEmitPrintf.h"
 
 using namespace clang;
 using namespace CodeGen;
@@ -83,8 +83,9 @@ CodeGenFunction::EmitNVPTXDevicePrintfCallExpr(const CallExpr *E,
                /* ParamsToSkip = */ 0);
 
   // We don't know how to emit non-scalar varargs.
-  if (std::any_of(Args.begin() + 1, Args.end(),
-                  [](const CallArg &A) { return !A.RV.isScalar(); })) {
+  if (std::any_of(Args.begin() + 1, Args.end(), [&](const CallArg &A) {
+        return !A.getRValue(*this).isScalar();
+      })) {
     CGM.ErrorUnsupported(E, "non-scalar arg to printf");
     return RValue::get(llvm::ConstantInt::get(IntTy, 0));
   }
@@ -97,7 +98,7 @@ CodeGenFunction::EmitNVPTXDevicePrintfCallExpr(const CallExpr *E,
   } else {
     llvm::SmallVector<llvm::Type *, 8> ArgTypes;
     for (unsigned I = 1, NumArgs = Args.size(); I < NumArgs; ++I)
-      ArgTypes.push_back(Args[I].RV.getScalarVal()->getType());
+      ArgTypes.push_back(Args[I].getRValue(*this).getScalarVal()->getType());
 
     // Using llvm::StructType is correct only because printf doesn't accept
     // aggregates.  If we had to handle aggregates here, we'd have to manually
@@ -109,14 +110,47 @@ CodeGenFunction::EmitNVPTXDevicePrintfCallExpr(const CallExpr *E,
 
     for (unsigned I = 1, NumArgs = Args.size(); I < NumArgs; ++I) {
       llvm::Value *P = Builder.CreateStructGEP(AllocaTy, Alloca, I - 1);
-      llvm::Value *Arg = Args[I].RV.getScalarVal();
-      Builder.CreateAlignedStore(Arg, P, DL.getPrefTypeAlignment(Arg->getType()));
+      llvm::Value *Arg = Args[I].getRValue(*this).getScalarVal();
+      Builder.CreateAlignedStore(Arg, P, DL.getPrefTypeAlign(Arg->getType()));
     }
     BufferPtr = Builder.CreatePointerCast(Alloca, llvm::Type::getInt8PtrTy(Ctx));
   }
 
   // Invoke vprintf and return.
   llvm::Function* VprintfFunc = GetVprintfDeclaration(CGM.getModule());
-  return RValue::get(
-      Builder.CreateCall(VprintfFunc, {Args[0].RV.getScalarVal(), BufferPtr}));
+  return RValue::get(Builder.CreateCall(
+      VprintfFunc, {Args[0].getRValue(*this).getScalarVal(), BufferPtr}));
+}
+
+RValue
+CodeGenFunction::EmitAMDGPUDevicePrintfCallExpr(const CallExpr *E,
+                                                ReturnValueSlot ReturnValue) {
+  assert(getTarget().getTriple().getArch() == llvm::Triple::amdgcn);
+  assert(E->getBuiltinCallee() == Builtin::BIprintf ||
+         E->getBuiltinCallee() == Builtin::BI__builtin_printf);
+  assert(E->getNumArgs() >= 1); // printf always has at least one arg.
+
+  CallArgList CallArgs;
+  EmitCallArgs(CallArgs,
+               E->getDirectCallee()->getType()->getAs<FunctionProtoType>(),
+               E->arguments(), E->getDirectCallee(),
+               /* ParamsToSkip = */ 0);
+
+  SmallVector<llvm::Value *, 8> Args;
+  for (auto A : CallArgs) {
+    // We don't know how to emit non-scalar varargs.
+    if (!A.getRValue(*this).isScalar()) {
+      CGM.ErrorUnsupported(E, "non-scalar arg to printf");
+      return RValue::get(llvm::ConstantInt::get(IntTy, -1));
+    }
+
+    llvm::Value *Arg = A.getRValue(*this).getScalarVal();
+    Args.push_back(Arg);
+  }
+
+  llvm::IRBuilder<> IRB(Builder.GetInsertBlock(), Builder.GetInsertPoint());
+  IRB.SetCurrentDebugLocation(Builder.getCurrentDebugLocation());
+  auto Printf = llvm::emitAMDGPUPrintfCall(IRB, Args);
+  Builder.SetInsertPoint(IRB.GetInsertBlock(), IRB.GetInsertPoint());
+  return RValue::get(Printf);
 }

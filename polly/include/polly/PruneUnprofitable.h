@@ -1,9 +1,8 @@
 //===- PruneUnprofitable.h --------------------------------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -11,20 +10,29 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef POLLY_ANALYSIS_PRUNEUNPROFITABLE_H
-#define POLLY_ANALYSIS_PRUNEUNPROFITABLE_H
+#ifndef POLLY_PRUNEUNPROFITABLE_H
+#define POLLY_PRUNEUNPROFITABLE_H
+
+#include "polly/ScopPass.h"
 
 namespace llvm {
-class PassRegistry;
 class Pass;
+class PassRegistry;
 } // namespace llvm
 
 namespace polly {
-llvm::Pass *createPruneUnprofitablePass();
+llvm::Pass *createPruneUnprofitableWrapperPass();
+
+struct PruneUnprofitablePass : llvm::PassInfoMixin<PruneUnprofitablePass> {
+  PruneUnprofitablePass() {}
+
+  llvm::PreservedAnalyses run(Scop &S, ScopAnalysisManager &SAM,
+                              ScopStandardAnalysisResults &SAR, SPMUpdater &U);
+};
 } // namespace polly
 
 namespace llvm {
-void initializePruneUnprofitablePass(llvm::PassRegistry &);
-} // namespace llvm
+void initializePruneUnprofitableWrapperPassPass(PassRegistry &);
+}
 
-#endif /* POLLY_ANALYSIS_PRUNEUNPROFITABLE_H */
+#endif // POLLY_PRUNEUNPROFITABLE_H

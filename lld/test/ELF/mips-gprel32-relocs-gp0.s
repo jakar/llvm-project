@@ -1,37 +1,28 @@
+# REQUIRES: mips
 # Check that relocatable object produced by LLD has zero gp0 value.
-# Also check an error message if input object file has non-zero gp0 value
-# and the linker generates a relocatable object.
-# mips-gp0-non-zero.o is a relocatable object produced from the asm code
-# below and linked by GNU bfd linker.
 
 # RUN: llvm-mc -filetype=obj -triple=mips-unknown-linux %s -o %t.o
 # RUN: ld.lld -r -o %t-rel.o %t.o
-# RUN: llvm-readobj -mips-reginfo %t-rel.o | FileCheck --check-prefix=REL %s
+# RUN: llvm-readobj -A %t-rel.o | FileCheck --check-prefix=REL %s
 
-# RUN: ld.lld -shared -o %t.so %S/Inputs/mips-gp0-non-zero.o
-# RUN: llvm-readobj -mips-reginfo %t.so | FileCheck --check-prefix=DSO %s
+# RUN: echo "SECTIONS { \
+# RUN:         .rodata ALIGN(0x1000) : { *(.rodata) } \
+# RUN:         . = 0x20000; .text :  { *(.text) } \
+# RUN:       }" > %t.script
+# RUN: ld.lld -shared --script %t.script -o %t.so %S/Inputs/mips-gp0-non-zero.o
 # RUN: llvm-objdump -s -t %t.so | FileCheck --check-prefix=DUMP %s
-
-# RUN: not ld.lld -r -o %t-rel.o %S/Inputs/mips-gp0-non-zero.o 2>&1 \
-# RUN:   | FileCheck --check-prefix=ERR %s
-
-# REQUIRES: mips
 
 # REL: GP: 0x0
 
-# DSO: GP: 0x27FF0
+# DUMP: SYMBOL TABLE:
+# DUMP: 00020008 l       .text          00000000 bar
+# DUMP: 00020004 l       .text          00000000 foo
+# DUMP: 00028000 l       .got           00000000 .hidden _gp
 
 # DUMP: Contents of section .rodata:
-# DUMP:  00f4 ffff0004 ffff0008
-#             ^ 0x10004 + 0x7ff0 - 0x27ff0
-#                      ^ 0x10008 + 0x7ff0 - 0x27ff0
-
-# DUMP: SYMBOL TABLE:
-# DUMP: 00010008         .text          00000000 bar
-# DUMP: 00010004         .text          00000000 foo
-# DUMP: 00027ff0         *ABS*          00000000 .hidden _gp
-
-# ERR: error: {{.*}}mips-gp0-non-zero.o: unsupported non-zero ri_gp_value
+# DUMP: 1000 fffffff4 fffffff8
+#            ^ 0x20004 + 0x7ff0 - 0x28000
+#                     ^ 0x20008 + 0x7ff0 - 0x28000
 
   .text
   .global  __start

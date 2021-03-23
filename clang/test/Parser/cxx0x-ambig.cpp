@@ -30,7 +30,8 @@ namespace final {
   struct U final _Alignas(4) {}; // expected-error 3{{}} expected-note {{}}
 }
 
-// enum versus bitfield mess.
+// enum versus bitfield. These are always required to be treated as an
+// enum-base, but we disambiguate anyway for better error recovery.
 namespace bitfield {
   enum E {};
 
@@ -44,9 +45,9 @@ namespace bitfield {
   constexpr T a, b, c, d;
 
   struct S1 {
-    enum E : T ( a = 1, b = 2, c = 3, 4 ); // ok, declares a bitfield
+    enum E : T ( a = 1, b = 2, c = 3, 4 ); // expected-error {{ISO C++ only allows ':' in member enumeration declaration to introduce a fixed underlying type, not an anonymous bit-field}}
   };
-  // This could be a bit-field.
+  // Enum definition, not a bit-field.
   struct S2 {
     enum E : T { a = 1, b = 2, c = 3, 4 }; // expected-error {{non-integral type}} expected-error {{expected identifier}}
   };
@@ -79,6 +80,14 @@ namespace bitfield {
   constexpr const U &id(const U &u) { return u; }
   struct S8 {
     enum E : int { a = id(U()) }; // expected-error {{no viable conversion}}
+  };
+
+  // PR26249: Disambiguate 'enum :' as an enum-base always, even if that would
+  // be ill-formed. It cannot be an elaborated-type-specifier.
+  struct S {
+    enum : undeclared_type { v = 0 }; // expected-error {{unknown type name 'undeclared_type'}}
+    enum E : undeclared_type { w = 0 }; // expected-error {{unknown type name 'undeclared_type'}}
+    enum X : undeclared_type { x = 0 }; // expected-error {{unknown type name 'undeclared_type'}}
   };
 }
 
@@ -132,6 +141,32 @@ namespace ellipsis {
     void l(int(*...)(T)); // expected-warning {{ISO C++11 requires a parenthesized pack declaration to have a name}}
     void l(int(S<int>::*...)(T)); // expected-warning {{ISO C++11 requires a parenthesized pack declaration to have a name}}
   };
+
+  struct CtorSink {
+    template <typename ...T> constexpr CtorSink(T &&...t) { }
+    constexpr operator int() const { return 42; }
+  };
+
+  template <unsigned ...N> struct UnsignedTmplArgSink;
+
+  template <typename ...T>
+  void foo(int x, T ...t) {
+    // Have a variety of cases where the syntax is technically unambiguous, but hinges on careful treatment of ellipses.
+    CtorSink(t ...), x; // ok, expression; expected-warning 2{{expression result unused}}
+
+    int x0(CtorSink(t ...)); // ok, declares object x0
+    int *p0 = &x0;
+    (void)p0;
+
+    CtorSink x1(int(t) ..., int(x)); // ok, declares object x1
+    CtorSink *p1 = &x1;
+    (void)p1;
+
+    UnsignedTmplArgSink<T(CtorSink(t ...)) ...> *t0; // ok
+    UnsignedTmplArgSink<((T *)0, 42u) ...> **t0p = &t0;
+  }
+
+  template void foo(int, int, int); // expected-note {{in instantiation of function template specialization 'ellipsis::foo<int, int>' requested here}}
 }
 
 namespace braced_init_list {

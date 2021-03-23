@@ -3,7 +3,7 @@
 ; Shrink wrapping currently does not kick in because we have a TLS CALL
 ; in the entry block and it will clobber the link register.
 
-; RUN: llc < %s -mtriple=aarch64-apple-ios -O0 | FileCheck --check-prefix=CHECK-O0 %s
+; RUN: llc < %s -mtriple=aarch64-apple-ios -O0 -fast-isel | FileCheck --check-prefix=CHECK-O0 %s
 
 %struct.S = type { i8 }
 
@@ -220,5 +220,5 @@ entry:
   ret void
 }
 
-attributes #0 = { nounwind "no-frame-pointer-elim"="true" }
+attributes #0 = { nounwind "frame-pointer"="all" }
 attributes #1 = { nounwind }

@@ -1,11 +1,19 @@
 // REQUIRES: powerpc-registered-target
 // RUN: %clang_cc1 -target-feature +altivec -target-feature +power9-vector \
 // RUN:   -triple powerpc64-unknown-unknown -emit-llvm %s \
+// RUN:   -flax-vector-conversions=integer \
 // RUN:   -o - | FileCheck %s -check-prefix=CHECK-BE
 
 // RUN: %clang_cc1 -target-feature +altivec -target-feature +power9-vector \
 // RUN:   -triple powerpc64le-unknown-unknown -emit-llvm %s \
+// RUN:   -flax-vector-conversions=integer \
 // RUN:   -o - | FileCheck %s
+
+// FIXME: This last test is intended to fail if the default is changed to
+// -flax-vector-conversions=none and <altivec.h> isn't fixed first.
+// RUN: %clang_cc1 -target-feature +altivec -target-feature +power9-vector \
+// RUN:   -triple powerpc64-unknown-unknown -emit-llvm %s \
+// RUN:   -o - | FileCheck %s -check-prefix=CHECK-BE
 
 #include <altivec.h>
 
@@ -919,7 +927,7 @@ vector double test80(void) {
 // CHECK: insertelement <2 x double>
   return vec_unpackl(vfa);
 }
-vector double test81(void) {
+vector float test81(void) {
   // CHECK: extractelement <2 x double>
   // CHECK: fptrunc double
   // CHECK: insertelement <4 x float>
@@ -983,7 +991,7 @@ vector bool int test86(void) {
 }
 vector bool long long test87(void) {
 // CHECK-BE: @llvm.ppc.vsx.xvtstdcdp(<2 x double> {{.+}}, i32 127)
-// CHECK-BE_NEXT: ret <2 x i64
+// CHECK-BE-NEXT: ret <2 x i64>
 // CHECK: @llvm.ppc.vsx.xvtstdcdp(<2 x double> {{.+}}, i32 127)
 // CHECK-NEXT: ret <2 x i64>
   return vec_test_data_class(vda, __VEC_CLASS_FP_NOT_NORMAL);
@@ -1219,3 +1227,32 @@ vector unsigned long long test119(void) {
   return vec_extract4b(vuca, -5);
 }
 
+vector signed int test_vec_signexti_si_sc(void) {
+    // CHECK: @llvm.ppc.altivec.vextsb2w(<16 x i8>
+    // CHECK-NEXT: ret <4 x i32>
+    return vec_signexti(vsca);
+}
+
+vector signed int test_vec_signexti_si_ss(void) {
+    // CHECK: @llvm.ppc.altivec.vextsh2w(<8 x i16>
+    // CHECK-NEXT: ret <4 x i32>
+    return vec_signexti(vssa);
+}
+
+vector signed long long test_vec_signextll_sll_sc(void) {
+    // CHECK: @llvm.ppc.altivec.vextsb2d(<16 x i8>
+    // CHECK-NEXT: ret <2 x i64>
+    return vec_signextll(vsca);
+}
+
+vector signed long long test_vec_signextll_sll_ss(void) {
+    // CHECK: @llvm.ppc.altivec.vextsh2d(<8 x i16>
+    // CHECK-NEXT: ret <2 x i64>
+    return vec_signextll(vssa);
+}
+
+vector signed long long test_vec_signextll_sll_si(void) {
+    // CHECK: @llvm.ppc.altivec.vextsw2d(<4 x i32>
+    // CHECK-NEXT: ret <2 x i64>
+    return vec_signextll(vsia);
+}

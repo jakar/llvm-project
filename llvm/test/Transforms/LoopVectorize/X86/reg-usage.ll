@@ -1,5 +1,5 @@
-; RUN: opt < %s -debug-only=loop-vectorize -loop-vectorize -vectorizer-maximize-bandwidth -O2 -mtriple=x86_64-unknown-linux -S 2>&1 | FileCheck %s
-; RUN: opt < %s -debug-only=loop-vectorize -loop-vectorize -vectorizer-maximize-bandwidth -O2 -mtriple=x86_64-unknown-linux -mattr=+avx512f -S 2>&1 | FileCheck %s --check-prefix=AVX512F
+; RUN: opt < %s -debug-only=loop-vectorize -loop-vectorize -vectorizer-maximize-bandwidth -mtriple=x86_64-unknown-linux -S 2>&1 | FileCheck %s
+; RUN: opt < %s -debug-only=loop-vectorize -loop-vectorize -vectorizer-maximize-bandwidth -mtriple=x86_64-unknown-linux -mattr=+avx512f -S 2>&1 | FileCheck %s --check-prefix=AVX512F
 ; REQUIRES: asserts
 
 @a = global [1024 x i8] zeroinitializer, align 16
@@ -10,12 +10,16 @@ define i32 @foo() {
 ; register usage doesn't exceed 16.
 ;
 ; CHECK-LABEL: foo
-; CHECK:      LV(REG): VF = 4
-; CHECK-NEXT: LV(REG): Found max usage: 4
 ; CHECK:      LV(REG): VF = 8
-; CHECK-NEXT: LV(REG): Found max usage: 7
+; CHECK-NEXT: LV(REG): Found max usage: 2 item
+; CHECK-NEXT: LV(REG): RegisterClass: Generic::ScalarRC, 2 registers
+; CHECK-NEXT: LV(REG): RegisterClass: Generic::VectorRC, 7 registers
+; CHECK-NEXT: LV(REG): Found invariant usage: 0 item
 ; CHECK:      LV(REG): VF = 16
-; CHECK-NEXT: LV(REG): Found max usage: 13
+; CHECK-NEXT: LV(REG): Found max usage: 2 item
+; CHECK-NEXT: LV(REG): RegisterClass: Generic::ScalarRC, 2 registers
+; CHECK-NEXT: LV(REG): RegisterClass: Generic::VectorRC, 13 registers
+; CHECK-NEXT: LV(REG): Found invariant usage: 0 item
 
 entry:
   br label %for.body
@@ -48,12 +52,16 @@ define i32 @goo() {
 ; it will not have vector version and the vector register usage will not exceed the
 ; available vector register number.
 ; CHECK-LABEL: goo
-; CHECK:      LV(REG): VF = 4
-; CHECK-NEXT: LV(REG): Found max usage: 4
 ; CHECK:      LV(REG): VF = 8
-; CHECK-NEXT: LV(REG): Found max usage: 7
+; CHECK-NEXT: LV(REG): Found max usage: 2 item
+; CHECK-NEXT: LV(REG): RegisterClass: Generic::ScalarRC, 2 registers
+; CHECK-NEXT: LV(REG): RegisterClass: Generic::VectorRC, 7 registers
+; CHECK-NEXT: LV(REG): Found invariant usage: 0 item
 ; CHECK:      LV(REG): VF = 16
-; CHECK-NEXT: LV(REG): Found max usage: 13
+; CHECK-NEXT: LV(REG): Found max usage: 2 item
+; CHECK-NEXT: LV(REG): RegisterClass: Generic::ScalarRC, 2 registers
+; CHECK-NEXT: LV(REG): RegisterClass: Generic::VectorRC, 13 registers
+; CHECK-NEXT: LV(REG): Found invariant usage: 0 item
 entry:
   br label %for.body
 
@@ -85,8 +93,11 @@ for.body:                                         ; preds = %for.body, %entry
 define i64 @bar(i64* nocapture %a) {
 ; CHECK-LABEL: bar
 ; CHECK:       LV(REG): VF = 2
-; CHECK:       LV(REG): Found max usage: 3
-;
+; CHECK-NEXT: LV(REG): Found max usage: 2 item
+; CHECK-NEXT: LV(REG): RegisterClass: Generic::VectorRC, 3 registers
+; CHECK-NEXT: LV(REG): RegisterClass: Generic::ScalarRC, 1 registers
+; CHECK-NEXT: LV(REG): Found invariant usage: 0 item
+
 entry:
   br label %for.body
 
@@ -117,8 +128,11 @@ define void @hoo(i32 %n) {
 ; so the max usage of AVX512 vector register will be 2.
 ; AVX512F-LABEL: bar
 ; AVX512F:       LV(REG): VF = 16
-; AVX512F:       LV(REG): Found max usage: 2
-;
+; AVX512F-CHECK: LV(REG): Found max usage: 2 item
+; AVX512F-CHECK: LV(REG): RegisterClass: Generic::ScalarRC, 2 registers
+; AVX512F-CHECK: LV(REG): RegisterClass: Generic::VectorRC, 2 registers
+; AVX512F-CHECK: LV(REG): Found invariant usage: 0 item
+
 entry:
   br label %for.body
 

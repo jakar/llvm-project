@@ -9,13 +9,14 @@
 ;    }
 
 ; SCEV:      polly.stmt.bb2:                                   ; preds = %polly.loop_header
-; SCEV-NEXT:   %p_tmp = srem i64 %polly.indvar, 4
-; SCEV-NEXT:   %p_tmp3 = getelementptr inbounds float, float* %A, i64 %p_tmp
-; SCEV-NEXT:   %tmp4_p_scalar_ = load float, float* %p_tmp3, align 4, !alias.scope !0, !noalias !2
+; SCEV-NEXT:   %0 = trunc i64 %polly.indvar to i2
+; SCEV-NEXT:   %1 = zext i2 %0 to i64
+; SCEV-NEXT:   %scevgep = getelementptr float, float* %A, i64 %1
+; SCEV-NEXT:   %tmp4_p_scalar_ = load float, float* %scevgep, align 4, !alias.scope !0, !noalias !2
 ; SCEV-NEXT:   %p_tmp5 = fadd float %tmp4_p_scalar_, 1.000000e+01
-; SCEV-NEXT:   store float %p_tmp5, float* %p_tmp3, align 4, !alias.scope !0, !noalias !2
+; SCEV-NEXT:   store float %p_tmp5, float* %scevgep, align 4, !alias.scope !0, !noalias !2
 ; SCEV-NEXT:   %polly.indvar_next = add nsw i64 %polly.indvar, 1
-; SCEV-NEXT:   %polly.loop_cond = icmp sle i64 %polly.indvar, 98
+; SCEV-NEXT:   %polly.loop_cond = icmp sle i64 %polly.indvar_next, 99
 ; SCEV-NEXT:   br i1 %polly.loop_cond, label %polly.loop_header, label %polly.loop_exit
 
 ; ASTEXPR: 	polly.stmt.bb2:                                   ; preds = %polly.loop_header
@@ -27,7 +28,7 @@
 ; ASTEXPR-NEXT:   %polly.access.A2 = getelementptr float, float* %A, i64 %pexp.pdiv_r1
 ; ASTEXPR-NEXT:   store float %p_tmp5, float* %polly.access.A2, align 4, !alias.scope !0, !noalias !2
 ; ASTEXPR-NEXT:   %polly.indvar_next = add nsw i64 %polly.indvar, 1
-; ASTEXPR-NEXT:   %polly.loop_cond = icmp sle i64 %polly.indvar, 98
+; ASTEXPR-NEXT:   %polly.loop_cond = icmp sle i64 %polly.indvar_next, 99
 ; ASTEXPR-NEXT:   br i1 %polly.loop_cond, label %polly.loop_header, label %polly.loop_exit
 
 target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"

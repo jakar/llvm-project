@@ -1,16 +1,20 @@
-//===-- SafeStackLayout.cpp - SafeStack frame layout -----------*- C++ -*--===//
+//===- SafeStackLayout.cpp - SafeStack frame layout -----------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
 #include "SafeStackLayout.h"
-
-#include "llvm/IR/Instructions.h"
+#include "llvm/IR/Value.h"
+#include "llvm/Support/CommandLine.h"
+#include "llvm/Support/Compiler.h"
 #include "llvm/Support/Debug.h"
+#include "llvm/Support/MathExtras.h"
+#include "llvm/Support/raw_ostream.h"
+#include <algorithm>
+#include <cassert>
 
 using namespace llvm;
 using namespace llvm::safestack;
@@ -34,8 +38,9 @@ LLVM_DUMP_METHOD void StackLayout::print(raw_ostream &OS) {
 }
 
 void StackLayout::addObject(const Value *V, unsigned Size, unsigned Alignment,
-                            const StackColoring::LiveRange &Range) {
+                            const StackLifetime::LiveRange &Range) {
   StackObjects.push_back({V, Size, Alignment, Range});
+  ObjectAlignments[V] = Alignment;
   MaxAlignment = std::max(MaxAlignment, Alignment);
 }
 
@@ -56,30 +61,30 @@ void StackLayout::layoutObject(StackObject &Obj) {
     return;
   }
 
-  DEBUG(dbgs() << "Layout: size " << Obj.Size << ", align " << Obj.Alignment
-               << ", range " << Obj.Range << "\n");
+  LLVM_DEBUG(dbgs() << "Layout: size " << Obj.Size << ", align "
+                    << Obj.Alignment << ", range " << Obj.Range << "\n");
   assert(Obj.Alignment <= MaxAlignment);
   unsigned Start = AdjustStackOffset(0, Obj.Size, Obj.Alignment);
   unsigned End = Start + Obj.Size;
-  DEBUG(dbgs() << "  First candidate: " << Start << " .. " << End << "\n");
+  LLVM_DEBUG(dbgs() << "  First candidate: " << Start << " .. " << End << "\n");
   for (const StackRegion &R : Regions) {
-    DEBUG(dbgs() << "  Examining region: " << R.Start << " .. " << R.End
-                 << ", range " << R.Range << "\n");
+    LLVM_DEBUG(dbgs() << "  Examining region: " << R.Start << " .. " << R.End
+                      << ", range " << R.Range << "\n");
     assert(End >= R.Start);
     if (Start >= R.End) {
-      DEBUG(dbgs() << "  Does not intersect, skip.\n");
+      LLVM_DEBUG(dbgs() << "  Does not intersect, skip.\n");
       continue;
     }
-    if (Obj.Range.Overlaps(R.Range)) {
+    if (Obj.Range.overlaps(R.Range)) {
       // Find the next appropriate location.
       Start = AdjustStackOffset(R.End, Obj.Size, Obj.Alignment);
       End = Start + Obj.Size;
-      DEBUG(dbgs() << "  Overlaps. Next candidate: " << Start << " .. " << End
-                   << "\n");
+      LLVM_DEBUG(dbgs() << "  Overlaps. Next candidate: " << Start << " .. "
+                        << End << "\n");
       continue;
     }
     if (End <= R.End) {
-      DEBUG(dbgs() << "  Reusing region(s).\n");
+      LLVM_DEBUG(dbgs() << "  Reusing region(s).\n");
       break;
     }
   }
@@ -88,13 +93,13 @@ void StackLayout::layoutObject(StackObject &Obj) {
   if (End > LastRegionEnd) {
     // Insert a new region at the end. Maybe two.
     if (Start > LastRegionEnd) {
-      DEBUG(dbgs() << "  Creating gap region: " << LastRegionEnd << " .. "
-                   << Start << "\n");
-      Regions.emplace_back(LastRegionEnd, Start, StackColoring::LiveRange());
+      LLVM_DEBUG(dbgs() << "  Creating gap region: " << LastRegionEnd << " .. "
+                        << Start << "\n");
+      Regions.emplace_back(LastRegionEnd, Start, StackLifetime::LiveRange(0));
       LastRegionEnd = Start;
     }
-    DEBUG(dbgs() << "  Creating new region: " << LastRegionEnd << " .. " << End
-                 << ", range " << Obj.Range << "\n");
+    LLVM_DEBUG(dbgs() << "  Creating new region: " << LastRegionEnd << " .. "
+                      << End << ", range " << Obj.Range << "\n");
     Regions.emplace_back(LastRegionEnd, End, Obj.Range);
     LastRegionEnd = End;
   }
@@ -119,7 +124,7 @@ void StackLayout::layoutObject(StackObject &Obj) {
   // Update live ranges for all affected regions.
   for (StackRegion &R : Regions) {
     if (Start < R.End && End > R.Start)
-      R.Range.Join(Obj.Range);
+      R.Range.join(Obj.Range);
     if (End <= R.End)
       break;
   }
@@ -135,13 +140,13 @@ void StackLayout::computeLayout() {
 
   // Sort objects by size (largest first) to reduce fragmentation.
   if (StackObjects.size() > 2)
-    std::stable_sort(StackObjects.begin() + 1, StackObjects.end(),
-                     [](const StackObject &a, const StackObject &b) {
-                       return a.Size > b.Size;
-                     });
+    llvm::stable_sort(drop_begin(StackObjects),
+                      [](const StackObject &a, const StackObject &b) {
+                        return a.Size > b.Size;
+                      });
 
   for (auto &Obj : StackObjects)
     layoutObject(Obj);
 
-  DEBUG(print(dbgs()));
+  LLVM_DEBUG(print(dbgs()));
 }

@@ -1,9 +1,8 @@
 //===----------------------------------------------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is dual licensed under the MIT and the University of Illinois Open
-// Source Licenses. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -11,6 +10,7 @@
 
 // asan and msan will not call the new handler.
 // UNSUPPORTED: sanitizer-new-delete
+// XFAIL: LIBCXX-WINDOWS-FIXME
 
 #include <new>
 #include <cstddef>
@@ -35,7 +35,7 @@ struct A
     ~A() {A_constructed = false;}
 };
 
-int main()
+int main(int, char**)
 {
 #ifndef TEST_HAS_NO_EXCEPTIONS
     std::set_new_handler(my_new_handler);
@@ -59,4 +59,6 @@ int main()
     assert(A_constructed);
     delete ap;
     assert(!A_constructed);
+
+  return 0;
 }

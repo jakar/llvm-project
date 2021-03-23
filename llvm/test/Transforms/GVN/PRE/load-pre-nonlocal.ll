@@ -1,4 +1,4 @@
-; RUN: opt -S -o - -basicaa -domtree -gvn %s | FileCheck %s
+; RUN: opt -S -o - -basic-aa -domtree -gvn %s | FileCheck %s
 
 target datalayout = "e-m:o-i64:64-f80:128-n8:16:32:64-S128"
 
@@ -101,7 +101,7 @@ if.end:
 !10 = !{}
 !11 = !DISubroutineType(types: !10)
 !12 = !DIFile(filename: "test.cpp", directory: "/tmp")
-!13 = distinct !DISubprogram(name: "test", scope: !12, file: !12, line: 99, type: !11, isLocal: false, isDefinition: true, scopeLine: 100, flags: DIFlagPrototyped, isOptimized: false, unit: !18, variables: !10)
+!13 = distinct !DISubprogram(name: "test", scope: !12, file: !12, line: 99, type: !11, isLocal: false, isDefinition: true, scopeLine: 100, flags: DIFlagPrototyped, isOptimized: false, unit: !18, retainedNodes: !10)
 !14 = !DILocation(line: 100, column: 1, scope: !13)
 !15 = !DILocation(line: 101, column: 1, scope: !13)
 !16 = !DILocation(line: 102, column: 1, scope: !13)

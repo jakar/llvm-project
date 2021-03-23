@@ -6,7 +6,7 @@ target triple = "powerpc64-unknown-linux-gnu"
 
 declare void @bar(i32*, i32*) #0
 
-define void @goo(%struct.s* byval nocapture readonly %a, i32 signext %n) #0 {
+define void @goo(%struct.s* byval(%struct.s) nocapture readonly %a, i32 signext %n) #0 {
 entry:
   %0 = zext i32 %n to i64
   %vla = alloca i32, i64 %0, align 128
@@ -25,8 +25,8 @@ entry:
 
 ; CHECK-DAG: li [[REG1:[0-9]+]], -128
 ; CHECK-DAG: neg [[REG2:[0-9]+]],
-; CHECK: and [[REG1]], [[REG2]], [[REG1]]
-; CHECK: stdux {{[0-9]+}}, 1, [[REG1]]
+; CHECK: and [[REG3:[0-9]+]], [[REG2]], [[REG1]]
+; CHECK: stdux {{[0-9]+}}, 1, [[REG3]]
 
 ; CHECK: blr
 

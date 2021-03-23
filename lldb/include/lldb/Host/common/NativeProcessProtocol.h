@@ -1,142 +1,166 @@
 //===-- NativeProcessProtocol.h ---------------------------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef liblldb_NativeProcessProtocol_h_
-#define liblldb_NativeProcessProtocol_h_
+#ifndef LLDB_HOST_COMMON_NATIVEPROCESSPROTOCOL_H
+#define LLDB_HOST_COMMON_NATIVEPROCESSPROTOCOL_H
 
+#include "NativeBreakpointList.h"
+#include "NativeThreadProtocol.h"
+#include "NativeWatchpointList.h"
+#include "lldb/Host/Host.h"
 #include "lldb/Host/MainLoop.h"
-#include "lldb/Utility/Error.h"
+#include "lldb/Utility/ArchSpec.h"
+#include "lldb/Utility/Status.h"
+#include "lldb/Utility/TraceOptions.h"
+#include "lldb/Utility/UnimplementedError.h"
 #include "lldb/lldb-private-forward.h"
 #include "lldb/lldb-types.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/Support/Error.h"
 #include "llvm/Support/MemoryBuffer.h"
+#include <mutex>
+#include <unordered_map>
 #include <vector>
-
-#include "NativeBreakpointList.h"
-#include "NativeWatchpointList.h"
 
 namespace lldb_private {
 class MemoryRegionInfo;
 class ResumeActionList;
 
-//------------------------------------------------------------------
-// NativeProcessProtocol
-//------------------------------------------------------------------
-class NativeProcessProtocol
-    : public std::enable_shared_from_this<NativeProcessProtocol> {
-  friend class SoftwareBreakpoint;
+struct SVR4LibraryInfo {
+  std::string name;
+  lldb::addr_t link_map;
+  lldb::addr_t base_addr;
+  lldb::addr_t ld_addr;
+  lldb::addr_t next;
+};
 
+// NativeProcessProtocol
+class NativeProcessProtocol {
 public:
   virtual ~NativeProcessProtocol() {}
 
-  virtual Error Resume(const ResumeActionList &resume_actions) = 0;
+  virtual Status Resume(const ResumeActionList &resume_actions) = 0;
 
-  virtual Error Halt() = 0;
+  virtual Status Halt() = 0;
 
-  virtual Error Detach() = 0;
+  virtual Status Detach() = 0;
 
-  //------------------------------------------------------------------
   /// Sends a process a UNIX signal \a signal.
   ///
-  /// @return
+  /// \return
   ///     Returns an error object.
-  //------------------------------------------------------------------
-  virtual Error Signal(int signo) = 0;
+  virtual Status Signal(int signo) = 0;
 
-  //------------------------------------------------------------------
   /// Tells a process to interrupt all operations as if by a Ctrl-C.
   ///
   /// The default implementation will send a local host's equivalent of
   /// a SIGSTOP to the process via the NativeProcessProtocol::Signal()
   /// operation.
   ///
-  /// @return
+  /// \return
   ///     Returns an error object.
-  //------------------------------------------------------------------
-  virtual Error Interrupt();
+  virtual Status Interrupt();
 
-  virtual Error Kill() = 0;
+  virtual Status Kill() = 0;
 
-  //------------------------------------------------------------------
-  // Tells a process not to stop the inferior on given signals
-  // and just reinject them back.
-  //------------------------------------------------------------------
-  virtual Error IgnoreSignals(llvm::ArrayRef<int> signals);
+  // Tells a process not to stop the inferior on given signals and just
+  // reinject them back.
+  virtual Status IgnoreSignals(llvm::ArrayRef<int> signals);
 
-  //----------------------------------------------------------------------
   // Memory and memory region functions
-  //----------------------------------------------------------------------
 
-  virtual Error GetMemoryRegionInfo(lldb::addr_t load_addr,
-                                    MemoryRegionInfo &range_info);
+  virtual Status GetMemoryRegionInfo(lldb::addr_t load_addr,
+                                     MemoryRegionInfo &range_info);
 
-  virtual Error ReadMemory(lldb::addr_t addr, void *buf, size_t size,
-                           size_t &bytes_read) = 0;
+  virtual Status ReadMemory(lldb::addr_t addr, void *buf, size_t size,
+                            size_t &bytes_read) = 0;
 
-  virtual Error ReadMemoryWithoutTrap(lldb::addr_t addr, void *buf, size_t size,
-                                      size_t &bytes_read) = 0;
+  Status ReadMemoryWithoutTrap(lldb::addr_t addr, void *buf, size_t size,
+                               size_t &bytes_read);
 
-  virtual Error WriteMemory(lldb::addr_t addr, const void *buf, size_t size,
-                            size_t &bytes_written) = 0;
+  /// Reads a null terminated string from memory.
+  ///
+  /// Reads up to \p max_size bytes of memory until it finds a '\0'.
+  /// If a '\0' is not found then it reads max_size-1 bytes as a string and a
+  /// '\0' is added as the last character of the \p buffer.
+  ///
+  /// \param[in] addr
+  ///     The address in memory to read from.
+  ///
+  /// \param[in] buffer
+  ///     An allocated buffer with at least \p max_size size.
+  ///
+  /// \param[in] max_size
+  ///     The maximum number of bytes to read from memory until it reads the
+  ///     string.
+  ///
+  /// \param[out] total_bytes_read
+  ///     The number of bytes read from memory into \p buffer.
+  ///
+  /// \return
+  ///     Returns a StringRef backed up by the \p buffer passed in.
+  llvm::Expected<llvm::StringRef>
+  ReadCStringFromMemory(lldb::addr_t addr, char *buffer, size_t max_size,
+                        size_t &total_bytes_read);
 
-  virtual Error AllocateMemory(size_t size, uint32_t permissions,
-                               lldb::addr_t &addr) = 0;
+  virtual Status WriteMemory(lldb::addr_t addr, const void *buf, size_t size,
+                             size_t &bytes_written) = 0;
 
-  virtual Error DeallocateMemory(lldb::addr_t addr) = 0;
+  virtual llvm::Expected<lldb::addr_t> AllocateMemory(size_t size,
+                                                      uint32_t permissions) {
+    return llvm::make_error<UnimplementedError>();
+  }
+
+  virtual llvm::Error DeallocateMemory(lldb::addr_t addr) {
+    return llvm::make_error<UnimplementedError>();
+  }
 
   virtual lldb::addr_t GetSharedLibraryInfoAddress() = 0;
+
+  virtual llvm::Expected<std::vector<SVR4LibraryInfo>>
+  GetLoadedSVR4Libraries() {
+    return llvm::createStringError(llvm::inconvertibleErrorCode(),
+                                   "Not implemented");
+  }
 
   virtual bool IsAlive() const;
 
   virtual size_t UpdateThreads() = 0;
 
-  virtual bool GetArchitecture(ArchSpec &arch) const = 0;
+  virtual const ArchSpec &GetArchitecture() const = 0;
 
-  //----------------------------------------------------------------------
   // Breakpoint functions
-  //----------------------------------------------------------------------
-  virtual Error SetBreakpoint(lldb::addr_t addr, uint32_t size,
-                              bool hardware) = 0;
+  virtual Status SetBreakpoint(lldb::addr_t addr, uint32_t size,
+                               bool hardware) = 0;
 
-  virtual Error RemoveBreakpoint(lldb::addr_t addr, bool hardware = false);
+  virtual Status RemoveBreakpoint(lldb::addr_t addr, bool hardware = false);
 
-  virtual Error EnableBreakpoint(lldb::addr_t addr);
-
-  virtual Error DisableBreakpoint(lldb::addr_t addr);
-
-  //----------------------------------------------------------------------
   // Hardware Breakpoint functions
-  //----------------------------------------------------------------------
   virtual const HardwareBreakpointMap &GetHardwareBreakpointMap() const;
 
-  virtual Error SetHardwareBreakpoint(lldb::addr_t addr, size_t size);
+  virtual Status SetHardwareBreakpoint(lldb::addr_t addr, size_t size);
 
-  virtual Error RemoveHardwareBreakpoint(lldb::addr_t addr);
+  virtual Status RemoveHardwareBreakpoint(lldb::addr_t addr);
 
-  //----------------------------------------------------------------------
   // Watchpoint functions
-  //----------------------------------------------------------------------
   virtual const NativeWatchpointList::WatchpointMap &GetWatchpointMap() const;
 
   virtual llvm::Optional<std::pair<uint32_t, uint32_t>>
   GetHardwareDebugSupportInfo() const;
 
-  virtual Error SetWatchpoint(lldb::addr_t addr, size_t size,
-                              uint32_t watch_flags, bool hardware);
+  virtual Status SetWatchpoint(lldb::addr_t addr, size_t size,
+                               uint32_t watch_flags, bool hardware);
 
-  virtual Error RemoveWatchpoint(lldb::addr_t addr);
+  virtual Status RemoveWatchpoint(lldb::addr_t addr);
 
-  //----------------------------------------------------------------------
   // Accessors
-  //----------------------------------------------------------------------
   lldb::pid_t GetID() const { return m_pid; }
 
   lldb::StateType GetState() const;
@@ -149,50 +173,43 @@ public:
 
   bool CanResume() const { return m_state == lldb::eStateStopped; }
 
-  bool GetByteOrder(lldb::ByteOrder &byte_order) const;
+  lldb::ByteOrder GetByteOrder() const {
+    return GetArchitecture().GetByteOrder();
+  }
+
+  uint32_t GetAddressByteSize() const {
+    return GetArchitecture().GetAddressByteSize();
+  }
 
   virtual llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer>>
   GetAuxvData() const = 0;
 
-  //----------------------------------------------------------------------
   // Exit Status
-  //----------------------------------------------------------------------
-  virtual bool GetExitStatus(lldb_private::ExitType *exit_type, int *status,
-                             std::string &exit_description);
+  virtual llvm::Optional<WaitStatus> GetExitStatus();
 
-  virtual bool SetExitStatus(lldb_private::ExitType exit_type, int status,
-                             const char *exit_description,
-                             bool bNotifyStateChange);
+  virtual bool SetExitStatus(WaitStatus status, bool bNotifyStateChange);
 
-  //----------------------------------------------------------------------
   // Access to threads
-  //----------------------------------------------------------------------
-  NativeThreadProtocolSP GetThreadAtIndex(uint32_t idx);
+  NativeThreadProtocol *GetThreadAtIndex(uint32_t idx);
 
-  NativeThreadProtocolSP GetThreadByID(lldb::tid_t tid);
+  NativeThreadProtocol *GetThreadByID(lldb::tid_t tid);
 
   void SetCurrentThreadID(lldb::tid_t tid) { m_current_thread_id = tid; }
 
   lldb::tid_t GetCurrentThreadID() { return m_current_thread_id; }
 
-  NativeThreadProtocolSP GetCurrentThread() {
+  NativeThreadProtocol *GetCurrentThread() {
     return GetThreadByID(m_current_thread_id);
   }
 
-  //----------------------------------------------------------------------
   // Access to inferior stdio
-  //----------------------------------------------------------------------
   virtual int GetTerminalFileDescriptor() { return m_terminal_fd; }
 
-  //----------------------------------------------------------------------
   // Stop id interface
-  //----------------------------------------------------------------------
 
   uint32_t GetStopID() const;
 
-  // ---------------------------------------------------------------------
   // Callbacks for low-level process state changes
-  // ---------------------------------------------------------------------
   class NativeDelegate {
   public:
     virtual ~NativeDelegate() {}
@@ -205,7 +222,6 @@ public:
     virtual void DidExec(NativeProcessProtocol *process) = 0;
   };
 
-  //------------------------------------------------------------------
   /// Register a native delegate.
   ///
   /// Clients can register nofication callbacks by passing in a
@@ -214,173 +230,253 @@ public:
   /// Note: it is required that the lifetime of the
   /// native_delegate outlive the NativeProcessProtocol.
   ///
-  /// @param[in] native_delegate
+  /// \param[in] native_delegate
   ///     A NativeDelegate impl to be called when certain events
   ///     happen within the NativeProcessProtocol or related threads.
   ///
-  /// @return
+  /// \return
   ///     true if the delegate was registered successfully;
   ///     false if the delegate was already registered.
   ///
-  /// @see NativeProcessProtocol::NativeDelegate.
-  //------------------------------------------------------------------
+  /// \see NativeProcessProtocol::NativeDelegate.
   bool RegisterNativeDelegate(NativeDelegate &native_delegate);
 
-  //------------------------------------------------------------------
   /// Unregister a native delegate previously registered.
   ///
-  /// @param[in] native_delegate
+  /// \param[in] native_delegate
   ///     A NativeDelegate impl previously registered with this process.
   ///
-  /// @return Returns \b true if the NativeDelegate was
+  /// \return Returns \b true if the NativeDelegate was
   /// successfully removed from the process, \b false otherwise.
   ///
-  /// @see NativeProcessProtocol::NativeDelegate
-  //------------------------------------------------------------------
+  /// \see NativeProcessProtocol::NativeDelegate
   bool UnregisterNativeDelegate(NativeDelegate &native_delegate);
 
-  virtual Error GetLoadedModuleFileSpec(const char *module_path,
-                                        FileSpec &file_spec) = 0;
+  virtual Status GetLoadedModuleFileSpec(const char *module_path,
+                                         FileSpec &file_spec) = 0;
 
-  virtual Error GetFileLoadAddress(const llvm::StringRef &file_name,
-                                   lldb::addr_t &load_addr) = 0;
+  virtual Status GetFileLoadAddress(const llvm::StringRef &file_name,
+                                    lldb::addr_t &load_addr) = 0;
 
-  //------------------------------------------------------------------
-  /// Launch a process for debugging. This method will create an concrete
-  /// instance of NativeProcessProtocol, based on the host platform.
-  /// (e.g. NativeProcessLinux on linux, etc.)
-  ///
-  /// @param[in] launch_info
-  ///     Information required to launch the process.
-  ///
-  /// @param[in] native_delegate
-  ///     The delegate that will receive messages regarding the
-  ///     inferior.  Must outlive the NativeProcessProtocol
-  ///     instance.
-  ///
-  /// @param[in] mainloop
-  ///     The mainloop instance with which the process can register
-  ///     callbacks. Must outlive the NativeProcessProtocol
-  ///     instance.
-  ///
-  /// @param[out] process_sp
-  ///     On successful return from the method, this parameter
-  ///     contains the shared pointer to the
-  ///     NativeProcessProtocol that can be used to manipulate
-  ///     the native process.
-  ///
-  /// @return
-  ///     An error object indicating if the operation succeeded,
-  ///     and if not, what error occurred.
-  //------------------------------------------------------------------
-  static Error Launch(ProcessLaunchInfo &launch_info,
-                      NativeDelegate &native_delegate, MainLoop &mainloop,
-                      NativeProcessProtocolSP &process_sp);
+  class Factory {
+  public:
+    virtual ~Factory();
+    /// Launch a process for debugging.
+    ///
+    /// \param[in] launch_info
+    ///     Information required to launch the process.
+    ///
+    /// \param[in] native_delegate
+    ///     The delegate that will receive messages regarding the
+    ///     inferior.  Must outlive the NativeProcessProtocol
+    ///     instance.
+    ///
+    /// \param[in] mainloop
+    ///     The mainloop instance with which the process can register
+    ///     callbacks. Must outlive the NativeProcessProtocol
+    ///     instance.
+    ///
+    /// \return
+    ///     A NativeProcessProtocol shared pointer if the operation succeeded or
+    ///     an error object if it failed.
+    virtual llvm::Expected<std::unique_ptr<NativeProcessProtocol>>
+    Launch(ProcessLaunchInfo &launch_info, NativeDelegate &native_delegate,
+           MainLoop &mainloop) const = 0;
 
-  //------------------------------------------------------------------
-  /// Attach to an existing process. This method will create an concrete
-  /// instance of NativeProcessProtocol, based on the host platform.
-  /// (e.g. NativeProcessLinux on linux, etc.)
+    /// Attach to an existing process.
+    ///
+    /// \param[in] pid
+    ///     pid of the process locatable
+    ///
+    /// \param[in] native_delegate
+    ///     The delegate that will receive messages regarding the
+    ///     inferior.  Must outlive the NativeProcessProtocol
+    ///     instance.
+    ///
+    /// \param[in] mainloop
+    ///     The mainloop instance with which the process can register
+    ///     callbacks. Must outlive the NativeProcessProtocol
+    ///     instance.
+    ///
+    /// \return
+    ///     A NativeProcessProtocol shared pointer if the operation succeeded or
+    ///     an error object if it failed.
+    virtual llvm::Expected<std::unique_ptr<NativeProcessProtocol>>
+    Attach(lldb::pid_t pid, NativeDelegate &native_delegate,
+           MainLoop &mainloop) const = 0;
+  };
+
+  /// StartTracing API for starting a tracing instance with the
+  /// TraceOptions on a specific thread or process.
   ///
-  /// @param[in] pid
-  ///     pid of the process locatable
+  /// \param[in] config
+  ///     The configuration to use when starting tracing.
   ///
-  /// @param[in] native_delegate
-  ///     The delegate that will receive messages regarding the
-  ///     inferior.  Must outlive the NativeProcessProtocol
+  /// \param[out] error
+  ///     Status indicates what went wrong.
+  ///
+  /// \return
+  ///     The API returns a user_id which can be used to get trace
+  ///     data, trace configuration or stopping the trace instance.
+  ///     The user_id is a key to identify and operate with a tracing
+  ///     instance. It may refer to the complete process or a single
+  ///     thread.
+  virtual lldb::user_id_t StartTrace(const TraceOptions &config,
+                                     Status &error) {
+    error.SetErrorString("Not implemented");
+    return LLDB_INVALID_UID;
+  }
+
+  /// StopTracing API as the name suggests stops a tracing instance.
+  ///
+  /// \param[in] traceid
+  ///     The user id of the trace intended to be stopped. Now a
+  ///     user_id may map to multiple threads in which case this API
+  ///     could be used to stop the tracing for a specific thread by
+  ///     supplying its thread id.
+  ///
+  /// \param[in] thread
+  ///     Thread is needed when the complete process is being traced
+  ///     and the user wishes to stop tracing on a particular thread.
+  ///
+  /// \return
+  ///     Status indicating what went wrong.
+  virtual Status StopTrace(lldb::user_id_t traceid,
+                           lldb::tid_t thread = LLDB_INVALID_THREAD_ID) {
+    return Status("Not implemented");
+  }
+
+  /// This API provides the trace data collected in the form of raw
+  /// data.
+  ///
+  /// \param[in] traceid thread
+  ///     The traceid and thread provide the context for the trace
   ///     instance.
   ///
-  /// @param[in] mainloop
-  ///     The mainloop instance with which the process can register
-  ///     callbacks. Must outlive the NativeProcessProtocol
-  ///     instance.
+  /// \param[in] buffer
+  ///     The buffer provides the destination buffer where the trace
+  ///     data would be read to. The buffer should be truncated to the
+  ///     filled length by this function.
   ///
-  /// @param[out] process_sp
-  ///     On successful return from the method, this parameter
-  ///     contains the shared pointer to the
-  ///     NativeProcessProtocol that can be used to manipulate
-  ///     the native process.
+  /// \param[in] offset
+  ///     There is possibility to read partially the trace data from
+  ///     a specified offset where in such cases the buffer provided
+  ///     may be smaller than the internal trace collection container.
   ///
-  /// @return
-  ///     An error object indicating if the operation succeeded,
-  ///     and if not, what error occurred.
-  //------------------------------------------------------------------
-  static Error Attach(lldb::pid_t pid, NativeDelegate &native_delegate,
-                      MainLoop &mainloop, NativeProcessProtocolSP &process_sp);
+  /// \return
+  ///     The size of the data actually read.
+  virtual Status GetData(lldb::user_id_t traceid, lldb::tid_t thread,
+                         llvm::MutableArrayRef<uint8_t> &buffer,
+                         size_t offset = 0) {
+    return Status("Not implemented");
+  }
+
+  /// Similar API as above except it aims to provide any extra data
+  /// useful for decoding the actual trace data.
+  virtual Status GetMetaData(lldb::user_id_t traceid, lldb::tid_t thread,
+                             llvm::MutableArrayRef<uint8_t> &buffer,
+                             size_t offset = 0) {
+    return Status("Not implemented");
+  }
+
+  /// API to query the TraceOptions for a given user id
+  ///
+  /// \param[in] traceid
+  ///     The user id of the tracing instance.
+  ///
+  /// \param[out] config
+  ///     The configuration being used for tracing.
+  ///
+  /// \return A status indicating what went wrong.
+  virtual Status GetTraceConfig(lldb::user_id_t traceid, TraceOptions &config) {
+    return Status("Not implemented");
+  }
+
+  /// \copydoc Process::GetSupportedTraceType()
+  virtual llvm::Expected<TraceTypeInfo> GetSupportedTraceType() {
+    return llvm::make_error<UnimplementedError>();
+  }
 
 protected:
+  struct SoftwareBreakpoint {
+    uint32_t ref_count;
+    llvm::SmallVector<uint8_t, 4> saved_opcodes;
+    llvm::ArrayRef<uint8_t> breakpoint_opcodes;
+  };
+
+  std::unordered_map<lldb::addr_t, SoftwareBreakpoint> m_software_breakpoints;
   lldb::pid_t m_pid;
 
-  std::vector<NativeThreadProtocolSP> m_threads;
-  lldb::tid_t m_current_thread_id;
+  std::vector<std::unique_ptr<NativeThreadProtocol>> m_threads;
+  lldb::tid_t m_current_thread_id = LLDB_INVALID_THREAD_ID;
   mutable std::recursive_mutex m_threads_mutex;
 
-  lldb::StateType m_state;
+  lldb::StateType m_state = lldb::eStateInvalid;
   mutable std::recursive_mutex m_state_mutex;
 
-  lldb_private::ExitType m_exit_type;
-  int m_exit_status;
-  std::string m_exit_description;
+  llvm::Optional<WaitStatus> m_exit_status;
+
   std::recursive_mutex m_delegates_mutex;
   std::vector<NativeDelegate *> m_delegates;
-  NativeBreakpointList m_breakpoint_list;
   NativeWatchpointList m_watchpoint_list;
   HardwareBreakpointMap m_hw_breakpoints_map;
   int m_terminal_fd;
-  uint32_t m_stop_id;
+  uint32_t m_stop_id = 0;
 
-  // Set of signal numbers that LLDB directly injects back to inferior
-  // without stopping it.
+  // Set of signal numbers that LLDB directly injects back to inferior without
+  // stopping it.
   llvm::DenseSet<int> m_signals_to_ignore;
 
   // lldb_private::Host calls should be used to launch a process for debugging,
-  // and
-  // then the process should be attached to. When attaching to a process
-  // lldb_private::Host calls should be used to locate the process to attach to,
-  // and then this function should be called.
-  NativeProcessProtocol(lldb::pid_t pid);
+  // and then the process should be attached to. When attaching to a process
+  // lldb_private::Host calls should be used to locate the process to attach
+  // to, and then this function should be called.
+  NativeProcessProtocol(lldb::pid_t pid, int terminal_fd,
+                        NativeDelegate &delegate);
 
-  // -----------------------------------------------------------
-  // Internal interface for state handling
-  // -----------------------------------------------------------
+  void SetID(lldb::pid_t pid) { m_pid = pid; }
+
+  // interface for state handling
   void SetState(lldb::StateType state, bool notify_delegates = true);
 
-  // Derived classes need not implement this.  It can be used as a
-  // hook to clear internal caches that should be invalidated when
-  // stop ids change.
+  // Derived classes need not implement this.  It can be used as a hook to
+  // clear internal caches that should be invalidated when stop ids change.
   //
-  // Note this function is called with the state mutex obtained
-  // by the caller.
+  // Note this function is called with the state mutex obtained by the caller.
   virtual void DoStopIDBumped(uint32_t newBumpId);
 
-  // -----------------------------------------------------------
-  // Internal interface for software breakpoints
-  // -----------------------------------------------------------
-  Error SetSoftwareBreakpoint(lldb::addr_t addr, uint32_t size_hint);
+  // interface for software breakpoints
 
-  virtual Error
-  GetSoftwareBreakpointTrapOpcode(size_t trap_opcode_size_hint,
-                                  size_t &actual_opcode_size,
-                                  const uint8_t *&trap_opcode_bytes) = 0;
+  Status SetSoftwareBreakpoint(lldb::addr_t addr, uint32_t size_hint);
+  Status RemoveSoftwareBreakpoint(lldb::addr_t addr);
 
-  // -----------------------------------------------------------
+  virtual llvm::Expected<llvm::ArrayRef<uint8_t>>
+  GetSoftwareBreakpointTrapOpcode(size_t size_hint);
+
+  /// Return the offset of the PC relative to the software breakpoint that was hit. If an
+  /// architecture (e.g. arm) reports breakpoint hits before incrementing the PC, this offset
+  /// will be 0. If an architecture (e.g. intel) reports breakpoints hits after incrementing the
+  /// PC, this offset will be the size of the breakpoint opcode.
+  virtual size_t GetSoftwareBreakpointPCOffset();
+
+  // Adjust the thread's PC after hitting a software breakpoint. On
+  // architectures where the PC points after the breakpoint instruction, this
+  // resets it to point to the breakpoint itself.
+  void FixupBreakpointPCAsNeeded(NativeThreadProtocol &thread);
+
   /// Notify the delegate that an exec occurred.
   ///
   /// Provide a mechanism for a delegate to clear out any exec-
   /// sensitive data.
-  // -----------------------------------------------------------
   void NotifyDidExec();
 
-  NativeThreadProtocolSP GetThreadByIDUnlocked(lldb::tid_t tid);
-
-  // -----------------------------------------------------------
-  // Static helper methods for derived classes.
-  // -----------------------------------------------------------
-  static Error ResolveProcessArchitecture(lldb::pid_t pid, ArchSpec &arch);
+  NativeThreadProtocol *GetThreadByIDUnlocked(lldb::tid_t tid);
 
 private:
   void SynchronouslyNotifyProcessStateChanged(lldb::StateType state);
+  llvm::Expected<SoftwareBreakpoint>
+  EnableSoftwareBreakpoint(lldb::addr_t addr, uint32_t size_hint);
 };
-}
+} // namespace lldb_private
 
-#endif // #ifndef liblldb_NativeProcessProtocol_h_
+#endif // LLDB_HOST_COMMON_NATIVEPROCESSPROTOCOL_H

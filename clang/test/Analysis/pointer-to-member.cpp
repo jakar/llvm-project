@@ -230,3 +230,83 @@ void double_diamond() {
   clang_analyzer_eval(d2.*(static_cast<int D2::*>(static_cast<int R2::*>(static_cast<int R1::*>(&B::f)))) == 4); // expected-warning {{TRUE}}
 }
 } // end of testPointerToMemberDiamond namespace
+
+namespace testAnonymousMember {
+struct A {
+  int a;
+  struct {
+    int b;
+    int c;
+  };
+  struct {
+    struct {
+      int d;
+      int e;
+    };
+  };
+  struct {
+    union {
+      int f;
+    };
+  };
+};
+
+void test() {
+  clang_analyzer_eval(&A::a); // expected-warning{{TRUE}}
+  clang_analyzer_eval(&A::b); // expected-warning{{TRUE}}
+  clang_analyzer_eval(&A::c); // expected-warning{{TRUE}}
+  clang_analyzer_eval(&A::d); // expected-warning{{TRUE}}
+  clang_analyzer_eval(&A::e); // expected-warning{{TRUE}}
+  clang_analyzer_eval(&A::f); // expected-warning{{TRUE}}
+
+  int A::*ap = &A::a,
+      A::*bp = &A::b,
+      A::*cp = &A::c,
+      A::*dp = &A::d,
+      A::*ep = &A::e,
+      A::*fp = &A::f;
+
+  clang_analyzer_eval(ap); // expected-warning{{TRUE}}
+  clang_analyzer_eval(bp); // expected-warning{{TRUE}}
+  clang_analyzer_eval(cp); // expected-warning{{TRUE}}
+  clang_analyzer_eval(dp); // expected-warning{{TRUE}}
+  clang_analyzer_eval(ep); // expected-warning{{TRUE}}
+  clang_analyzer_eval(fp); // expected-warning{{TRUE}}
+
+  A a;
+  a.a = 1;
+  a.b = 2;
+  a.c = 3;
+  a.d = 4;
+  a.e = 5;
+
+  clang_analyzer_eval(a.*ap == 1); // expected-warning{{TRUE}}
+  clang_analyzer_eval(a.*bp == 2); // expected-warning{{TRUE}}
+  clang_analyzer_eval(a.*cp == 3); // expected-warning{{TRUE}}
+  clang_analyzer_eval(a.*dp == 4); // expected-warning{{TRUE}}
+  clang_analyzer_eval(a.*ep == 5); // expected-warning{{TRUE}}
+}
+} // namespace testAnonymousMember
+
+namespace testStaticCasting {
+// From bug #48739
+struct Grandfather {
+  int field;
+};
+
+struct Father : public Grandfather {};
+struct Son : public Father {};
+
+void test() {
+  int Son::*sf = &Son::field;
+  Grandfather grandpa;
+  grandpa.field = 10;
+  int Grandfather::*gpf1 = static_cast<int Grandfather::*>(sf);
+  int Grandfather::*gpf2 = static_cast<int Grandfather::*>(static_cast<int Father::*>(sf));
+  int Grandfather::*gpf3 = static_cast<int Grandfather::*>(static_cast<int Son::*>(static_cast<int Father::*>(sf)));
+  clang_analyzer_eval(grandpa.*gpf1 == 10); // expected-warning{{TRUE}}
+  clang_analyzer_eval(grandpa.*gpf2 == 10); // expected-warning{{TRUE}}
+  clang_analyzer_eval(grandpa.*gpf3 == 10); // expected-warning{{TRUE}}
+}
+} // namespace testStaticCasting
+

@@ -1,9 +1,8 @@
-//===-- llvm/Support/GraphWriter.h - Write graph to a .dot file -*- C++ -*-===//
+//===- llvm/Support/GraphWriter.h - Write graph to a .dot file --*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -24,30 +23,41 @@
 #define LLVM_SUPPORT_GRAPHWRITER_H
 
 #include "llvm/ADT/GraphTraits.h"
+#include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/Twine.h"
 #include "llvm/Support/DOTGraphTraits.h"
+#include "llvm/Support/FileSystem.h"
 #include "llvm/Support/raw_ostream.h"
+#include <algorithm>
+#include <cstddef>
+#include <iterator>
+#include <string>
+#include <type_traits>
 #include <vector>
 
 namespace llvm {
 
 namespace DOT {  // Private functions...
-  std::string EscapeString(const std::string &Label);
 
-  /// \brief Get a color string for this node number. Simply round-robin selects
-  /// from a reasonable number of colors.
-  StringRef getColorString(unsigned NodeNumber);
-}
+std::string EscapeString(const std::string &Label);
+
+/// Get a color string for this node number. Simply round-robin selects
+/// from a reasonable number of colors.
+StringRef getColorString(unsigned NodeNumber);
+
+} // end namespace DOT
 
 namespace GraphProgram {
-   enum Name {
-      DOT,
-      FDP,
-      NEATO,
-      TWOPI,
-      CIRCO
-   };
-}
+
+enum Name {
+  DOT,
+  FDP,
+  NEATO,
+  TWOPI,
+  CIRCO
+};
+
+} // end namespace GraphProgram
 
 bool DisplayGraph(StringRef Filename, bool wait = true,
                   GraphProgram::Name program = GraphProgram::DOT);
@@ -57,11 +67,11 @@ class GraphWriter {
   raw_ostream &O;
   const GraphType &G;
 
-  typedef DOTGraphTraits<GraphType>           DOTTraits;
-  typedef GraphTraits<GraphType>              GTraits;
-  typedef typename GTraits::NodeRef           NodeRef;
-  typedef typename GTraits::nodes_iterator    node_iterator;
-  typedef typename GTraits::ChildIteratorType child_iterator;
+  using DOTTraits = DOTGraphTraits<GraphType>;
+  using GTraits = GraphTraits<GraphType>;
+  using NodeRef = typename GTraits::NodeRef;
+  using node_iterator = typename GTraits::nodes_iterator;
+  using child_iterator = typename GTraits::ChildIteratorType;
   DOTTraits DTraits;
 
   static_assert(std::is_pointer<NodeRef>::value,
@@ -116,7 +126,7 @@ public:
   }
 
   void writeHeader(const std::string &Title) {
-    std::string GraphName = DTraits.getGraphName(G);
+    std::string GraphName(DTraits.getGraphName(G));
 
     if (!Title.empty())
       O << "digraph \"" << DOT::EscapeString(Title) << "\" {\n";
@@ -148,9 +158,7 @@ public:
         writeNode(Node);
   }
 
-  bool isNodeHidden(NodeRef Node) {
-    return DTraits.isNodeHidden(Node);
-  }
+  bool isNodeHidden(NodeRef Node) { return DTraits.isNodeHidden(Node, G); }
 
   void writeNode(NodeRef Node) {
     std::string NodeAttributes = DTraits.getNodeAttributes(Node, G);
@@ -218,10 +226,10 @@ public:
     child_iterator EI = GTraits::child_begin(Node);
     child_iterator EE = GTraits::child_end(Node);
     for (unsigned i = 0; EI != EE && i != 64; ++EI, ++i)
-      if (!DTraits.isNodeHidden(*EI))
+      if (!DTraits.isNodeHidden(*EI, G))
         writeEdge(Node, i, EI);
     for (; EI != EE; ++EI)
-      if (!DTraits.isNodeHidden(*EI))
+      if (!DTraits.isNodeHidden(*EI, G))
         writeEdge(Node, 64, EI);
   }
 
@@ -310,14 +318,31 @@ raw_ostream &WriteGraph(raw_ostream &O, const GraphType &G,
 
 std::string createGraphFilename(const Twine &Name, int &FD);
 
+/// Writes graph into a provided @c Filename.
+/// If @c Filename is empty, generates a random one.
+/// \return The resulting filename, or an empty string if writing
+/// failed.
 template <typename GraphType>
 std::string WriteGraph(const GraphType &G, const Twine &Name,
-                       bool ShortNames = false, const Twine &Title = "") {
+                       bool ShortNames = false,
+                       const Twine &Title = "",
+                       std::string Filename = "") {
   int FD;
-  // Windows can't always handle long paths, so limit the length of the name.
-  std::string N = Name.str();
-  N = N.substr(0, std::min<std::size_t>(N.size(), 140));
-  std::string Filename = createGraphFilename(N, FD);
+  if (Filename.empty()) {
+    Filename = createGraphFilename(Name.str(), FD);
+  } else {
+    std::error_code EC = sys::fs::openFileForWrite(Filename, FD);
+
+    // Writing over an existing file is not considered an error.
+    if (EC == std::errc::file_exists) {
+      errs() << "file exists, overwriting" << "\n";
+    } else if (EC) {
+      errs() << "error writing into file" << "\n";
+      return "";
+    } else {
+      errs() << "writing to the newly created file " << Filename << "\n";
+    }
+  }
   raw_fd_ostream O(FD, /*shouldClose=*/ true);
 
   if (FD == -1) {
@@ -330,6 +355,17 @@ std::string WriteGraph(const GraphType &G, const Twine &Name,
 
   return Filename;
 }
+
+/// DumpDotGraph - Just dump a dot graph to the user-provided file name.
+#if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
+template <typename GraphType>
+LLVM_DUMP_METHOD void
+dumpDotGraphToFile(const GraphType &G, const Twine &FileName,
+                   const Twine &Title, bool ShortNames = false,
+                   const Twine &Name = "") {
+  llvm::WriteGraph(G, Name, ShortNames, Title, FileName.str());
+}
+#endif
 
 /// ViewGraph - Emit a dot graph, run 'dot', run gv on the postscript file,
 /// then cleanup.  For use from the debugger.
@@ -346,6 +382,6 @@ void ViewGraph(const GraphType &G, const Twine &Name,
   DisplayGraph(Filename, false, Program);
 }
 
-} // End llvm namespace
+} // end namespace llvm
 
-#endif
+#endif // LLVM_SUPPORT_GRAPHWRITER_H

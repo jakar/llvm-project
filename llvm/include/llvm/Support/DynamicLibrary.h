@@ -1,9 +1,8 @@
 //===-- llvm/Support/DynamicLibrary.h - Portable Dynamic Library -*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -64,7 +63,7 @@ namespace sys {
     /// if the library fails to load.
     ///
     /// It is safe to call this function multiple times for the same library.
-    /// @brief Open a dynamic library permanently.
+    /// Open a dynamic library permanently.
     static DynamicLibrary getPermanentLibrary(const char *filename,
                                               std::string *errMsg = nullptr);
 
@@ -88,16 +87,32 @@ namespace sys {
       return !getPermanentLibrary(Filename, ErrMsg).isValid();
     }
 
+    enum SearchOrdering {
+      /// SO_Linker - Search as a call to dlsym(dlopen(NULL)) would when
+      /// DynamicLibrary::getPermanentLibrary(NULL) has been called or
+      /// search the list of explcitly loaded symbols if not.
+      SO_Linker,
+      /// SO_LoadedFirst - Search all loaded libraries, then as SO_Linker would.
+      SO_LoadedFirst,
+      /// SO_LoadedLast - Search as SO_Linker would, then loaded libraries.
+      /// Only useful to search if libraries with RTLD_LOCAL have been added.
+      SO_LoadedLast,
+      /// SO_LoadOrder - Or this in to search libraries in the ordered loaded.
+      /// The default bahaviour is to search loaded libraries in reverse.
+      SO_LoadOrder = 4
+    };
+    static SearchOrdering SearchOrder; // = SO_Linker
+
     /// This function will search through all previously loaded dynamic
     /// libraries for the symbol \p symbolName. If it is found, the address of
     /// that symbol is returned. If not, null is returned. Note that this will
     /// search permanently loaded libraries (getPermanentLibrary()) as well
     /// as explicitly registered symbols (AddSymbol()).
     /// @throws std::string on error.
-    /// @brief Search through libraries for address of a symbol
+    /// Search through libraries for address of a symbol
     static void *SearchForAddressOfSymbol(const char *symbolName);
 
-    /// @brief Convenience function for C++ophiles.
+    /// Convenience function for C++ophiles.
     static void *SearchForAddressOfSymbol(const std::string &symbolName) {
       return SearchForAddressOfSymbol(symbolName.c_str());
     }
@@ -105,7 +120,7 @@ namespace sys {
     /// This functions permanently adds the symbol \p symbolName with the
     /// value \p symbolValue.  These symbols are searched before any
     /// libraries.
-    /// @brief Add searchable symbol/value pair.
+    /// Add searchable symbol/value pair.
     static void AddSymbol(StringRef symbolName, void *symbolValue);
 
     class HandleSet;

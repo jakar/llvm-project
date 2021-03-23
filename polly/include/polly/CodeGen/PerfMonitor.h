@@ -1,9 +1,8 @@
 //===--- PerfMonitor.h --- Monitor time spent in scops --------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -12,21 +11,16 @@
 
 #include "polly/CodeGen/IRBuilder.h"
 
-namespace llvm {
-class Function;
-class Module;
-class Value;
-class Instruction;
-} // namespace llvm
-
 namespace polly {
 
 class PerfMonitor {
 public:
   /// Create a new performance monitor.
   ///
+  /// @param S The scop for which to generate fine-grained performance
+  ///          monitoring information.
   /// @param M The module for which to generate the performance monitor.
-  PerfMonitor(llvm::Module *M);
+  PerfMonitor(const Scop &S, llvm::Module *M);
 
   /// Initialize the performance monitor.
   ///
@@ -37,7 +31,7 @@ public:
   /// Mark the beginning of a timing region.
   ///
   /// @param InsertBefore The instruction before which the timing region starts.
-  void insertRegionStart(llvm::Instruction *InserBefore);
+  void insertRegionStart(llvm::Instruction *InsertBefore);
 
   /// Mark the end of a timing region.
   ///
@@ -48,22 +42,26 @@ private:
   llvm::Module *M;
   PollyIRBuilder Builder;
 
+  // The scop to profile against.
+  const Scop &S;
+
   /// Indicates if performance profiling is supported on this architecture.
   bool Supported;
 
   /// The cycle counter at the beginning of the program execution.
   llvm::Value *CyclesTotalStartPtr;
 
+  /// The total number of cycles spent in the current scop S.
+  llvm::Value *CyclesInCurrentScopPtr;
+
+  /// The total number of times the current scop S is executed.
+  llvm::Value *TripCountForCurrentScopPtr;
+
   /// The total number of cycles spent within scops.
   llvm::Value *CyclesInScopsPtr;
 
   /// The value of the cycle counter at the beginning of the last scop.
   llvm::Value *CyclesInScopStartPtr;
-
-  /// A memory location which serves as argument of the RDTSCP function.
-  ///
-  /// The value written to this location is currently not used.
-  llvm::Value *RDTSCPWriteLocation;
 
   /// A global variable, that keeps track if the performance monitor
   /// initialization has already been run.
@@ -89,7 +87,13 @@ private:
   /// into the module (or obtain references to them if they already exist).
   void addGlobalVariables();
 
-  /// Get a reference to the intrinsic "i64 @llvm.x86.rdtscp(i8*)".
+  /// Add per-scop tracking to module.
+  ///
+  /// Insert the global variable which is used to track the number of cycles
+  /// this scop runs.
+  void addScopCounter();
+
+  /// Get a reference to the intrinsic "{ i64, i32 } @llvm.x86.rdtscp()".
   ///
   /// The rdtscp function returns the current value of the processor's
   /// time-stamp counter as well as the current CPU identifier. On modern x86
@@ -126,6 +130,12 @@ private:
   /// This function finalizes the performance measurements and prints the
   /// results to stdout. It is expected to be registered with 'atexit()'.
   llvm::Function *insertFinalReporting();
+
+  /// Append Scop reporting data to "__polly_perf_final_reporting".
+  ///
+  /// This function appends the current scop (S)'s information to the final
+  /// printing function.
+  void AppendScopReporting();
 };
 } // namespace polly
 

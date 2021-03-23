@@ -1,9 +1,8 @@
 //===- Thunks.h --------------------------------------------------------===//
 //
-//                             The LLVM Linker
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -14,7 +13,9 @@
 
 namespace lld {
 namespace elf {
-class SymbolBody;
+class Defined;
+class InputFile;
+class Symbol;
 class ThunkSection;
 // Class to describe an instance of a Thunk.
 // A Thunk is a code-sequence inserted by the linker in between a caller and
@@ -23,35 +24,58 @@ class ThunkSection;
 // include transferring control from non-pi to pi and changing state on
 // targets like ARM.
 //
-// Thunks can be created for DefinedRegular, Shared and Undefined Symbols.
+// Thunks can be created for Defined, Shared and Undefined Symbols.
 // Thunks are assigned to synthetic ThunkSections
 class Thunk {
 public:
-  Thunk(const SymbolBody &Destination);
+  Thunk(Symbol &destination, int64_t addend);
   virtual ~Thunk();
 
-  virtual uint32_t size() const { return 0; }
-  virtual void writeTo(uint8_t *Buf, ThunkSection &IS) const {}
+  virtual uint32_t size() = 0;
+  virtual void writeTo(uint8_t *buf) = 0;
 
-  // All Thunks must define at least one symbol ThunkSym so that we can
-  // redirect relocations to it.
-  virtual void addSymbols(ThunkSection &IS) {}
+  // All Thunks must define at least one symbol, known as the thunk target
+  // symbol, so that we can redirect relocations to it. The thunk may define
+  // additional symbols, but these are never targets for relocations.
+  virtual void addSymbols(ThunkSection &isec) = 0;
+
+  void setOffset(uint64_t offset);
+  Defined *addSymbol(StringRef name, uint8_t type, uint64_t value,
+                     InputSectionBase &section);
 
   // Some Thunks must be placed immediately before their Target as they elide
   // a branch and fall through to the first Symbol in the Target.
   virtual InputSection *getTargetInputSection() const { return nullptr; }
 
+  // To reuse a Thunk the InputSection and the relocation must be compatible
+  // with it.
+  virtual bool isCompatibleWith(const InputSection &,
+                                const Relocation &) const {
+    return true;
+  }
+
+  Defined *getThunkTargetSym() const { return syms[0]; }
+
+  Symbol &destination;
+  int64_t addend;
+  llvm::SmallVector<Defined *, 3> syms;
+  uint64_t offset = 0;
   // The alignment requirement for this Thunk, defaults to the size of the
   // typical code section alignment.
-  const SymbolBody &Destination;
-  SymbolBody *ThunkSym;
-  uint64_t Offset;
   uint32_t alignment = 4;
 };
 
 // For a Relocation to symbol S create a Thunk to be added to a synthetic
-// ThunkSection. At present there are implementations for ARM and Mips Thunks.
-template <class ELFT> Thunk *addThunk(uint32_t RelocType, SymbolBody &S);
+// ThunkSection.
+Thunk *addThunk(const InputSection &isec, Relocation &rel);
+
+void writePPC32PltCallStub(uint8_t *buf, uint64_t gotPltVA,
+                           const InputFile *file, int64_t addend);
+void writePPC64LoadAndBranch(uint8_t *buf, int64_t offset);
+
+static inline uint16_t computeHiBits(uint32_t toCompute) {
+  return (toCompute + 0x8000) >> 16;
+}
 
 } // namespace elf
 } // namespace lld

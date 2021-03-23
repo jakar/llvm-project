@@ -1,9 +1,8 @@
-//===--- Diagnostic.cpp - C Language Family Diagnostic Handling -----------===//
+//===- Diagnostic.cpp - C Language Family Diagnostic Handling -------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -11,22 +10,38 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "clang/Basic/CharInfo.h"
 #include "clang/Basic/Diagnostic.h"
+#include "clang/Basic/CharInfo.h"
+#include "clang/Basic/DiagnosticError.h"
+#include "clang/Basic/DiagnosticIDs.h"
 #include "clang/Basic/DiagnosticOptions.h"
 #include "clang/Basic/IdentifierTable.h"
 #include "clang/Basic/PartialDiagnostic.h"
+#include "clang/Basic/SourceLocation.h"
 #include "clang/Basic/SourceManager.h"
+#include "clang/Basic/Specifiers.h"
+#include "clang/Basic/TokenKinds.h"
 #include "llvm/ADT/SmallString.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringExtras.h"
+#include "llvm/ADT/StringRef.h"
 #include "llvm/Support/CrashRecoveryContext.h"
 #include "llvm/Support/Locale.h"
 #include "llvm/Support/raw_ostream.h"
+#include <algorithm>
+#include <cassert>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <limits>
+#include <string>
+#include <utility>
+#include <vector>
 
 using namespace clang;
 
-const DiagnosticBuilder &clang::operator<<(const DiagnosticBuilder &DB,
-                                           DiagNullabilityKind nullability) {
+const StreamingDiagnostic &clang::operator<<(const StreamingDiagnostic &DB,
+                                             DiagNullabilityKind nullability) {
   StringRef string;
   switch (nullability.first) {
   case NullabilityKind::NonNull:
@@ -40,9 +55,21 @@ const DiagnosticBuilder &clang::operator<<(const DiagnosticBuilder &DB,
   case NullabilityKind::Unspecified:
     string = nullability.second ? "'null_unspecified'" : "'_Null_unspecified'";
     break;
+
+  case NullabilityKind::NullableResult:
+    assert(!nullability.second &&
+           "_Nullable_result isn't supported as context-sensitive keyword");
+    string = "_Nullable_result";
+    break;
   }
 
   DB.AddString(string);
+  return DB;
+}
+
+const StreamingDiagnostic &clang::operator<<(const StreamingDiagnostic &DB,
+                                             llvm::Error &&E) {
+  DB.AddString(toString(std::move(E)));
   return DB;
 }
 
@@ -56,27 +83,13 @@ static void DummyArgToStringFn(DiagnosticsEngine::ArgumentKind AK, intptr_t QT,
   Output.append(Str.begin(), Str.end());
 }
 
-DiagnosticsEngine::DiagnosticsEngine(IntrusiveRefCntPtr<DiagnosticIDs> diags,
-                                     DiagnosticOptions *DiagOpts,
-                                     DiagnosticConsumer *client,
-                                     bool ShouldOwnClient)
-    : Diags(std::move(diags)), DiagOpts(DiagOpts), Client(nullptr),
-      SourceMgr(nullptr) {
+DiagnosticsEngine::DiagnosticsEngine(
+    IntrusiveRefCntPtr<DiagnosticIDs> diags,
+    IntrusiveRefCntPtr<DiagnosticOptions> DiagOpts, DiagnosticConsumer *client,
+    bool ShouldOwnClient)
+    : Diags(std::move(diags)), DiagOpts(std::move(DiagOpts)) {
   setClient(client, ShouldOwnClient);
   ArgToStringFn = DummyArgToStringFn;
-  ArgToStringCookie = nullptr;
-
-  AllExtensionsSilenced = 0;
-  SuppressAfterFatalError = true;
-  SuppressAllDiagnostics = false;
-  ElideType = true;
-  PrintTemplateTree = false;
-  ShowColors = false;
-  ShowOverloads = Ovl_All;
-
-  ErrorLimit = 0;
-  TemplateBacktraceLimit = 0;
-  ConstexprBacktraceLimit = 0;
 
   Reset();
 }
@@ -85,6 +98,14 @@ DiagnosticsEngine::~DiagnosticsEngine() {
   // If we own the diagnostic client, destroy it first so that it can access the
   // engine from its destructor.
   setClient(nullptr);
+}
+
+void DiagnosticsEngine::dump() const {
+  DiagStatesByLoc.dump(*SourceMgr);
+}
+
+void DiagnosticsEngine::dump(StringRef DiagName) const {
+  DiagStatesByLoc.dump(*SourceMgr, DiagName);
 }
 
 void DiagnosticsEngine::setClient(DiagnosticConsumer *client,
@@ -114,13 +135,13 @@ void DiagnosticsEngine::Reset() {
   UncompilableErrorOccurred = false;
   FatalErrorOccurred = false;
   UnrecoverableErrorOccurred = false;
-  
+
   NumWarnings = 0;
   NumErrors = 0;
   TrapNumErrorsOccurred = 0;
   TrapNumUnrecoverableErrorsOccurred = 0;
-  
-  CurDiagID = ~0U;
+
+  CurDiagID = std::numeric_limits<unsigned>::max();
   LastDiagLevel = DiagnosticIDs::Ignored;
   DelayedDiagID = 0;
 
@@ -136,23 +157,23 @@ void DiagnosticsEngine::Reset() {
 }
 
 void DiagnosticsEngine::SetDelayedDiagnostic(unsigned DiagID, StringRef Arg1,
-                                             StringRef Arg2) {
+                                             StringRef Arg2, StringRef Arg3) {
   if (DelayedDiagID)
     return;
 
   DelayedDiagID = DiagID;
   DelayedDiagArg1 = Arg1.str();
   DelayedDiagArg2 = Arg2.str();
+  DelayedDiagArg3 = Arg3.str();
 }
 
 void DiagnosticsEngine::ReportDelayed() {
   unsigned ID = DelayedDiagID;
   DelayedDiagID = 0;
-  Report(ID) << DelayedDiagArg1 << DelayedDiagArg2;
+  Report(ID) << DelayedDiagArg1 << DelayedDiagArg2 << DelayedDiagArg3;
 }
 
-void DiagnosticsEngine::DiagStateMap::appendFirst(
-                                             DiagState *State) {
+void DiagnosticsEngine::DiagStateMap::appendFirst(DiagState *State) {
   assert(Files.empty() && "not first");
   FirstDiagState = CurDiagState = State;
   CurDiagStateLoc = SourceLocation();
@@ -197,10 +218,9 @@ DiagnosticsEngine::DiagStateMap::lookup(SourceManager &SrcMgr,
 
 DiagnosticsEngine::DiagState *
 DiagnosticsEngine::DiagStateMap::File::lookup(unsigned Offset) const {
-  auto OnePastIt = std::upper_bound(
-      StateTransitions.begin(), StateTransitions.end(), Offset,
-      [](unsigned Offset, const DiagStatePoint &P) {
-        return Offset < P.Offset;
+  auto OnePastIt =
+      llvm::partition_point(StateTransitions, [=](const DiagStatePoint &P) {
+        return P.Offset <= Offset;
       });
   assert(OnePastIt != StateTransitions.begin() && "missing initial state");
   return OnePastIt[-1].State;
@@ -233,6 +253,97 @@ DiagnosticsEngine::DiagStateMap::getFile(SourceManager &SrcMgr,
     F.StateTransitions.push_back({FirstDiagState, 0});
   }
   return &F;
+}
+
+void DiagnosticsEngine::DiagStateMap::dump(SourceManager &SrcMgr,
+                                           StringRef DiagName) const {
+  llvm::errs() << "diagnostic state at ";
+  CurDiagStateLoc.print(llvm::errs(), SrcMgr);
+  llvm::errs() << ": " << CurDiagState << "\n";
+
+  for (auto &F : Files) {
+    FileID ID = F.first;
+    File &File = F.second;
+
+    bool PrintedOuterHeading = false;
+    auto PrintOuterHeading = [&] {
+      if (PrintedOuterHeading) return;
+      PrintedOuterHeading = true;
+
+      llvm::errs() << "File " << &File << " <FileID " << ID.getHashValue()
+                   << ">: " << SrcMgr.getBufferOrFake(ID).getBufferIdentifier();
+
+      if (F.second.Parent) {
+        std::pair<FileID, unsigned> Decomp =
+            SrcMgr.getDecomposedIncludedLoc(ID);
+        assert(File.ParentOffset == Decomp.second);
+        llvm::errs() << " parent " << File.Parent << " <FileID "
+                     << Decomp.first.getHashValue() << "> ";
+        SrcMgr.getLocForStartOfFile(Decomp.first)
+              .getLocWithOffset(Decomp.second)
+              .print(llvm::errs(), SrcMgr);
+      }
+      if (File.HasLocalTransitions)
+        llvm::errs() << " has_local_transitions";
+      llvm::errs() << "\n";
+    };
+
+    if (DiagName.empty())
+      PrintOuterHeading();
+
+    for (DiagStatePoint &Transition : File.StateTransitions) {
+      bool PrintedInnerHeading = false;
+      auto PrintInnerHeading = [&] {
+        if (PrintedInnerHeading) return;
+        PrintedInnerHeading = true;
+
+        PrintOuterHeading();
+        llvm::errs() << "  ";
+        SrcMgr.getLocForStartOfFile(ID)
+              .getLocWithOffset(Transition.Offset)
+              .print(llvm::errs(), SrcMgr);
+        llvm::errs() << ": state " << Transition.State << ":\n";
+      };
+
+      if (DiagName.empty())
+        PrintInnerHeading();
+
+      for (auto &Mapping : *Transition.State) {
+        StringRef Option =
+            DiagnosticIDs::getWarningOptionForDiag(Mapping.first);
+        if (!DiagName.empty() && DiagName != Option)
+          continue;
+
+        PrintInnerHeading();
+        llvm::errs() << "    ";
+        if (Option.empty())
+          llvm::errs() << "<unknown " << Mapping.first << ">";
+        else
+          llvm::errs() << Option;
+        llvm::errs() << ": ";
+
+        switch (Mapping.second.getSeverity()) {
+        case diag::Severity::Ignored: llvm::errs() << "ignored"; break;
+        case diag::Severity::Remark: llvm::errs() << "remark"; break;
+        case diag::Severity::Warning: llvm::errs() << "warning"; break;
+        case diag::Severity::Error: llvm::errs() << "error"; break;
+        case diag::Severity::Fatal: llvm::errs() << "fatal"; break;
+        }
+
+        if (!Mapping.second.isUser())
+          llvm::errs() << " default";
+        if (Mapping.second.isPragma())
+          llvm::errs() << " pragma";
+        if (Mapping.second.hasNoWarningAsError())
+          llvm::errs() << " no-error";
+        if (Mapping.second.hasNoErrorAsFatal())
+          llvm::errs() << " no-fatal";
+        if (Mapping.second.wasUpgradedFromWarning())
+          llvm::errs() << " overruled";
+        llvm::errs() << "\n";
+      }
+    }
+  }
 }
 
 void DiagnosticsEngine::PushDiagStatePoint(DiagState *State,
@@ -362,8 +473,8 @@ void DiagnosticsEngine::setSeverityForAll(diag::Flavor Flavor,
                                           diag::Severity Map,
                                           SourceLocation Loc) {
   // Get all the diagnostics.
-  SmallVector<diag::kind, 64> AllDiags;
-  Diags->getAllDiagnostics(Flavor, AllDiags);
+  std::vector<diag::kind> AllDiags;
+  DiagnosticIDs::getAllDiagnostics(Flavor, AllDiags);
 
   // Set the mapping.
   for (diag::kind Diag : AllDiags)
@@ -372,17 +483,20 @@ void DiagnosticsEngine::setSeverityForAll(diag::Flavor Flavor,
 }
 
 void DiagnosticsEngine::Report(const StoredDiagnostic &storedDiag) {
-  assert(CurDiagID == ~0U && "Multiple diagnostics in flight at once!");
+  assert(CurDiagID == std::numeric_limits<unsigned>::max() &&
+         "Multiple diagnostics in flight at once!");
 
   CurDiagLoc = storedDiag.getLocation();
   CurDiagID = storedDiag.getID();
-  NumDiagArgs = 0;
+  DiagStorage.NumDiagArgs = 0;
 
-  DiagRanges.clear();
-  DiagRanges.append(storedDiag.range_begin(), storedDiag.range_end());
+  DiagStorage.DiagRanges.clear();
+  DiagStorage.DiagRanges.append(storedDiag.range_begin(),
+                                storedDiag.range_end());
 
-  DiagFixItHints.clear();
-  DiagFixItHints.append(storedDiag.fixit_begin(), storedDiag.fixit_end());
+  DiagStorage.FixItHints.clear();
+  DiagStorage.FixItHints.append(storedDiag.fixit_begin(),
+                                storedDiag.fixit_end());
 
   assert(Client && "DiagnosticConsumer not set!");
   Level DiagLevel = storedDiag.getLevel();
@@ -393,7 +507,7 @@ void DiagnosticsEngine::Report(const StoredDiagnostic &storedDiag) {
       ++NumWarnings;
   }
 
-  CurDiagID = ~0U;
+  CurDiagID = std::numeric_limits<unsigned>::max();
 }
 
 bool DiagnosticsEngine::EmitCurrentDiagnostic(bool Force) {
@@ -428,8 +542,7 @@ bool DiagnosticsEngine::EmitCurrentDiagnostic(bool Force) {
   return Emitted;
 }
 
-
-DiagnosticConsumer::~DiagnosticConsumer() {}
+DiagnosticConsumer::~DiagnosticConsumer() = default;
 
 void DiagnosticConsumer::HandleDiagnostic(DiagnosticsEngine::Level DiagLevel,
                                         const Diagnostic &Info) {
@@ -446,7 +559,7 @@ void DiagnosticConsumer::HandleDiagnostic(DiagnosticsEngine::Level DiagLevel,
 template <std::size_t StrLen>
 static bool ModifierIs(const char *Modifier, unsigned ModifierLen,
                        const char (&Str)[StrLen]) {
-  return StrLen-1 == ModifierLen && !memcmp(Modifier, Str, StrLen-1);
+  return StrLen-1 == ModifierLen && memcmp(Modifier, Str, StrLen-1) == 0;
 }
 
 /// ScanForward - Scans forward, looking for the given character, skipping
@@ -526,7 +639,6 @@ static void HandleOrdinalModifier(unsigned ValNo,
   Out << ValNo << llvm::getOrdinalSuffix(ValNo);
 }
 
-
 /// PluralNumber - Parse an unsigned integer and advance Start.
 static unsigned PluralNumber(const char *&Start, const char *End) {
   // Programming 101: Parse a decimal number :-)
@@ -562,7 +674,7 @@ static bool EvalPluralExpr(unsigned ValNo, const char *Start, const char *End) {
   if (*Start == ':')
     return true;
 
-  while (1) {
+  while (true) {
     char C = *Start;
     if (C == '%') {
       // Modulo expression
@@ -627,7 +739,7 @@ static void HandlePluralModifier(const Diagnostic &DInfo, unsigned ValNo,
                                  const char *Argument, unsigned ArgumentLen,
                                  SmallVectorImpl<char> &OutStr) {
   const char *ArgumentEnd = Argument + ArgumentLen;
-  while (1) {
+  while (true) {
     assert(Argument < ArgumentEnd && "Plural expression didn't match.");
     const char *ExprEnd = Argument;
     while (*ExprEnd != ':') {
@@ -647,7 +759,7 @@ static void HandlePluralModifier(const Diagnostic &DInfo, unsigned ValNo,
   }
 }
 
-/// \brief Returns the friendly description for a token kind that will appear
+/// Returns the friendly description for a token kind that will appear
 /// without quotes in diagnostic messages. These strings may be translatable in
 /// future.
 static const char *getTokenDescForDiagnostic(tok::TokenKind Kind) {
@@ -669,7 +781,7 @@ FormatDiagnostic(SmallVectorImpl<char> &OutStr) const {
     return;
   }
 
-  StringRef Diag = 
+  StringRef Diag =
     getDiags()->getDiagnosticIDs()->getDescription(getID());
 
   FormatDiagnostic(Diag.begin(), Diag.end(), OutStr);
@@ -678,7 +790,6 @@ FormatDiagnostic(SmallVectorImpl<char> &OutStr) const {
 void Diagnostic::
 FormatDiagnostic(const char *DiagStr, const char *DiagEnd,
                  SmallVectorImpl<char> &OutStr) const {
-
   // When the diagnostic string is only "%0", the entire string is being given
   // by an outside source.  Remove unprintable characters from this string
   // and skip all the other string processing.
@@ -703,7 +814,7 @@ FormatDiagnostic(const char *DiagStr, const char *DiagEnd,
   /// QualTypeVals - Pass a vector of arrays so that QualType names can be
   /// compared to see if more information is needed to be printed.
   SmallVector<intptr_t, 2> QualTypeVals;
-  SmallVector<char, 64> Tree;
+  SmallString<64> Tree;
 
   for (unsigned i = 0, e = getNumArgs(); i < e; ++i)
     if (getArgKind(i) == DiagnosticsEngine::ak_qualtype)
@@ -791,7 +902,7 @@ FormatDiagnostic(const char *DiagStr, const char *DiagEnd,
         continue;
       }
     }
-    
+
     switch (Kind) {
     // ---- STRINGS ----
     case DiagnosticsEngine::ak_std_string: {
@@ -886,6 +997,8 @@ FormatDiagnostic(const char *DiagStr, const char *DiagEnd,
       llvm::raw_svector_ostream(OutStr) << '\'' << II->getName() << '\'';
       break;
     }
+    case DiagnosticsEngine::ak_addrspace:
+    case DiagnosticsEngine::ak_qual:
     case DiagnosticsEngine::ak_qualtype:
     case DiagnosticsEngine::ak_declarationname:
     case DiagnosticsEngine::ak_nameddecl:
@@ -898,7 +1011,7 @@ FormatDiagnostic(const char *DiagStr, const char *DiagEnd,
                                      FormattedArgs,
                                      OutStr, QualTypeVals);
       break;
-    case DiagnosticsEngine::ak_qualtype_pair:
+    case DiagnosticsEngine::ak_qualtype_pair: {
       // Create a struct with all the info needed for printing.
       TemplateDiffTypes TDT;
       TDT.FromType = getRawArg(ArgNo);
@@ -966,7 +1079,8 @@ FormatDiagnostic(const char *DiagStr, const char *DiagEnd,
       FormatDiagnostic(SecondDollar + 1, Pipe, OutStr);
       break;
     }
-    
+    }
+
     // Remember this argument info for subsequent formatting operations.  Turn
     // std::strings into a null terminated string to make it be the same case as
     // all the other ones.
@@ -977,7 +1091,6 @@ FormatDiagnostic(const char *DiagStr, const char *DiagEnd,
     else
       FormattedArgs.push_back(std::make_pair(DiagnosticsEngine::ak_c_string,
                                         (intptr_t)getArgStdStr(ArgNo).c_str()));
-    
   }
 
   // Append the type tree to the end of the diagnostics.
@@ -986,12 +1099,11 @@ FormatDiagnostic(const char *DiagStr, const char *DiagEnd,
 
 StoredDiagnostic::StoredDiagnostic(DiagnosticsEngine::Level Level, unsigned ID,
                                    StringRef Message)
-  : ID(ID), Level(Level), Loc(), Message(Message) { }
+    : ID(ID), Level(Level), Message(Message) {}
 
-StoredDiagnostic::StoredDiagnostic(DiagnosticsEngine::Level Level, 
+StoredDiagnostic::StoredDiagnostic(DiagnosticsEngine::Level Level,
                                    const Diagnostic &Info)
-  : ID(Info.getID()), Level(Level) 
-{
+    : ID(Info.getID()), Level(Level) {
   assert((Info.getLocation().isInvalid() || Info.hasSourceManager()) &&
        "Valid source location without setting a source manager for diagnostic");
   if (Info.getLocation().isValid())
@@ -1007,8 +1119,8 @@ StoredDiagnostic::StoredDiagnostic(DiagnosticsEngine::Level Level, unsigned ID,
                                    StringRef Message, FullSourceLoc Loc,
                                    ArrayRef<CharSourceRange> Ranges,
                                    ArrayRef<FixItHint> FixIts)
-  : ID(ID), Level(Level), Loc(Loc), Message(Message), 
-    Ranges(Ranges.begin(), Ranges.end()), FixIts(FixIts.begin(), FixIts.end())
+    : ID(ID), Level(Level), Loc(Loc), Message(Message),
+      Ranges(Ranges.begin(), Ranges.end()), FixIts(FixIts.begin(), FixIts.end())
 {
 }
 
@@ -1018,9 +1130,9 @@ StoredDiagnostic::StoredDiagnostic(DiagnosticsEngine::Level Level, unsigned ID,
 ///  reported by DiagnosticsEngine.
 bool DiagnosticConsumer::IncludeInDiagnosticCounts() const { return true; }
 
-void IgnoringDiagConsumer::anchor() { }
+void IgnoringDiagConsumer::anchor() {}
 
-ForwardingDiagnosticConsumer::~ForwardingDiagnosticConsumer() {}
+ForwardingDiagnosticConsumer::~ForwardingDiagnosticConsumer() = default;
 
 void ForwardingDiagnosticConsumer::HandleDiagnostic(
        DiagnosticsEngine::Level DiagLevel,
@@ -1037,16 +1149,18 @@ bool ForwardingDiagnosticConsumer::IncludeInDiagnosticCounts() const {
   return Target.IncludeInDiagnosticCounts();
 }
 
-PartialDiagnostic::StorageAllocator::StorageAllocator() {
+PartialDiagnostic::DiagStorageAllocator::DiagStorageAllocator() {
   for (unsigned I = 0; I != NumCached; ++I)
     FreeList[I] = Cached + I;
   NumFreeListEntries = NumCached;
 }
 
-PartialDiagnostic::StorageAllocator::~StorageAllocator() {
+PartialDiagnostic::DiagStorageAllocator::~DiagStorageAllocator() {
   // Don't assert if we are in a CrashRecovery context, as this invariant may
   // be invalidated during a crash.
   assert((NumFreeListEntries == NumCached ||
           llvm::CrashRecoveryContext::isRecoveringFromCrash()) &&
          "A partial is on the lam");
 }
+
+char DiagnosticError::ID;

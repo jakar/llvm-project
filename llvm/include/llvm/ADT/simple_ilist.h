@@ -1,9 +1,8 @@
 //===- llvm/ADT/simple_ilist.h - Simple Intrusive List ----------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -13,9 +12,14 @@
 #include "llvm/ADT/ilist_base.h"
 #include "llvm/ADT/ilist_iterator.h"
 #include "llvm/ADT/ilist_node.h"
+#include "llvm/ADT/ilist_node_options.h"
+#include "llvm/Support/Compiler.h"
 #include <algorithm>
 #include <cassert>
 #include <cstddef>
+#include <functional>
+#include <iterator>
+#include <utility>
 
 namespace llvm {
 
@@ -24,8 +28,8 @@ namespace llvm {
 /// This is a simple intrusive list for a \c T that inherits from \c
 /// ilist_node<T>.  The list never takes ownership of anything inserted in it.
 ///
-/// Unlike \a iplist<T> and \a ilist<T>, \a simple_ilist<T> never allocates or
-/// deletes values, and has no callback traits.
+/// Unlike \a iplist<T> and \a ilist<T>, \a simple_ilist<T> never deletes
+/// values, and has no callback traits.
 ///
 /// The API for adding nodes include \a push_front(), \a push_back(), and \a
 /// insert().  These all take values by reference (not by pointer), except for
@@ -48,7 +52,7 @@ namespace llvm {
 /// to calling \a std::for_each() on the range to be discarded.
 ///
 /// The currently available \p Options customize the nodes in the list.  The
-/// same options must be specified in the \a ilist_node instantation for
+/// same options must be specified in the \a ilist_node instantiation for
 /// compatibility (although the order is irrelevant).
 /// \li Use \a ilist_tag to designate which ilist_node for a given \p T this
 /// list should use.  This is useful if a type \p T is part of multiple,
@@ -77,23 +81,23 @@ class simple_ilist
           typename ilist_detail::compute_node_options<T, Options...>::type> {
   static_assert(ilist_detail::check_options<Options...>::value,
                 "Unrecognized node option!");
-  typedef
-      typename ilist_detail::compute_node_options<T, Options...>::type OptionsT;
-  typedef typename OptionsT::list_base_type list_base_type;
+  using OptionsT =
+      typename ilist_detail::compute_node_options<T, Options...>::type;
+  using list_base_type = typename OptionsT::list_base_type;
   ilist_sentinel<OptionsT> Sentinel;
 
 public:
-  typedef typename OptionsT::value_type value_type;
-  typedef typename OptionsT::pointer pointer;
-  typedef typename OptionsT::reference reference;
-  typedef typename OptionsT::const_pointer const_pointer;
-  typedef typename OptionsT::const_reference const_reference;
-  typedef ilist_iterator<OptionsT, false, false> iterator;
-  typedef ilist_iterator<OptionsT, false, true> const_iterator;
-  typedef ilist_iterator<OptionsT, true, false> reverse_iterator;
-  typedef ilist_iterator<OptionsT, true, true> const_reverse_iterator;
-  typedef size_t size_type;
-  typedef ptrdiff_t difference_type;
+  using value_type = typename OptionsT::value_type;
+  using pointer = typename OptionsT::pointer;
+  using reference = typename OptionsT::reference;
+  using const_pointer = typename OptionsT::const_pointer;
+  using const_reference = typename OptionsT::const_reference;
+  using iterator = ilist_iterator<OptionsT, false, false>;
+  using const_iterator = ilist_iterator<OptionsT, false, true>;
+  using reverse_iterator = ilist_iterator<OptionsT, true, false>;
+  using const_reverse_iterator = ilist_iterator<OptionsT, true, true>;
+  using size_type = size_t;
+  using difference_type = ptrdiff_t;
 
   simple_ilist() = default;
   ~simple_ilist() = default;

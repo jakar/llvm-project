@@ -1,36 +1,35 @@
-//===-- Communication.cpp ---------------------------------------*- C++ -*-===//
+//===-- Communication.cpp -------------------------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
 #include "lldb/Core/Communication.h"
 
-#include "lldb/Core/Connection.h"
-#include "lldb/Core/Event.h"
-#include "lldb/Core/Listener.h"
 #include "lldb/Host/HostThread.h"
 #include "lldb/Host/ThreadLauncher.h"
-#include "lldb/Utility/ConstString.h" // for ConstString
-#include "lldb/Utility/Error.h"       // for Error
+#include "lldb/Utility/Connection.h"
+#include "lldb/Utility/ConstString.h"
+#include "lldb/Utility/Event.h"
+#include "lldb/Utility/Listener.h"
 #include "lldb/Utility/Log.h"
-#include "lldb/Utility/Logging.h" // for LogIfAnyCategoriesSet, LIBLLDB...
+#include "lldb/Utility/Logging.h"
+#include "lldb/Utility/Status.h"
 
-#include "llvm/ADT/None.h"         // for None
-#include "llvm/ADT/Optional.h"     // for Optional
-#include "llvm/Support/Compiler.h" // for LLVM_FALLTHROUGH
+#include "llvm/ADT/None.h"
+#include "llvm/ADT/Optional.h"
+#include "llvm/Support/Compiler.h"
 
-#include <algorithm> // for min
-#include <chrono>    // for duration, seconds
+#include <algorithm>
+#include <chrono>
 #include <cstring>
-#include <memory> // for shared_ptr
+#include <memory>
 
-#include <errno.h>    // for EIO
-#include <inttypes.h> // for PRIu64
-#include <stdio.h>    // for snprintf
+#include <errno.h>
+#include <inttypes.h>
+#include <stdio.h>
 
 using namespace lldb;
 using namespace lldb_private;
@@ -47,9 +46,10 @@ Communication::Communication(const char *name)
       m_callback(nullptr), m_callback_baton(nullptr), m_close_on_eof(true)
 
 {
-  lldb_private::LogIfAnyCategoriesSet(
-      LIBLLDB_LOG_OBJECT | LIBLLDB_LOG_COMMUNICATION,
-      "%p Communication::Communication (name = %s)", this, name);
+
+  LLDB_LOG(lldb_private::GetLogIfAnyCategoriesSet(LIBLLDB_LOG_OBJECT |
+                                                  LIBLLDB_LOG_COMMUNICATION),
+           "{0} Communication::Communication (name = {1})", this, name);
 
   SetEventName(eBroadcastBitDisconnected, "disconnected");
   SetEventName(eBroadcastBitReadThreadGotBytes, "got bytes");
@@ -62,25 +62,24 @@ Communication::Communication(const char *name)
 }
 
 Communication::~Communication() {
-  lldb_private::LogIfAnyCategoriesSet(
-      LIBLLDB_LOG_OBJECT | LIBLLDB_LOG_COMMUNICATION,
-      "%p Communication::~Communication (name = %s)", this,
-      GetBroadcasterName().AsCString());
+  LLDB_LOG(lldb_private::GetLogIfAnyCategoriesSet(LIBLLDB_LOG_OBJECT |
+                                                  LIBLLDB_LOG_COMMUNICATION),
+           "{0} Communication::~Communication (name = {1})", this,
+           GetBroadcasterName().AsCString());
   Clear();
 }
 
 void Communication::Clear() {
   SetReadThreadBytesReceivedCallback(nullptr, nullptr);
-  Disconnect(nullptr);
   StopReadThread(nullptr);
+  Disconnect(nullptr);
 }
 
-ConnectionStatus Communication::Connect(const char *url, Error *error_ptr) {
+ConnectionStatus Communication::Connect(const char *url, Status *error_ptr) {
   Clear();
 
-  lldb_private::LogIfAnyCategoriesSet(LIBLLDB_LOG_COMMUNICATION,
-                                      "%p Communication::Connect (url = %s)",
-                                      this, url);
+  LLDB_LOG(lldb_private::GetLogIfAllCategoriesSet(LIBLLDB_LOG_COMMUNICATION),
+           "{0} Communication::Connect (url = {1})", this, url);
 
   lldb::ConnectionSP connection_sp(m_connection_sp);
   if (connection_sp)
@@ -90,22 +89,24 @@ ConnectionStatus Communication::Connect(const char *url, Error *error_ptr) {
   return eConnectionStatusNoConnection;
 }
 
-ConnectionStatus Communication::Disconnect(Error *error_ptr) {
-  lldb_private::LogIfAnyCategoriesSet(LIBLLDB_LOG_COMMUNICATION,
-                                      "%p Communication::Disconnect ()", this);
+ConnectionStatus Communication::Disconnect(Status *error_ptr) {
+  LLDB_LOG(lldb_private::GetLogIfAllCategoriesSet(LIBLLDB_LOG_COMMUNICATION),
+           "{0} Communication::Disconnect ()", this);
 
+  assert((!m_read_thread_enabled || m_read_thread_did_exit) &&
+         "Disconnecting while the read thread is running is racy!");
   lldb::ConnectionSP connection_sp(m_connection_sp);
   if (connection_sp) {
     ConnectionStatus status = connection_sp->Disconnect(error_ptr);
-    // We currently don't protect connection_sp with any mutex for
-    // multi-threaded environments. So lets not nuke our connection class
-    // without putting some multi-threaded protections in. We also probably
-    // don't want to pay for the overhead it might cause if every time we
-    // access the connection we have to take a lock.
+    // We currently don't protect connection_sp with any mutex for multi-
+    // threaded environments. So lets not nuke our connection class without
+    // putting some multi-threaded protections in. We also probably don't want
+    // to pay for the overhead it might cause if every time we access the
+    // connection we have to take a lock.
     //
-    // This unique pointer will cleanup after itself when this object goes away,
-    // so there is no need to currently have it destroy itself immediately
-    // upon disconnnect.
+    // This unique pointer will cleanup after itself when this object goes
+    // away, so there is no need to currently have it destroy itself
+    // immediately upon disconnect.
     // connection_sp.reset();
     return status;
   }
@@ -123,7 +124,7 @@ bool Communication::HasConnection() const {
 
 size_t Communication::Read(void *dst, size_t dst_len,
                            const Timeout<std::micro> &timeout,
-                           ConnectionStatus &status, Error *error_ptr) {
+                           ConnectionStatus &status, Status *error_ptr) {
   Log *log = GetLogIfAllCategoriesSet(LIBLLDB_LOG_COMMUNICATION);
   LLDB_LOG(
       log,
@@ -170,15 +171,14 @@ size_t Communication::Read(void *dst, size_t dst_len,
 }
 
 size_t Communication::Write(const void *src, size_t src_len,
-                            ConnectionStatus &status, Error *error_ptr) {
+                            ConnectionStatus &status, Status *error_ptr) {
   lldb::ConnectionSP connection_sp(m_connection_sp);
 
   std::lock_guard<std::mutex> guard(m_write_mutex);
-  lldb_private::LogIfAnyCategoriesSet(
-      LIBLLDB_LOG_COMMUNICATION,
-      "%p Communication::Write (src = %p, src_len = %" PRIu64
-      ") connection = %p",
-      this, src, (uint64_t)src_len, connection_sp.get());
+  LLDB_LOG(lldb_private::GetLogIfAllCategoriesSet(LIBLLDB_LOG_COMMUNICATION),
+           "{0} Communication::Write (src = {1}, src_len = %" PRIu64
+           ") connection = {2}",
+           this, src, (uint64_t)src_len, connection_sp.get());
 
   if (connection_sp)
     return connection_sp->Write(src, src_len, status, error_ptr);
@@ -189,35 +189,47 @@ size_t Communication::Write(const void *src, size_t src_len,
   return 0;
 }
 
-bool Communication::StartReadThread(Error *error_ptr) {
+bool Communication::StartReadThread(Status *error_ptr) {
   if (error_ptr)
     error_ptr->Clear();
 
   if (m_read_thread.IsJoinable())
     return true;
 
-  lldb_private::LogIfAnyCategoriesSet(
-      LIBLLDB_LOG_COMMUNICATION, "%p Communication::StartReadThread ()", this);
+  LLDB_LOG(lldb_private::GetLogIfAllCategoriesSet(LIBLLDB_LOG_COMMUNICATION),
+           "{0} Communication::StartReadThread ()", this);
 
-  char thread_name[1024];
-  snprintf(thread_name, sizeof(thread_name), "<lldb.comm.%s>",
-           GetBroadcasterName().AsCString());
+  const std::string thread_name =
+      llvm::formatv("<lldb.comm.{0}>", GetBroadcasterName());
 
   m_read_thread_enabled = true;
   m_read_thread_did_exit = false;
-  m_read_thread = ThreadLauncher::LaunchThread(
-      thread_name, Communication::ReadThread, this, error_ptr);
+  auto maybe_thread = ThreadLauncher::LaunchThread(
+      thread_name, Communication::ReadThread, this);
+  if (maybe_thread) {
+    m_read_thread = *maybe_thread;
+  } else {
+    if (error_ptr)
+      *error_ptr = Status(maybe_thread.takeError());
+    else {
+      LLDB_LOG(lldb_private::GetLogIfAllCategoriesSet(LIBLLDB_LOG_HOST),
+               "failed to launch host thread: {}",
+               llvm::toString(maybe_thread.takeError()));
+    }
+  }
+
   if (!m_read_thread.IsJoinable())
     m_read_thread_enabled = false;
+
   return m_read_thread_enabled;
 }
 
-bool Communication::StopReadThread(Error *error_ptr) {
+bool Communication::StopReadThread(Status *error_ptr) {
   if (!m_read_thread.IsJoinable())
     return true;
 
-  lldb_private::LogIfAnyCategoriesSet(
-      LIBLLDB_LOG_COMMUNICATION, "%p Communication::StopReadThread ()", this);
+  LLDB_LOG(lldb_private::GetLogIfAllCategoriesSet(LIBLLDB_LOG_COMMUNICATION),
+           "{0} Communication::StopReadThread ()", this);
 
   m_read_thread_enabled = false;
 
@@ -225,23 +237,23 @@ bool Communication::StopReadThread(Error *error_ptr) {
 
   // error = m_read_thread.Cancel();
 
-  Error error = m_read_thread.Join(nullptr);
+  Status error = m_read_thread.Join(nullptr);
   return error.Success();
 }
 
-bool Communication::JoinReadThread(Error *error_ptr) {
+bool Communication::JoinReadThread(Status *error_ptr) {
   if (!m_read_thread.IsJoinable())
     return true;
 
-  Error error = m_read_thread.Join(nullptr);
+  Status error = m_read_thread.Join(nullptr);
   return error.Success();
 }
 
 size_t Communication::GetCachedBytes(void *dst, size_t dst_len) {
   std::lock_guard<std::recursive_mutex> guard(m_bytes_mutex);
   if (!m_bytes.empty()) {
-    // If DST is nullptr and we have a thread, then return the number
-    // of bytes that are available so the caller can call again
+    // If DST is nullptr and we have a thread, then return the number of bytes
+    // that are available so the caller can call again
     if (dst == nullptr)
       return m_bytes.size();
 
@@ -258,11 +270,10 @@ size_t Communication::GetCachedBytes(void *dst, size_t dst_len) {
 void Communication::AppendBytesToCache(const uint8_t *bytes, size_t len,
                                        bool broadcast,
                                        ConnectionStatus status) {
-  lldb_private::LogIfAnyCategoriesSet(
-      LIBLLDB_LOG_COMMUNICATION,
-      "%p Communication::AppendBytesToCache (src = %p, src_len = %" PRIu64
-      ", broadcast = %i)",
-      this, bytes, (uint64_t)len, broadcast);
+  LLDB_LOG(lldb_private::GetLogIfAllCategoriesSet(LIBLLDB_LOG_COMMUNICATION),
+           "{0} Communication::AppendBytesToCache (src = {1}, src_len = {2}, "
+           "broadcast = {3})",
+           this, bytes, (uint64_t)len, broadcast);
   if ((bytes == nullptr || len == 0) &&
       (status != lldb::eConnectionStatusEndOfFile))
     return;
@@ -280,7 +291,7 @@ void Communication::AppendBytesToCache(const uint8_t *bytes, size_t len,
 size_t Communication::ReadFromConnection(void *dst, size_t dst_len,
                                          const Timeout<std::micro> &timeout,
                                          ConnectionStatus &status,
-                                         Error *error_ptr) {
+                                         Status *error_ptr) {
   lldb::ConnectionSP connection_sp(m_connection_sp);
   if (connection_sp)
     return connection_sp->Read(dst, dst_len, timeout, status, error_ptr);
@@ -298,24 +309,19 @@ lldb::thread_result_t Communication::ReadThread(lldb::thread_arg_t p) {
 
   Log *log(lldb_private::GetLogIfAllCategoriesSet(LIBLLDB_LOG_COMMUNICATION));
 
-  if (log)
-    log->Printf("%p Communication::ReadThread () thread starting...", p);
+  LLDB_LOGF(log, "%p Communication::ReadThread () thread starting...", p);
 
   uint8_t buf[1024];
 
-  Error error;
+  Status error;
   ConnectionStatus status = eConnectionStatusSuccess;
   bool done = false;
+  bool disconnect = false;
   while (!done && comm->m_read_thread_enabled) {
     size_t bytes_read = comm->ReadFromConnection(
         buf, sizeof(buf), std::chrono::seconds(5), status, &error);
-    if (bytes_read > 0)
+    if (bytes_read > 0 || status == eConnectionStatusEndOfFile)
       comm->AppendBytesToCache(buf, bytes_read, true, status);
-    else if ((bytes_read == 0) && status == eConnectionStatusEndOfFile) {
-      if (comm->GetCloseOnEOF())
-        comm->Disconnect();
-      comm->AppendBytesToCache(buf, bytes_read, true, status);
-    }
 
     switch (status) {
     case eConnectionStatusSuccess:
@@ -323,22 +329,22 @@ lldb::thread_result_t Communication::ReadThread(lldb::thread_arg_t p) {
 
     case eConnectionStatusEndOfFile:
       done = true;
+      disconnect = comm->GetCloseOnEOF();
       break;
     case eConnectionStatusError: // Check GetError() for details
       if (error.GetType() == eErrorTypePOSIX && error.GetError() == EIO) {
         // EIO on a pipe is usually caused by remote shutdown
-        comm->Disconnect();
+        disconnect = comm->GetCloseOnEOF();
         done = true;
       }
       if (error.Fail())
         LLDB_LOG(log, "error: {0}, status = {1}", error,
-                 Communication::ConnectionStatusAsCString(status));
+                 Communication::ConnectionStatusAsString(status));
       break;
     case eConnectionStatusInterrupted: // Synchronization signal from
                                        // SynchronizeWithReadThread()
       // The connection returns eConnectionStatusInterrupted only when there is
-      // no
-      // input pending to be read, so we can signal that.
+      // no input pending to be read, so we can signal that.
       comm->BroadcastEvent(eBroadcastBitNoMorePendingInput);
       break;
     case eConnectionStatusNoConnection:   // No connection
@@ -349,19 +355,32 @@ lldb::thread_result_t Communication::ReadThread(lldb::thread_arg_t p) {
     case eConnectionStatusTimedOut: // Request timed out
       if (error.Fail())
         LLDB_LOG(log, "error: {0}, status = {1}", error,
-                 Communication::ConnectionStatusAsCString(status));
+                 Communication::ConnectionStatusAsString(status));
       break;
     }
   }
   log = lldb_private::GetLogIfAllCategoriesSet(LIBLLDB_LOG_COMMUNICATION);
   if (log)
-    log->Printf("%p Communication::ReadThread () thread exiting...", p);
+    LLDB_LOGF(log, "%p Communication::ReadThread () thread exiting...", p);
 
-  comm->m_read_thread_did_exit = true;
+  // Handle threads wishing to synchronize with us.
+  {
+    // Prevent new ones from showing up.
+    comm->m_read_thread_did_exit = true;
+
+    // Unblock any existing thread waiting for the synchronization signal.
+    comm->BroadcastEvent(eBroadcastBitNoMorePendingInput);
+
+    // Wait for the thread to finish...
+    std::lock_guard<std::mutex> guard(comm->m_synchronize_mutex);
+    // ... and disconnect.
+    if (disconnect)
+      comm->Disconnect();
+  }
+
   // Let clients know that this thread is exiting
-  comm->BroadcastEvent(eBroadcastBitNoMorePendingInput);
   comm->BroadcastEvent(eBroadcastBitReadThreadDidExit);
-  return NULL;
+  return {};
 }
 
 void Communication::SetReadThreadBytesReceivedCallback(
@@ -391,14 +410,14 @@ void Communication::SynchronizeWithReadThread() {
   listener_sp->GetEvent(event_sp, llvm::None);
 }
 
-void Communication::SetConnection(Connection *connection) {
+void Communication::SetConnection(std::unique_ptr<Connection> connection) {
   Disconnect(nullptr);
   StopReadThread(nullptr);
-  m_connection_sp.reset(connection);
+  m_connection_sp = std::move(connection);
 }
 
-const char *
-Communication::ConnectionStatusAsCString(lldb::ConnectionStatus status) {
+std::string
+Communication::ConnectionStatusAsString(lldb::ConnectionStatus status) {
   switch (status) {
   case eConnectionStatusSuccess:
     return "success";
@@ -416,8 +435,5 @@ Communication::ConnectionStatusAsCString(lldb::ConnectionStatus status) {
     return "interrupted";
   }
 
-  static char unknown_state_string[64];
-  snprintf(unknown_state_string, sizeof(unknown_state_string),
-           "ConnectionStatus = %i", status);
-  return unknown_state_string;
+  return "@" + std::to_string(status);
 }

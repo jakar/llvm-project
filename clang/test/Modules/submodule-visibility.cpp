@@ -3,6 +3,11 @@
 // RUN: %clang_cc1 -fmodules -fimplicit-module-maps -fmodules-local-submodule-visibility -fmodules-cache-path=%t -I%S/Inputs/submodule-visibility -verify %s -DIMPORT
 // RUN: %clang_cc1 -fmodules -fimplicit-module-maps -fmodules-local-submodule-visibility -fmodules-cache-path=%t -fmodule-name=x -I%S/Inputs/submodule-visibility -verify %s
 // RUN: %clang_cc1 -fimplicit-module-maps -fmodules-local-submodule-visibility -fmodules-cache-path=%t -I%S/Inputs/submodule-visibility -verify %s
+//
+// Explicit module builds.
+// RUN: %clang_cc1 -fmodules -fmodules-local-submodule-visibility -emit-module -x c++-module-map %S/Inputs/submodule-visibility/module.modulemap -fmodule-name=other -o %t/other.pcm
+// RUN: %clang_cc1 -fmodules -fmodule-map-file=%S/Inputs/submodule-visibility/module.modulemap -fmodules-local-submodule-visibility -fmodule-file=%t/other.pcm -verify -fmodule-name=x -I%S/Inputs/submodule-visibility %s
+// RUN: %clang_cc1 -fmodules -fmodule-map-file=%S/Inputs/submodule-visibility/module.modulemap -fmodule-file=%t/other.pcm -verify -fmodule-name=x -I%S/Inputs/submodule-visibility %s -DALLOW_TEXTUAL_NAME_LEAKAGE
 
 #include "a.h"
 #include "b.h"
@@ -11,11 +16,13 @@
 // expected-no-diagnostics
 #elif IMPORT
 // expected-error@-6 {{could not build module 'x'}}
+#elif ALLOW_TEXTUAL_NAME_LEAKAGE
+// expected-warning@b.h:7 {{A is defined}}
 #else
 // The use of -fmodule-name=x causes us to textually include the above headers.
 // The submodule visibility rules are still applied in this case.
 //
-// expected-error@b.h:1 {{declaration of 'n' must be imported from module 'x.a'}}
+// expected-error@b.h:1 {{missing '#include "a.h"'; 'n' must be declared}}
 // expected-note@a.h:1 {{here}}
 #endif
 
@@ -35,3 +42,5 @@ typedef struct {
   int p;                 
   void (*f)(int p);                                                                       
 } name_for_linkage;
+
+void g() { b_template<int>(); }

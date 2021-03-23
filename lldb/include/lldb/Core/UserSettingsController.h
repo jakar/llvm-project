@@ -1,39 +1,30 @@
 //====-- UserSettingsController.h --------------------------------*- C++-*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef liblldb_UserSettingsController_h_
-#define liblldb_UserSettingsController_h_
+#ifndef LLDB_CORE_USERSETTINGSCONTROLLER_H
+#define LLDB_CORE_USERSETTINGSCONTROLLER_H
 
-#include "lldb/Utility/Error.h"             // for Error
-#include "lldb/lldb-forward.h"              // for OptionValuePropertiesSP
-#include "lldb/lldb-private-enumerations.h" // for VarSetOperationType
+#include "lldb/Utility/Status.h"
+#include "lldb/lldb-forward.h"
+#include "lldb/lldb-private-enumerations.h"
 
-#include "llvm/ADT/StringRef.h" // for StringRef
+#include "llvm/ADT/StringRef.h"
 
 #include <vector>
 
-#include <stddef.h> // for size_t
-#include <stdint.h> // for uint32_t
+#include <stddef.h>
+#include <stdint.h>
 
 namespace lldb_private {
 class CommandInterpreter;
-}
-namespace lldb_private {
 class ConstString;
-}
-namespace lldb_private {
 class ExecutionContext;
-}
-namespace lldb_private {
 class Property;
-}
-namespace lldb_private {
 class Stream;
 }
 
@@ -49,23 +40,24 @@ public:
   virtual ~Properties() {}
 
   virtual lldb::OptionValuePropertiesSP GetValueProperties() const {
-    // This function is virtual in case subclasses want to lazily
-    // implement creating the properties.
+    // This function is virtual in case subclasses want to lazily implement
+    // creating the properties.
     return m_collection_sp;
   }
 
   virtual lldb::OptionValueSP GetPropertyValue(const ExecutionContext *exe_ctx,
                                                llvm::StringRef property_path,
                                                bool will_modify,
-                                               Error &error) const;
+                                               Status &error) const;
 
-  virtual Error SetPropertyValue(const ExecutionContext *exe_ctx,
-                                 VarSetOperationType op,
-    llvm::StringRef property_path, llvm::StringRef value);
+  virtual Status SetPropertyValue(const ExecutionContext *exe_ctx,
+                                  VarSetOperationType op,
+                                  llvm::StringRef property_path,
+                                  llvm::StringRef value);
 
-  virtual Error DumpPropertyValue(const ExecutionContext *exe_ctx, Stream &strm,
-    llvm::StringRef property_path,
-                                  uint32_t dump_mask);
+  virtual Status DumpPropertyValue(const ExecutionContext *exe_ctx,
+                                   Stream &strm, llvm::StringRef property_path,
+                                   uint32_t dump_mask);
 
   virtual void DumpAllPropertyValues(const ExecutionContext *exe_ctx,
                                      Stream &strm, uint32_t dump_mask);
@@ -77,20 +69,15 @@ public:
                  std::vector<const Property *> &matching_properties) const;
 
   lldb::OptionValuePropertiesSP GetSubProperty(const ExecutionContext *exe_ctx,
-                                               const ConstString &name);
+                                               ConstString name);
 
   // We sometimes need to introduce a setting to enable experimental features,
   // but then we don't want the setting for these to cause errors when the
-  // setting
-  // goes away.  Add a sub-topic of the settings using this experimental name,
-  // and
-  // two things will happen.  One is that settings that don't find the name will
-  // not
-  // be treated as errors.  Also, if you decide to keep the settings just move
-  // them into
-  // the containing properties, and we will auto-forward the experimental
-  // settings to the
-  // real one.
+  // setting goes away.  Add a sub-topic of the settings using this
+  // experimental name, and two things will happen.  One is that settings that
+  // don't find the name will not be treated as errors.  Also, if you decide to
+  // keep the settings just move them into the containing properties, and we
+  // will auto-forward the experimental settings to the real one.
   static const char *GetExperimentalSettingsName();
 
   static bool IsSettingExperimental(llvm::StringRef setting);
@@ -101,4 +88,4 @@ protected:
 
 } // namespace lldb_private
 
-#endif // liblldb_UserSettingsController_h_
+#endif // LLDB_CORE_USERSETTINGSCONTROLLER_H

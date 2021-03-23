@@ -1,9 +1,8 @@
 //===--- CreateInvocationFromCommandLine.cpp - CompilerInvocation from Args ==//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -25,14 +24,10 @@
 using namespace clang;
 using namespace llvm::opt;
 
-/// createInvocationFromCommandLine - Construct a compiler invocation object for
-/// a command line argument vector.
-///
-/// \return A CompilerInvocation, or 0 if none was built for the given
-/// argument vector.
 std::unique_ptr<CompilerInvocation> clang::createInvocationFromCommandLine(
-    ArrayRef<const char *> ArgList,
-    IntrusiveRefCntPtr<DiagnosticsEngine> Diags) {
+    ArrayRef<const char *> ArgList, IntrusiveRefCntPtr<DiagnosticsEngine> Diags,
+    IntrusiveRefCntPtr<llvm::vfs::FileSystem> VFS, bool ShouldRecoverOnErorrs,
+    std::vector<std::string> *CC1Args) {
   if (!Diags.get()) {
     // No diagnostics engine was provided, so create our own diagnostics object
     // with the default options.
@@ -45,13 +40,15 @@ std::unique_ptr<CompilerInvocation> clang::createInvocationFromCommandLine(
   Args.push_back("-fsyntax-only");
 
   // FIXME: We shouldn't have to pass in the path info.
-  driver::Driver TheDriver(Args[0], llvm::sys::getDefaultTargetTriple(),
-                           *Diags);
+  driver::Driver TheDriver(Args[0], llvm::sys::getDefaultTargetTriple(), *Diags,
+                           "clang LLVM compiler", VFS);
 
   // Don't check that inputs exist, they may have been remapped.
   TheDriver.setCheckInputsExist(false);
 
   std::unique_ptr<driver::Compilation> C(TheDriver.BuildCompilation(Args));
+  if (!C)
+    return nullptr;
 
   // Just print the cc1 options if -### was present.
   if (C->getArgs().hasArg(driver::options::OPT__HASH_HASH_HASH)) {
@@ -93,12 +90,11 @@ std::unique_ptr<CompilerInvocation> clang::createInvocationFromCommandLine(
   }
 
   const ArgStringList &CCArgs = Cmd.getArguments();
-  auto CI = llvm::make_unique<CompilerInvocation>();
-  if (!CompilerInvocation::CreateFromArgs(*CI,
-                                     const_cast<const char **>(CCArgs.data()),
-                                     const_cast<const char **>(CCArgs.data()) +
-                                     CCArgs.size(),
-                                     *Diags))
+  if (CC1Args)
+    *CC1Args = {CCArgs.begin(), CCArgs.end()};
+  auto CI = std::make_unique<CompilerInvocation>();
+  if (!CompilerInvocation::CreateFromArgs(*CI, CCArgs, *Diags, Args[0]) &&
+      !ShouldRecoverOnErorrs)
     return nullptr;
   return CI;
 }

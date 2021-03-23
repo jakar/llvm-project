@@ -1,11 +1,10 @@
 #include <assert.h>
 #include <isl/stream.h>
 #include <isl_map_private.h>
-#include <isl_polynomial_private.h>
+#include <isl/polynomial.h>
 #include <isl_scan.h>
+#include <isl/val.h>
 #include <isl/options.h>
-#include <isl/deprecated/point_int.h>
-#include <isl/deprecated/polynomial_int.h>
 
 struct bound_options {
 	struct isl_options	*isl;
@@ -26,12 +25,14 @@ ISL_ARG_DEF(bound_options, struct bound_options, bound_options_args)
 
 static __isl_give isl_set *set_bounds(__isl_take isl_set *set)
 {
-	unsigned nparam;
+	isl_size nparam;
 	int i, r;
 	isl_point *pt, *pt2;
 	isl_set *box;
 
 	nparam = isl_set_dim(set, isl_dim_param);
+	if (nparam < 0)
+		return isl_set_free(set);
 	r = nparam >= 8 ? 5 : nparam >= 5 ? 15 : 50;
 
 	pt = isl_set_sample_point(isl_set_copy(set));
@@ -61,9 +62,9 @@ struct verify_point_bound {
 static isl_stat verify_point(__isl_take isl_point *pnt, void *user)
 {
 	int i;
-	unsigned nparam;
+	isl_size nparam;
 	struct verify_point_bound *vpb = (struct verify_point_bound *) user;
-	isl_int t;
+	isl_val *v;
 	isl_ctx *ctx;
 	isl_pw_qpolynomial_fold *pwf;
 	isl_val *bound = NULL;
@@ -89,14 +90,14 @@ static isl_stat verify_point(__isl_take isl_point *pnt, void *user)
 	ctx = isl_point_get_ctx(pnt);
 	p = isl_printer_to_file(ctx, out);
 
-	isl_int_init(t);
-
 	pwf = isl_pw_qpolynomial_fold_copy(vpb->pwf);
 
 	nparam = isl_pw_qpolynomial_fold_dim(pwf, isl_dim_param);
+	if (nparam < 0)
+		pwf = isl_pw_qpolynomial_fold_free(pwf);
 	for (i = 0; i < nparam; ++i) {
-		isl_point_get_coordinate(pnt, isl_dim_param, i, &t);
-		pwf = isl_pw_qpolynomial_fold_fix_dim(pwf, isl_dim_param, i, t);
+		v = isl_point_get_coordinate_val(pnt, isl_dim_param, i);
+		pwf = isl_pw_qpolynomial_fold_fix_val(pwf, isl_dim_param, i, v);
 	}
 
 	bound = isl_pw_qpolynomial_fold_eval(
@@ -133,8 +134,9 @@ static isl_stat verify_point(__isl_take isl_point *pnt, void *user)
 		for (i = 0; i < nparam; ++i) {
 			if (i)
 				p = isl_printer_print_str(p, ", ");
-			isl_point_get_coordinate(pnt, isl_dim_param, i, &t);
-			p = isl_printer_print_isl_int(p, t);
+			v = isl_point_get_coordinate_val(pnt, isl_dim_param, i);
+			p = isl_printer_print_val(p, v);
+			isl_val_free(v);
 		}
 		p = isl_printer_print_str(p, ") = ");
 		p = isl_printer_print_val(p, bound);
@@ -162,8 +164,6 @@ error:
 	isl_val_free(opt);
 	isl_point_free(pnt);
 	isl_set_free(dom);
-
-	isl_int_clear(t);
 
 	isl_printer_free(p);
 
@@ -243,7 +243,7 @@ int main(int argc, char **argv)
 	isl_stream *s;
 	struct isl_obj obj;
 	struct bound_options *options;
-	int exact;
+	isl_bool exact;
 	int r = 0;
 
 	options = bound_options_new_with_defaults();

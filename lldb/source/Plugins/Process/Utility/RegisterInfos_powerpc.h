@@ -1,9 +1,8 @@
 //===-- RegisterInfos_powerpc.h ---------------------------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===---------------------------------------------------------------------===//
 
@@ -11,8 +10,8 @@
 
 // Computes the offset of the given GPR in the user data area.
 #define GPR_OFFSET(regname) (offsetof(GPR, regname))
-#define FPR_OFFSET(regname) (offsetof(FPR, regname))
-#define VMX_OFFSET(regname) (offsetof(VMX, regname))
+#define FPR_OFFSET(regname) (sizeof(GPR) + offsetof(FPR, regname))
+#define VMX_OFFSET(regname) (sizeof(GPR) + sizeof(FPR) + offsetof(VMX, regname))
 #define GPR_SIZE(regname) (sizeof(((GPR *)NULL)->regname))
 
 #ifdef DECLARE_REGISTER_INFOS_POWERPC_STRUCT

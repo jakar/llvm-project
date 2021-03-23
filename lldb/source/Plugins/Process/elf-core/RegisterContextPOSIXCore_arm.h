@@ -1,20 +1,16 @@
 //===-- RegisterContextPOSIXCore_arm.h --------------------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef liblldb_RegisterContextCorePOSIX_arm_h_
-#define liblldb_RegisterContextCorePOSIX_arm_h_
+#ifndef LLDB_SOURCE_PLUGINS_PROCESS_ELF_CORE_REGISTERCONTEXTPOSIXCORE_ARM_H
+#define LLDB_SOURCE_PLUGINS_PROCESS_ELF_CORE_REGISTERCONTEXTPOSIXCORE_ARM_H
 
-// C Includes
-// C++ Includes
-// Other libraries and framework includes
-// Project includes
 #include "Plugins/Process/Utility/RegisterContextPOSIX_arm.h"
+#include "Plugins/Process/elf-core/RegisterUtilities.h"
 #include "lldb/Utility/DataBufferHeap.h"
 #include "lldb/Utility/DataExtractor.h"
 
@@ -22,9 +18,9 @@ class RegisterContextCorePOSIX_arm : public RegisterContextPOSIX_arm {
 public:
   RegisterContextCorePOSIX_arm(
       lldb_private::Thread &thread,
-      lldb_private::RegisterInfoInterface *register_info,
+      std::unique_ptr<RegisterInfoPOSIX_arm> register_info,
       const lldb_private::DataExtractor &gpregset,
-      const lldb_private::DataExtractor &fpregset);
+      llvm::ArrayRef<lldb_private::CoreNote> notes);
 
   ~RegisterContextCorePOSIX_arm() override;
 
@@ -54,4 +50,4 @@ private:
   lldb_private::DataExtractor m_gpr;
 };
 
-#endif // liblldb_RegisterContextCorePOSIX_arm_h_
+#endif // LLDB_SOURCE_PLUGINS_PROCESS_ELF_CORE_REGISTERCONTEXTPOSIXCORE_ARM_H

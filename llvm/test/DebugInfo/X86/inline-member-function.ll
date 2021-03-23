@@ -1,6 +1,5 @@
-; REQUIRES: object-emission
 
-; RUN: llc -mtriple=x86_64-linux -O0 -filetype=obj < %s | llvm-dwarfdump -debug-dump=info - | FileCheck %s
+; RUN: llc -mtriple=x86_64-linux -O0 -filetype=obj < %s | llvm-dwarfdump -v -debug-info - | FileCheck %s
 
 ; From source:
 ; struct foo {
@@ -61,14 +60,14 @@ entry:
 
 declare void @llvm.dbg.declare(metadata, metadata, metadata) #1
 
-attributes #0 = { uwtable "less-precise-fpmad"="false" "no-frame-pointer-elim"="true" "no-frame-pointer-elim-non-leaf" "no-infs-fp-math"="false" "no-nans-fp-math"="false" "stack-protector-buffer-size"="8" "unsafe-fp-math"="false" "use-soft-float"="false" }
+attributes #0 = { uwtable "less-precise-fpmad"="false" "frame-pointer"="all" "no-infs-fp-math"="false" "no-nans-fp-math"="false" "stack-protector-buffer-size"="8" "unsafe-fp-math"="false" "use-soft-float"="false" }
 attributes #1 = { nounwind readnone }
 
 !llvm.dbg.cu = !{!4}
 !llvm.module.flags = !{!14, !15}
 !llvm.ident = !{!16}
 
-!0 = !DIGlobalVariableExpression(var: !1)
+!0 = !DIGlobalVariableExpression(var: !1, expr: !DIExpression())
 !1 = !DIGlobalVariable(name: "i", scope: null, file: !2, line: 5, type: !3, isLocal: false, isDefinition: true)
 !2 = !DIFile(filename: "inline.cpp", directory: "/tmp/dbginfo")
 !3 = !DIBasicType(name: "int", size: 32, align: 32, encoding: DW_ATE_signed)
@@ -85,12 +84,12 @@ attributes #1 = { nounwind readnone }
 !14 = !{i32 2, !"Dwarf Version", i32 4}
 !15 = !{i32 1, !"Debug Info Version", i32 3}
 !16 = !{!"clang version 3.5.0 "}
-!17 = distinct !DISubprogram(name: "main", scope: !2, file: !2, line: 7, type: !18, isLocal: false, isDefinition: true, scopeLine: 7, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, unit: !4, variables: !5)
+!17 = distinct !DISubprogram(name: "main", scope: !2, file: !2, line: 7, type: !18, isLocal: false, isDefinition: true, scopeLine: 7, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, unit: !4, retainedNodes: !5)
 !18 = !DISubroutineType(types: !19)
 !19 = !{!3}
 !20 = !DILocation(line: 8, scope: !17)
 !21 = !DILocalVariable(name: "this", arg: 1, scope: !22, type: !23, flags: DIFlagArtificial | DIFlagObjectPointer)
-!22 = distinct !DISubprogram(name: "func", linkageName: "_ZN3foo4funcEi", scope: !7, file: !2, line: 2, type: !10, isLocal: false, isDefinition: true, scopeLine: 2, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, unit: !4, declaration: !9, variables: !5)
+!22 = distinct !DISubprogram(name: "func", linkageName: "_ZN3foo4funcEi", scope: !7, file: !2, line: 2, type: !10, isLocal: false, isDefinition: true, scopeLine: 2, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, unit: !4, declaration: !9, retainedNodes: !5)
 !23 = !DIDerivedType(tag: DW_TAG_pointer_type, baseType: !7, size: 64, align: 64)
 !24 = !DIExpression()
 !25 = !DILocation(line: 0, scope: !22, inlinedAt: !20)

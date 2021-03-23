@@ -1,9 +1,8 @@
 //===- FormatVariadic.h - Efficient type-safe string formatting --*- C++-*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -26,9 +25,10 @@
 #ifndef LLVM_SUPPORT_FORMATVARIADIC_H
 #define LLVM_SUPPORT_FORMATVARIADIC_H
 
+#include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/Optional.h"
-#include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/FormatCommon.h"
 #include "llvm/Support/FormatProviders.h"
@@ -58,29 +58,14 @@ struct ReplacementItem {
   size_t Index = 0;
   size_t Align = 0;
   AlignStyle Where = AlignStyle::Right;
-  char Pad;
+  char Pad = 0;
   StringRef Options;
 };
 
 class formatv_object_base {
 protected:
-  // The parameters are stored in a std::tuple, which does not provide runtime
-  // indexing capabilities.  In order to enable runtime indexing, we use this
-  // structure to put the parameters into a std::vector.  Since the parameters
-  // are not all the same type, we use some type-erasure by wrapping the
-  // parameters in a template class that derives from a non-template superclass.
-  // Essentially, we are converting a std::tuple<Derived<Ts...>> to a
-  // std::vector<Base*>.
-  struct create_adapters {
-    template <typename... Ts>
-    std::vector<detail::format_adapter *> operator()(Ts &... Items) {
-      return std::vector<detail::format_adapter *>{&Items...};
-    }
-  };
-
   StringRef Fmt;
-  std::vector<detail::format_adapter *> Adapters;
-  std::vector<ReplacementItem> Replacements;
+  ArrayRef<detail::format_adapter *> Adapters;
 
   static bool consumeFieldLayout(StringRef &Spec, AlignStyle &Where,
                                  size_t &Align, char &Pad);
@@ -88,14 +73,16 @@ protected:
   static std::pair<ReplacementItem, StringRef>
   splitLiteralAndReplacement(StringRef Fmt);
 
-public:
-  formatv_object_base(StringRef Fmt, std::size_t ParamCount)
-      : Fmt(Fmt), Replacements(parseFormatString(Fmt)) {
-    Adapters.reserve(ParamCount);
-  }
+  formatv_object_base(StringRef Fmt,
+                      ArrayRef<detail::format_adapter *> Adapters)
+      : Fmt(Fmt), Adapters(Adapters) {}
 
+  formatv_object_base(formatv_object_base const &rhs) = delete;
+  formatv_object_base(formatv_object_base &&rhs) = default;
+
+public:
   void format(raw_ostream &S) const {
-    for (auto &R : Replacements) {
+    for (auto &R : parseFormatString(Fmt)) {
       if (R.Type == ReplacementType::Empty)
         continue;
       if (R.Type == ReplacementType::Literal) {
@@ -109,11 +96,11 @@ public:
 
       auto W = Adapters[R.Index];
 
-      FmtAlign Align(*W, R.Where, R.Align);
+      FmtAlign Align(*W, R.Where, R.Align, R.Pad);
       Align.format(S, R.Options);
     }
   }
-  static std::vector<ReplacementItem> parseFormatString(StringRef Fmt);
+  static SmallVector<ReplacementItem, 2> parseFormatString(StringRef Fmt);
 
   static Optional<ReplacementItem> parseReplacementItem(StringRef Spec);
 
@@ -142,16 +129,42 @@ template <typename Tuple> class formatv_object : public formatv_object_base {
   // of the parameters, we have to own the storage for the parameters here, and
   // have the base class store type-erased pointers into this tuple.
   Tuple Parameters;
+  std::array<detail::format_adapter *, std::tuple_size<Tuple>::value>
+      ParameterPointers;
+
+  // The parameters are stored in a std::tuple, which does not provide runtime
+  // indexing capabilities.  In order to enable runtime indexing, we use this
+  // structure to put the parameters into a std::array.  Since the parameters
+  // are not all the same type, we use some type-erasure by wrapping the
+  // parameters in a template class that derives from a non-template superclass.
+  // Essentially, we are converting a std::tuple<Derived<Ts...>> to a
+  // std::array<Base*>.
+  struct create_adapters {
+    template <typename... Ts>
+    std::array<detail::format_adapter *, std::tuple_size<Tuple>::value>
+    operator()(Ts &... Items) {
+      return {{&Items...}};
+    }
+  };
 
 public:
   formatv_object(StringRef Fmt, Tuple &&Params)
-      : formatv_object_base(Fmt, std::tuple_size<Tuple>::value),
+      : formatv_object_base(Fmt, ParameterPointers),
         Parameters(std::move(Params)) {
-    Adapters = apply_tuple(create_adapters(), Parameters);
+    ParameterPointers = apply_tuple(create_adapters(), Parameters);
+  }
+
+  formatv_object(formatv_object const &rhs) = delete;
+
+  formatv_object(formatv_object &&rhs)
+      : formatv_object_base(std::move(rhs)),
+        Parameters(std::move(rhs.Parameters)) {
+    ParameterPointers = apply_tuple(create_adapters(), Parameters);
+    Adapters = ParameterPointers;
   }
 };
 
-// \brief Format text given a format string and replacement parameters.
+// Format text given a format string and replacement parameters.
 //
 // ===General Description===
 //
@@ -192,10 +205,10 @@ public:
 //
 // The characters '{' and '}' are reserved and cannot appear anywhere within a
 // replacement sequence.  Outside of a replacement sequence, in order to print
-// a literal '{' or '}' it must be doubled -- "{{" to print a literal '{' and
-// "}}" to print a literal '}'.
+// a literal '{' it must be doubled as "{{".
 //
 // ===Parameter Indexing===
+//
 // `index` specifies the index of the parameter in the parameter pack to format
 // into the output.  Note that it is possible to refer to the same parameter
 // index multiple times in a given format string.  This makes it possible to
@@ -213,14 +226,15 @@ public:
 // For a given parameter of type T, the following steps are executed in order
 // until a match is found:
 //
-//   1. If the parameter is of class type, and contains a method
-//      void format(raw_ostream &Stream, StringRef Options)
-//      Then this method is invoked to produce the formatted output.  The
+//   1. If the parameter is of class type, and inherits from format_adapter,
+//      Then format() is invoked on it to produce the formatted output.  The
 //      implementation should write the formatted text into `Stream`.
 //   2. If there is a suitable template specialization of format_provider<>
 //      for type T containing a method whose signature is:
 //      void format(const T &Obj, raw_ostream &Stream, StringRef Options)
 //      Then this method is invoked as described in Step 1.
+//   3. If an appropriate operator<< for raw_ostream exists, it will be used.
+//      For this to work, (raw_ostream& << const T&) must return raw_ostream&.
 //
 // If a match cannot be found through either of the above methods, a compiler
 // error is generated.

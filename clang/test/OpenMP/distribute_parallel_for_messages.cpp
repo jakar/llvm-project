@@ -1,11 +1,37 @@
-// RUN: %clang_cc1 -verify -fopenmp -ferror-limit 100 -std=c++11 -o - %s
+// RUN: %clang_cc1 -verify=expected,omp45 -fopenmp -ferror-limit 100 -std=c++11 -o - %s -fopenmp-version=45 -Wuninitialized
+// RUN: %clang_cc1 -verify=expected,omp50 -fopenmp -ferror-limit 100 -std=c++11 -o - %s -Wuninitialized
+
+// RUN: %clang_cc1 -verify=expected,omp45 -fopenmp-simd -ferror-limit 100 -std=c++11 -o - %s -fopenmp-version=45 -Wuninitialized
+// RUN: %clang_cc1 -verify=expected,omp50 -fopenmp-simd -ferror-limit 100 -std=c++11 -o - %s -Wuninitialized
 
 void foo() {
+}
+
+void xxx(int argc) {
+  int x; // expected-note {{initialize the variable 'x' to silence this warning}}
+#pragma omp distribute parallel for
+  for (int i = 0; i < 10; ++i)
+    argc = x; // expected-warning {{variable 'x' is uninitialized when used here}}
 }
 
 #pragma omp distribute parallel for // expected-error {{unexpected OpenMP directive '#pragma omp distribute parallel for'}}
 
 int main(int argc, char **argv) {
+#pragma omp distribute parallel for order // omp45-error {{unexpected OpenMP clause 'order' in directive '#pragma omp distribute parallel for'}} expected-error {{expected '(' after 'order'}}
+  for (int i = 0; i < argc; ++i)
+    foo();
+#pragma omp distribute parallel for order( // omp45-error {{unexpected OpenMP clause 'order' in directive '#pragma omp distribute parallel for'}} expected-error {{expected ')'}} expected-note {{to match this '('}} omp50-error {{expected 'concurrent' in OpenMP clause 'order'}}
+  for (int i = 0; i < argc; ++i)
+    foo();
+#pragma omp distribute parallel for order(none // omp45-error {{unexpected OpenMP clause 'order' in directive '#pragma omp distribute parallel for'}} expected-error {{expected ')'}} expected-note {{to match this '('}} omp50-error {{expected 'concurrent' in OpenMP clause 'order'}}
+  for (int i = 0; i < argc; ++i)
+    foo();
+#pragma omp distribute parallel for order(concurrent // omp45-error {{unexpected OpenMP clause 'order' in directive '#pragma omp distribute parallel for'}} expected-error {{expected ')'}} expected-note {{to match this '('}}
+  for (int i = 0; i < argc; ++i)
+    foo();
+#pragma omp distribute parallel for order(concurrent) // omp45-error {{unexpected OpenMP clause 'order' in directive '#pragma omp distribute parallel for'}}
+  for (int i = 0; i < argc; ++i)
+    foo();
 #pragma omp target
 #pragma omp teams
 #pragma omp distribute parallel for { // expected-warning {{extra tokens at the end of '#pragma omp distribute parallel for' are ignored}}
@@ -38,7 +64,7 @@ int main(int argc, char **argv) {
     foo();
 #pragma omp target
 #pragma omp teams
-#pragma omp distribute parallel for
+#pragma omp distribute parallel for linear(argc) // expected-error {{unexpected OpenMP clause 'linear' in directive '#pragma omp distribute parallel for'}}
   for (int i = 0; i < argc; ++i)
     foo();
 #pragma omp target
@@ -79,7 +105,7 @@ L1:
   }
 #pragma omp target
 #pragma omp teams
-#pragma omp distribute parallel for default(none)
+#pragma omp distribute parallel for default(none) // expected-note {{explicit data sharing attribute requested here}}
   for (int i = 0; i < 10; ++i)
     ++argc; // expected-error {{variable 'argc' must have explicitly specified data sharing attributes}}
 
@@ -114,5 +140,16 @@ void test_ordered() {
   for (int i = 0; i < 16; ++i)
     for (int j = 0; j < 16; ++j)
     ;
+}
+
+void test_cancel() {
+#pragma omp target
+#pragma omp teams
+#pragma omp distribute parallel for
+  for (int i = 0; i < 16; ++i)
+    for (int j = 0; j < 16; ++j) {
+#pragma omp cancel for
+    ;
+    }
 }
 

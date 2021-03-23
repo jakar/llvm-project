@@ -1,9 +1,9 @@
-(* RUN: cp %s %T/bitwriter.ml
- * RUN: %ocamlc -g -w -3 -w +A -package llvm.bitreader -package llvm.bitwriter -linkpkg %T/bitwriter.ml -o %t
- * RUN: %t %t.bc
- * RUN: %ocamlopt -g -w -3 -w +A -package llvm.bitreader -package llvm.bitwriter -linkpkg %T/bitwriter.ml -o %t
- * RUN: %t %t.bc
- * RUN: llvm-dis < %t.bc
+(* RUN: rm -rf %t && mkdir -p %t && cp %s %t/bitwriter.ml
+ * RUN: %ocamlc -g -w -3 -w +A -package llvm.bitreader -package llvm.bitwriter -linkpkg %t/bitwriter.ml -o %t/executable
+ * RUN: %t/executable %t/bitcode.bc
+ * RUN: %ocamlopt -g -w -3 -w +A -package llvm.bitreader -package llvm.bitwriter -linkpkg %t/bitwriter.ml -o %t/executable
+ * RUN: %t/executable %t/bitcode.bc
+ * RUN: llvm-dis < %t/bitcode.bc
  * XFAIL: vg_leak
  *)
 
@@ -17,7 +17,7 @@ let test x = if not x then exit 1 else ()
 let read_file name =
   let ic = open_in_bin name in
   let len = in_channel_length ic in
-  let buf = String.create len in
+  let buf = Bytes.create len in
 
   test ((input ic buf 0 len) = len);
 
@@ -46,4 +46,4 @@ let _ =
   test (file_buf = temp_bitcode m);
   test (file_buf = temp_bitcode ~unbuffered:false m);
   test (file_buf = temp_bitcode ~unbuffered:true m);
-  test (file_buf = Llvm.MemoryBuffer.as_string (Llvm_bitwriter.write_bitcode_to_memory_buffer m))
+  test (file_buf = Bytes.of_string (Llvm.MemoryBuffer.as_string (Llvm_bitwriter.write_bitcode_to_memory_buffer m)))

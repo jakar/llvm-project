@@ -1,9 +1,8 @@
 //===-- CFGMST.h - Minimum Spanning Tree for CFG ----------------*- C++ -*-===//
 //
-//                      The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -11,6 +10,9 @@
 // for a given CFG.
 //
 //===----------------------------------------------------------------------===//
+
+#ifndef LLVM_LIB_TRANSFORMS_INSTRUMENTATION_CFGMST_H
+#define LLVM_LIB_TRANSFORMS_INSTRUMENTATION_CFGMST_H
 
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/STLExtras.h"
@@ -24,11 +26,13 @@
 #include <utility>
 #include <vector>
 
-namespace llvm {
-
 #define DEBUG_TYPE "cfgmst"
 
-/// \brief An union-find based Minimum Spanning Tree for CFG
+using namespace llvm;
+
+namespace llvm {
+
+/// An union-find based Minimum Spanning Tree for CFG
 ///
 /// Implements a Union-find algorithm to compute Minimum Spanning Tree
 /// for a given CFG.
@@ -42,6 +46,10 @@ public:
 
   // This map records the auxiliary information for each BB.
   DenseMap<const BasicBlock *, std::unique_ptr<BBInfo>> BBInfos;
+
+  // Whehter the function has an exit block with no successors.
+  // (For function with an infinite loop, this block may be absent)
+  bool ExitBlockFound = false;
 
   // Find the root group of the G and compress the path from G to the root.
   BBInfo *findAndCompressGroup(BBInfo *G) {
@@ -90,25 +98,34 @@ public:
   // Edges with large weight will be put into MST first so they are less likely
   // to be instrumented.
   void buildEdges() {
-    DEBUG(dbgs() << "Build Edge on " << F.getName() << "\n");
+    LLVM_DEBUG(dbgs() << "Build Edge on " << F.getName() << "\n");
 
-    const BasicBlock *BB = &(F.getEntryBlock());
+    const BasicBlock *Entry = &(F.getEntryBlock());
     uint64_t EntryWeight = (BFI != nullptr ? BFI->getEntryFreq() : 2);
+    // If we want to instrument the entry count, lower the weight to 0.
+    if (InstrumentFuncEntry)
+      EntryWeight = 0;
+    Edge *EntryIncoming = nullptr, *EntryOutgoing = nullptr,
+         *ExitOutgoing = nullptr, *ExitIncoming = nullptr;
+    uint64_t MaxEntryOutWeight = 0, MaxExitOutWeight = 0, MaxExitInWeight = 0;
+
     // Add a fake edge to the entry.
-    addEdge(nullptr, BB, EntryWeight);
+    EntryIncoming = &addEdge(nullptr, Entry, EntryWeight);
+    LLVM_DEBUG(dbgs() << "  Edge: from fake node to " << Entry->getName()
+                      << " w = " << EntryWeight << "\n");
 
     // Special handling for single BB functions.
-    if (succ_empty(BB)) {
-      addEdge(BB, nullptr, EntryWeight);
+    if (succ_empty(Entry)) {
+      addEdge(Entry, nullptr, EntryWeight);
       return;
     }
 
     static const uint32_t CriticalEdgeMultiplier = 1000;
 
-    for (Function::iterator BB = F.begin(), E = F.end(); BB != E; ++BB) {
-      TerminatorInst *TI = BB->getTerminator();
+    for (BasicBlock &BB : F) {
+      Instruction *TI = BB.getTerminator();
       uint64_t BBWeight =
-          (BFI != nullptr ? BFI->getBlockFreq(&*BB).getFrequency() : 2);
+          (BFI != nullptr ? BFI->getBlockFreq(&BB).getFrequency() : 2);
       uint64_t Weight = 2;
       if (int successors = TI->getNumSuccessors()) {
         for (int i = 0; i != successors; ++i) {
@@ -122,26 +139,73 @@ public:
               scaleFactor = UINT64_MAX;
           }
           if (BPI != nullptr)
-            Weight = BPI->getEdgeProbability(&*BB, TargetBB).scale(scaleFactor);
-          addEdge(&*BB, TargetBB, Weight).IsCritical = Critical;
-          DEBUG(dbgs() << "  Edge: from " << BB->getName() << " to "
-                       << TargetBB->getName() << "  w=" << Weight << "\n");
+            Weight = BPI->getEdgeProbability(&BB, TargetBB).scale(scaleFactor);
+          if (Weight == 0)
+            Weight++;
+          auto *E = &addEdge(&BB, TargetBB, Weight);
+          E->IsCritical = Critical;
+          LLVM_DEBUG(dbgs() << "  Edge: from " << BB.getName() << " to "
+                            << TargetBB->getName() << "  w=" << Weight << "\n");
+
+          // Keep track of entry/exit edges:
+          if (&BB == Entry) {
+            if (Weight > MaxEntryOutWeight) {
+              MaxEntryOutWeight = Weight;
+              EntryOutgoing = E;
+            }
+          }
+
+          auto *TargetTI = TargetBB->getTerminator();
+          if (TargetTI && !TargetTI->getNumSuccessors()) {
+            if (Weight > MaxExitInWeight) {
+              MaxExitInWeight = Weight;
+              ExitIncoming = E;
+            }
+          }
         }
       } else {
-        addEdge(&*BB, nullptr, BBWeight);
-        DEBUG(dbgs() << "  Edge: from " << BB->getName() << " to exit"
-                     << " w = " << BBWeight << "\n");
+        ExitBlockFound = true;
+        Edge *ExitO = &addEdge(&BB, nullptr, BBWeight);
+        if (BBWeight > MaxExitOutWeight) {
+          MaxExitOutWeight = BBWeight;
+          ExitOutgoing = ExitO;
+        }
+        LLVM_DEBUG(dbgs() << "  Edge: from " << BB.getName() << " to fake exit"
+                          << " w = " << BBWeight << "\n");
       }
+    }
+
+    // Entry/exit edge adjustment heurisitic:
+    // prefer instrumenting entry edge over exit edge
+    // if possible. Those exit edges may never have a chance to be
+    // executed (for instance the program is an event handling loop)
+    // before the profile is asynchronously dumped.
+    //
+    // If EntryIncoming and ExitOutgoing has similar weight, make sure
+    // ExitOutging is selected as the min-edge. Similarly, if EntryOutgoing
+    // and ExitIncoming has similar weight, make sure ExitIncoming becomes
+    // the min-edge.
+    uint64_t EntryInWeight = EntryWeight;
+
+    if (EntryInWeight >= MaxExitOutWeight &&
+        EntryInWeight * 2 < MaxExitOutWeight * 3) {
+      EntryIncoming->Weight = MaxExitOutWeight;
+      ExitOutgoing->Weight = EntryInWeight + 1;
+    }
+
+    if (MaxEntryOutWeight >= MaxExitInWeight &&
+        MaxEntryOutWeight * 2 < MaxExitInWeight * 3) {
+      EntryOutgoing->Weight = MaxExitInWeight;
+      ExitIncoming->Weight = MaxEntryOutWeight + 1;
     }
   }
 
   // Sort CFG edges based on its weight.
   void sortEdgesByWeight() {
-    std::stable_sort(AllEdges.begin(), AllEdges.end(),
-                     [](const std::unique_ptr<Edge> &Edge1,
-                        const std::unique_ptr<Edge> &Edge2) {
-                       return Edge1->Weight > Edge2->Weight;
-                     });
+    llvm::stable_sort(AllEdges, [](const std::unique_ptr<Edge> &Edge1,
+                                   const std::unique_ptr<Edge> &Edge2) {
+      return Edge1->Weight > Edge2->Weight;
+    });
   }
 
   // Traverse all the edges and compute the Minimum Weight Spanning Tree
@@ -163,6 +227,10 @@ public:
 
     for (auto &Ei : AllEdges) {
       if (Ei->Removed)
+        continue;
+      // If we detect infinite loops, force
+      // instrumenting the entry edge:
+      if (!ExitBlockFound && Ei->SrcBB == nullptr)
         continue;
       if (unionGroups(Ei->SrcBB, Ei->DestBB))
         Ei->InMST = true;
@@ -196,13 +264,13 @@ public:
     std::tie(Iter, Inserted) = BBInfos.insert(std::make_pair(Src, nullptr));
     if (Inserted) {
       // Newly inserted, update the real info.
-      Iter->second = std::move(llvm::make_unique<BBInfo>(Index));
+      Iter->second = std::move(std::make_unique<BBInfo>(Index));
       Index++;
     }
     std::tie(Iter, Inserted) = BBInfos.insert(std::make_pair(Dest, nullptr));
     if (Inserted)
       // Newly inserted, update the real info.
-      Iter->second = std::move(llvm::make_unique<BBInfo>(Index));
+      Iter->second = std::move(std::make_unique<BBInfo>(Index));
     AllEdges.emplace_back(new Edge(Src, Dest, W));
     return *AllEdges.back();
   }
@@ -210,15 +278,26 @@ public:
   BranchProbabilityInfo *BPI;
   BlockFrequencyInfo *BFI;
 
+  // If function entry will be always instrumented.
+  bool InstrumentFuncEntry;
+
 public:
-  CFGMST(Function &Func, BranchProbabilityInfo *BPI_ = nullptr,
+  CFGMST(Function &Func, bool InstrumentFuncEntry_,
+         BranchProbabilityInfo *BPI_ = nullptr,
          BlockFrequencyInfo *BFI_ = nullptr)
-      : F(Func), BPI(BPI_), BFI(BFI_) {
+      : F(Func), BPI(BPI_), BFI(BFI_),
+        InstrumentFuncEntry(InstrumentFuncEntry_) {
     buildEdges();
     sortEdgesByWeight();
     computeMinimumSpanningTree();
+    if (AllEdges.size() > 1 && InstrumentFuncEntry)
+      std::iter_swap(std::move(AllEdges.begin()),
+                     std::move(AllEdges.begin() + AllEdges.size() - 1));
   }
 };
 
-#undef DEBUG_TYPE // "cfgmst"
 } // end namespace llvm
+
+#undef DEBUG_TYPE // "cfgmst"
+
+#endif // LLVM_LIB_TRANSFORMS_INSTRUMENTATION_CFGMST_H

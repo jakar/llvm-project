@@ -1,9 +1,8 @@
-//===-- ProfileSummary.h - Profile summary data structure. ------*- C++ -*-===//
+//===- ProfileSummary.h - Profile summary data structure. -------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -11,21 +10,19 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_SUPPORT_PROFILE_SUMMARY_H
-#define LLVM_SUPPORT_PROFILE_SUMMARY_H
+#ifndef LLVM_IR_PROFILESUMMARY_H
+#define LLVM_IR_PROFILESUMMARY_H
 
+#include <algorithm>
+#include <cassert>
 #include <cstdint>
-#include <utility>
 #include <vector>
-
-#include "llvm/Support/Casting.h"
 
 namespace llvm {
 
 class LLVMContext;
 class Metadata;
-class MDTuple;
-class MDNode;
+class raw_ostream;
 
 // The profile summary is one or more (Cutoff, MinCount, NumCounts) triplets.
 // The semantics of counts depend on the type of profile. For instrumentation
@@ -37,40 +34,56 @@ struct ProfileSummaryEntry {
   uint32_t Cutoff;    ///< The required percentile of counts.
   uint64_t MinCount;  ///< The minimum count for this percentile.
   uint64_t NumCounts; ///< Number of counts >= the minimum count.
+
   ProfileSummaryEntry(uint32_t TheCutoff, uint64_t TheMinCount,
                       uint64_t TheNumCounts)
       : Cutoff(TheCutoff), MinCount(TheMinCount), NumCounts(TheNumCounts) {}
 };
 
-typedef std::vector<ProfileSummaryEntry> SummaryEntryVector;
+using SummaryEntryVector = std::vector<ProfileSummaryEntry>;
 
 class ProfileSummary {
 public:
-  enum Kind { PSK_Instr, PSK_Sample };
+  enum Kind { PSK_Instr, PSK_CSInstr, PSK_Sample };
 
 private:
   const Kind PSK;
-  static const char *KindStr[2];
   SummaryEntryVector DetailedSummary;
   uint64_t TotalCount, MaxCount, MaxInternalCount, MaxFunctionCount;
   uint32_t NumCounts, NumFunctions;
-  /// \brief Return detailed summary as metadata.
+  /// If 'Partial' is false, it means the profile being used to optimize
+  /// a target is collected from the same target.
+  /// If 'Partial' is true, it means the profile is for common/shared
+  /// code. The common profile is usually merged from profiles collected
+  /// from running other targets.
+  bool Partial = false;
+  /// This approximately represents the ratio of the number of profile counters
+  /// of the program being built to the number of profile counters in the
+  /// partial sample profile. When 'Partial' is false, it is undefined. This is
+  /// currently only available under thin LTO mode.
+  double PartialProfileRatio = 0;
+  /// Return detailed summary as metadata.
   Metadata *getDetailedSummaryMD(LLVMContext &Context);
 
 public:
   static const int Scale = 1000000;
+
   ProfileSummary(Kind K, SummaryEntryVector DetailedSummary,
                  uint64_t TotalCount, uint64_t MaxCount,
                  uint64_t MaxInternalCount, uint64_t MaxFunctionCount,
-                 uint32_t NumCounts, uint32_t NumFunctions)
+                 uint32_t NumCounts, uint32_t NumFunctions,
+                 bool Partial = false, double PartialProfileRatio = 0)
       : PSK(K), DetailedSummary(std::move(DetailedSummary)),
         TotalCount(TotalCount), MaxCount(MaxCount),
         MaxInternalCount(MaxInternalCount), MaxFunctionCount(MaxFunctionCount),
-        NumCounts(NumCounts), NumFunctions(NumFunctions) {}
+        NumCounts(NumCounts), NumFunctions(NumFunctions), Partial(Partial),
+        PartialProfileRatio(PartialProfileRatio) {}
+
   Kind getKind() const { return PSK; }
-  /// \brief Return summary information as metadata.
-  Metadata *getMD(LLVMContext &Context);
-  /// \brief Construct profile summary from metdata.
+  /// Return summary information as metadata.
+  Metadata *getMD(LLVMContext &Context, bool AddPartialField = true,
+                  bool AddPartialProfileRatioField = true);
+  /// Construct profile summary from metdata.
   static ProfileSummary *getFromMD(Metadata *MD);
   SummaryEntryVector &getDetailedSummary() { return DetailedSummary; }
   uint32_t getNumFunctions() { return NumFunctions; }
@@ -79,7 +92,17 @@ public:
   uint64_t getTotalCount() { return TotalCount; }
   uint64_t getMaxCount() { return MaxCount; }
   uint64_t getMaxInternalCount() { return MaxInternalCount; }
+  void setPartialProfile(bool PP) { Partial = PP; }
+  bool isPartialProfile() { return Partial; }
+  double getPartialProfileRatio() { return PartialProfileRatio; }
+  void setPartialProfileRatio(double R) {
+    assert(isPartialProfile() && "Unexpected when not partial profile");
+    PartialProfileRatio = R;
+  }
+  void printSummary(raw_ostream &OS);
+  void printDetailedSummary(raw_ostream &OS);
 };
 
 } // end namespace llvm
-#endif
+
+#endif // LLVM_IR_PROFILESUMMARY_H

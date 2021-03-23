@@ -1,9 +1,9 @@
 /******************************************************************************/
 /*                                                                            */
-/*                     The LLVM Compiler Infrastructure                       */
-/*                                                                            */
-/* This file is dual licensed under the MIT and the University of Illinois    */
-/* Open Source License. See LICENSE.TXT for details.                          */
+/* Part of the LLVM Project, under the Apache License v2.0 with LLVM          */
+/* Exceptions.                                                                */
+/* See https://llvm.org/LICENSE.txt for license information.                  */
+/* SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception                    */
 /*                                                                            */
 /******************************************************************************/
 /*                                                                            */
@@ -13,6 +13,7 @@
 
 #ifndef GPUJIT_H_
 #define GPUJIT_H_
+#include "stddef.h"
 
 /*
  * The following demostrates how we can use the GPURuntime library to
@@ -110,4 +111,13 @@ void polly_launchKernel(PollyGPUFunction *Kernel, unsigned int GridDimX,
                         void **Parameters);
 void polly_freeDeviceMemory(PollyGPUDevicePtr *Allocation);
 void polly_freeContext(PollyGPUContext *Context);
+
+// Note that polly_{malloc/free}Managed are currently not used by Polly.
+// We use them in COSMO by replacing all malloc with polly_mallocManaged and all
+// frees with cudaFree, so we can get managed memory "automatically".
+// Needless to say, this is a hack.
+// Please make sure that this code is not present in Polly when 2018 rolls in.
+// If this is still present, ping Siddharth Bhat <siddu.druid@gmail.com>
+void *polly_mallocManaged(size_t size);
+void polly_freeManaged(void *mem);
 #endif /* GPUJIT_H_ */

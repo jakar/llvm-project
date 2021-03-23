@@ -1,7 +1,7 @@
-; RUN: opt -mtriple=amdgcn-amd-amdhsa -load-store-vectorizer -S -o - %s | FileCheck %s
+; RUN: opt -mtriple=amdgcn-amd-amdhsa --mcpu=hawaii -load-store-vectorizer -S -o - %s | FileCheck %s
 ; Copy of test/CodeGen/AMDGPU/merge-stores.ll with some additions
 
-target datalayout = "e-p:32:32-p1:64:64-p2:64:64-p3:32:32-p4:64:64-p5:32:32-p24:64:64-i64:64-v16:16-v24:32-v32:32-v48:64-v96:128-v192:256-v256:256-v512:512-v1024:1024-v2048:2048-n32:64"
+target datalayout = "e-p:64:64-p1:64:64-p2:32:32-p3:32:32-p4:64:64-p5:32:32-p6:32:32-i64:64-v16:16-v24:32-v32:32-v48:64-v96:128-v192:256-v256:256-v512:512-v1024:1024-v2048:2048-n32:64-S32-A5"
 
 ; TODO: Vector element tests
 ; TODO: Non-zero base offset for load and store combinations
@@ -49,7 +49,8 @@ define amdgpu_kernel void @merge_global_store_2_constants_0_i16(i16 addrspace(1)
 }
 
 ; CHECK-LABEL: @merge_global_store_2_constants_i16_natural_align
-; CHECK: store <2 x i16>
+; CHECK: store i16
+; CHECK: store i16
 define amdgpu_kernel void @merge_global_store_2_constants_i16_natural_align(i16 addrspace(1)* %out) #0 {
   %out.gep.1 = getelementptr i16, i16 addrspace(1)* %out, i32 1
 
@@ -58,13 +59,34 @@ define amdgpu_kernel void @merge_global_store_2_constants_i16_natural_align(i16 
   ret void
 }
 
+; CHECK-LABEL: @merge_global_store_2_constants_i16_align_1
+; CHECK: store <2 x i16>
+define amdgpu_kernel void @merge_global_store_2_constants_i16_align_1(i16 addrspace(1)* %out) #0 {
+  %out.gep.1 = getelementptr i16, i16 addrspace(1)* %out, i32 1
+
+  store i16 123, i16 addrspace(1)* %out.gep.1, align 1
+  store i16 456, i16 addrspace(1)* %out, align 1
+  ret void
+}
+
 ; CHECK-LABEL: @merge_global_store_2_constants_half_natural_align
-; CHECK: store <2 x half>
+; CHECK: store half
+; CHECK: store half
 define amdgpu_kernel void @merge_global_store_2_constants_half_natural_align(half addrspace(1)* %out) #0 {
   %out.gep.1 = getelementptr half, half addrspace(1)* %out, i32 1
 
   store half 2.0, half addrspace(1)* %out.gep.1
   store half 1.0, half addrspace(1)* %out
+  ret void
+}
+
+; CHECK-LABEL: @merge_global_store_2_constants_half_align_1
+; CHECK: store <2 x half>
+define amdgpu_kernel void @merge_global_store_2_constants_half_align_1(half addrspace(1)* %out) #0 {
+  %out.gep.1 = getelementptr half, half addrspace(1)* %out, i32 1
+
+  store half 2.0, half addrspace(1)* %out.gep.1, align 1
+  store half 1.0, half addrspace(1)* %out, align 1
   ret void
 }
 
@@ -89,7 +111,7 @@ define amdgpu_kernel void @merge_global_store_2_constants_i32_f32(i32 addrspace(
 }
 
 ; CHECK-LABEL: @merge_global_store_2_constants_f32_i32
-; CHECK  store <2 x float> <float 4.000000e+00, float 0x370EC00000000000>, <2 x float> addrspace(1)* %{{[0-9]+$}}
+; CHECK: store <2 x i32> <i32 1082130432, i32 123>, <2 x i32> addrspace(1)*
 define amdgpu_kernel void @merge_global_store_2_constants_f32_i32(float addrspace(1)* %out) #0 {
   %out.gep.1 = getelementptr float, float addrspace(1)* %out, i32 1
   %out.gep.1.bc = bitcast float addrspace(1)* %out.gep.1 to i32 addrspace(1)*
@@ -504,8 +526,8 @@ define amdgpu_kernel void @merge_local_store_2_constants_i32_align_2(i32 addrspa
 }
 
 ; CHECK-LABEL: @merge_local_store_4_constants_i32
-; CHECK: store <2 x i32> <i32 456, i32 333>, <2 x i32> addrspace(3)*
-; CHECK: store <2 x i32> <i32 1234, i32 123>, <2 x i32> addrspace(3)*
+; CHECK: store <2 x i32> <i32 456, i32 333>, <2 x i32> addrspace(3)* %1, align 4
+; CHECK: store <2 x i32> <i32 1234, i32 123>, <2 x i32> addrspace(3)* %2, align 4
 define amdgpu_kernel void @merge_local_store_4_constants_i32(i32 addrspace(3)* %out) #0 {
   %out.gep.1 = getelementptr i32, i32 addrspace(3)* %out, i32 1
   %out.gep.2 = getelementptr i32, i32 addrspace(3)* %out, i32 2
@@ -629,6 +651,26 @@ define amdgpu_kernel void @copy_v3f64_align4(<3 x double> addrspace(1)* noalias 
   %vec = load <3 x double>, <3 x double> addrspace(1)* %in, align 4
   %fadd = fadd <3 x double> %vec, <double 1.0, double 2.0, double 4.0>
   store <3 x double> %fadd, <3 x double> addrspace(1)* %out
+  ret void
+}
+
+; Verify that we no longer hit asserts for this test case. No change expected.
+; CHECK-LABEL: @copy_vec_of_ptrs
+; CHECK: %in.gep.1 = getelementptr <2 x i16*>, <2 x i16*> addrspace(1)* %in, i32 1
+; CHECK: %vec1 = load <2 x i16*>, <2 x i16*> addrspace(1)* %in.gep.1
+; CHECK: %vec2 = load <2 x i16*>, <2 x i16*> addrspace(1)* %in, align 4
+; CHECK: %out.gep.1 = getelementptr <2 x i16*>, <2 x i16*> addrspace(1)* %out, i32 1
+; CHECK: store <2 x i16*> %vec1, <2 x i16*> addrspace(1)* %out.gep.1
+; CHECK: store <2 x i16*> %vec2, <2 x i16*> addrspace(1)* %out, align 4
+define amdgpu_kernel void @copy_vec_of_ptrs(<2 x i16*> addrspace(1)* %out,
+                                            <2 x i16*> addrspace(1)* %in ) #0 {
+  %in.gep.1 = getelementptr <2 x i16*>, <2 x i16*> addrspace(1)* %in, i32 1
+  %vec1 = load <2 x i16*>, <2 x i16*> addrspace(1)* %in.gep.1
+  %vec2 = load <2 x i16*>, <2 x i16*> addrspace(1)* %in, align 4
+
+  %out.gep.1 = getelementptr <2 x i16*>, <2 x i16*> addrspace(1)* %out, i32 1
+  store <2 x i16*> %vec1, <2 x i16*> addrspace(1)* %out.gep.1
+  store <2 x i16*> %vec2, <2 x i16*> addrspace(1)* %out, align 4
   ret void
 }
 

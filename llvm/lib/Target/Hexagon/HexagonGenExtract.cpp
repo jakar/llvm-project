@@ -1,26 +1,27 @@
-//===--- HexagonGenExtract.cpp --------------------------------------------===//
+//===- HexagonGenExtract.cpp ----------------------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
 #include "llvm/ADT/APInt.h"
-#include "llvm/ADT/StringRef.h"
+#include "llvm/ADT/GraphTraits.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/CFG.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Dominators.h"
 #include "llvm/IR/Function.h"
+#include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Instruction.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/Intrinsics.h"
-#include "llvm/IR/IRBuilder.h"
+#include "llvm/IR/IntrinsicsHexagon.h"
 #include "llvm/IR/PatternMatch.h"
 #include "llvm/IR/Type.h"
 #include "llvm/IR/Value.h"
+#include "llvm/InitializePasses.h"
 #include "llvm/Pass.h"
 #include "llvm/Support/CommandLine.h"
 #include <algorithm>
@@ -47,8 +48,8 @@ static cl::opt<bool> NeedAnd("extract-needand", cl::init(true), cl::Hidden,
 
 namespace llvm {
 
-  void initializeHexagonGenExtractPass(PassRegistry&);
-  FunctionPass *createHexagonGenExtract();
+void initializeHexagonGenExtractPass(PassRegistry&);
+FunctionPass *createHexagonGenExtract();
 
 } // end namespace llvm
 
@@ -58,7 +59,7 @@ namespace {
   public:
     static char ID;
 
-    HexagonGenExtract() : FunctionPass(ID), ExtractCount(0) {
+    HexagonGenExtract() : FunctionPass(ID) {
       initializeHexagonGenExtractPass(*PassRegistry::getPassRegistry());
     }
 
@@ -78,13 +79,13 @@ namespace {
     bool visitBlock(BasicBlock *B);
     bool convert(Instruction *In);
 
-    unsigned ExtractCount;
+    unsigned ExtractCount = 0;
     DominatorTree *DT;
   };
 
-  char HexagonGenExtract::ID = 0;
-
 } // end anonymous namespace
+
+char HexagonGenExtract::ID = 0;
 
 INITIALIZE_PASS_BEGIN(HexagonGenExtract, "hextract", "Hexagon generate "
   "\"extract\" instructions", false, false)
@@ -185,7 +186,7 @@ bool HexagonGenExtract::convert(Instruction *In) {
   // The width of the extracted field is the minimum of the original bits
   // that remain after the shifts and the number of contiguous 1s in the mask.
   uint32_t W = std::min(U, T);
-  if (W == 0)
+  if (W == 0 || W == 1)
     return false;
 
   // Check if the extracted bits are contained within the mask that it is
@@ -211,7 +212,7 @@ bool HexagonGenExtract::convert(Instruction *In) {
   Intrinsic::ID IntId = (BW == 32) ? Intrinsic::hexagon_S2_extractu
                                    : Intrinsic::hexagon_S2_extractup;
   Module *Mod = BB->getParent()->getParent();
-  Value *ExtF = Intrinsic::getDeclaration(Mod, IntId);
+  Function *ExtF = Intrinsic::getDeclaration(Mod, IntId);
   Value *NewIn = IRB.CreateCall(ExtF, {BF, IRB.getInt32(W), IRB.getInt32(SR)});
   if (SL != 0)
     NewIn = IRB.CreateShl(NewIn, SL, CSL->getName());
@@ -220,15 +221,16 @@ bool HexagonGenExtract::convert(Instruction *In) {
 }
 
 bool HexagonGenExtract::visitBlock(BasicBlock *B) {
+  bool Changed = false;
+
   // Depth-first, bottom-up traversal.
   for (auto *DTN : children<DomTreeNode*>(DT->getNode(B)))
-    visitBlock(DTN->getBlock());
+    Changed |= visitBlock(DTN->getBlock());
 
   // Allow limiting the number of generated extracts for debugging purposes.
   bool HasCutoff = ExtractCutoff.getPosition();
   unsigned Cutoff = ExtractCutoff;
 
-  bool Changed = false;
   BasicBlock::iterator I = std::prev(B->end()), NextI, Begin = B->begin();
   while (true) {
     if (HasCutoff && (ExtractCount >= Cutoff))

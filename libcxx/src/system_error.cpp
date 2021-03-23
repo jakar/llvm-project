@@ -1,15 +1,13 @@
 //===---------------------- system_error.cpp ------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is dual licensed under the MIT and the University of Illinois Open
-// Source Licenses. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
 #include "__config"
 
-#define _LIBCPP_BUILDING_SYSTEM_ERROR
 #include "system_error"
 
 #include "include/config_elast.h"
@@ -30,29 +28,29 @@ _LIBCPP_BEGIN_NAMESPACE_STD
 // class error_category
 
 #if defined(_LIBCPP_DEPRECATED_ABI_LEGACY_LIBRARY_DEFINITIONS_FOR_INLINE_FUNCTIONS)
-error_category::error_category() _NOEXCEPT
+error_category::error_category() noexcept
 {
 }
 #endif
 
-error_category::~error_category() _NOEXCEPT
+error_category::~error_category() noexcept
 {
 }
 
 error_condition
-error_category::default_error_condition(int ev) const _NOEXCEPT
+error_category::default_error_condition(int ev) const noexcept
 {
     return error_condition(ev, *this);
 }
 
 bool
-error_category::equivalent(int code, const error_condition& condition) const _NOEXCEPT
+error_category::equivalent(int code, const error_condition& condition) const noexcept
 {
     return default_error_condition(code) == condition;
 }
 
 bool
-error_category::equivalent(const error_code& code, int condition) const _NOEXCEPT
+error_category::equivalent(const error_code& code, int condition) const noexcept
 {
     return *this == code.category() && code.value() == condition;
 }
@@ -65,7 +63,7 @@ constexpr size_t strerror_buff_size = 1024;
 
 string do_strerror_r(int ev);
 
-#if defined(_LIBCPP_MSVCRT)
+#if defined(_LIBCPP_MSVCRT_LIKE)
 string do_strerror_r(int ev) {
   char buffer[strerror_buff_size];
   if (::strerror_s(buffer, strerror_buff_size, ev) == 0)
@@ -73,39 +71,59 @@ string do_strerror_r(int ev) {
   std::snprintf(buffer, strerror_buff_size, "unknown error %d", ev);
   return string(buffer);
 }
-#elif defined(__linux__) && !defined(_LIBCPP_HAS_MUSL_LIBC) &&                 \
-    (!defined(__ANDROID__) || __ANDROID_API__ >= 23)
-// GNU Extended version
-string do_strerror_r(int ev) {
-    char buffer[strerror_buff_size];
-    char* ret = ::strerror_r(ev, buffer, strerror_buff_size);
-    return string(ret);
-}
 #else
-// POSIX version
+
+// Only one of the two following functions will be used, depending on
+// the return type of strerror_r:
+
+// For the GNU variant, a char* return value:
+__attribute__((unused)) const char *
+handle_strerror_r_return(char *strerror_return, char *buffer) {
+  // GNU always returns a string pointer in its return value. The
+  // string might point to either the input buffer, or a static
+  // buffer, but we don't care which.
+  return strerror_return;
+}
+
+// For the POSIX variant: an int return value.
+__attribute__((unused)) const char *
+handle_strerror_r_return(int strerror_return, char *buffer) {
+  // The POSIX variant either:
+  // - fills in the provided buffer and returns 0
+  // - returns a positive error value, or
+  // - returns -1 and fills in errno with an error value.
+  if (strerror_return == 0)
+    return buffer;
+
+  // Only handle EINVAL. Other errors abort.
+  int new_errno = strerror_return == -1 ? errno : strerror_return;
+  if (new_errno == EINVAL)
+    return "";
+
+  _LIBCPP_ASSERT(new_errno == ERANGE, "unexpected error from ::strerror_r");
+  // FIXME maybe? 'strerror_buff_size' is likely to exceed the
+  // maximum error size so ERANGE shouldn't be returned.
+  std::abort();
+}
+
+// This function handles both GNU and POSIX variants, dispatching to
+// one of the two above functions.
 string do_strerror_r(int ev) {
     char buffer[strerror_buff_size];
+    // Preserve errno around the call. (The C++ standard requires that
+    // system_error functions not modify errno).
     const int old_errno = errno;
-    int ret;
-    if ((ret = ::strerror_r(ev, buffer, strerror_buff_size)) != 0) {
-        // If `ret == -1` then the error is specified using `errno`, otherwise
-        // `ret` represents the error.
-        const int new_errno = ret == -1 ? errno : ret;
-        errno = old_errno;
-        if (new_errno == EINVAL) {
-            std::snprintf(buffer, strerror_buff_size, "Unknown error %d", ev);
-            return string(buffer);
-        } else {
-            _LIBCPP_ASSERT(new_errno == ERANGE, "unexpected error from ::strerr_r");
-            // FIXME maybe? 'strerror_buff_size' is likely to exceed the
-            // maximum error size so ERANGE shouldn't be returned.
-            std::abort();
-        }
+    const char *error_message = handle_strerror_r_return(
+        ::strerror_r(ev, buffer, strerror_buff_size), buffer);
+    // If we didn't get any message, print one now.
+    if (!error_message[0]) {
+      std::snprintf(buffer, strerror_buff_size, "Unknown error %d", ev);
+      error_message = buffer;
     }
-    return string(buffer);
+    errno = old_errno;
+    return string(error_message);
 }
 #endif
-
 } // end namespace
 #endif
 
@@ -123,12 +141,12 @@ class _LIBCPP_HIDDEN __generic_error_category
     : public __do_message
 {
 public:
-    virtual const char* name() const _NOEXCEPT;
+    virtual const char* name() const noexcept;
     virtual string message(int ev) const;
 };
 
 const char*
-__generic_error_category::name() const _NOEXCEPT
+__generic_error_category::name() const noexcept
 {
     return "generic";
 }
@@ -144,7 +162,7 @@ __generic_error_category::message(int ev) const
 }
 
 const error_category&
-generic_category() _NOEXCEPT
+generic_category() noexcept
 {
     static __generic_error_category s;
     return s;
@@ -154,13 +172,13 @@ class _LIBCPP_HIDDEN __system_error_category
     : public __do_message
 {
 public:
-    virtual const char* name() const _NOEXCEPT;
+    virtual const char* name() const noexcept;
     virtual string message(int ev) const;
-    virtual error_condition default_error_condition(int ev) const _NOEXCEPT;
+    virtual error_condition default_error_condition(int ev) const noexcept;
 };
 
 const char*
-__system_error_category::name() const _NOEXCEPT
+__system_error_category::name() const noexcept
 {
     return "system";
 }
@@ -176,7 +194,7 @@ __system_error_category::message(int ev) const
 }
 
 error_condition
-__system_error_category::default_error_condition(int ev) const _NOEXCEPT
+__system_error_category::default_error_condition(int ev) const noexcept
 {
 #ifdef _LIBCPP_ELAST
     if (ev > _LIBCPP_ELAST)
@@ -186,7 +204,7 @@ __system_error_category::default_error_condition(int ev) const _NOEXCEPT
 }
 
 const error_category&
-system_category() _NOEXCEPT
+system_category() noexcept
 {
     static __system_error_category s;
     return s;
@@ -258,7 +276,7 @@ system_error::system_error(int ev, const error_category& ecat)
 {
 }
 
-system_error::~system_error() _NOEXCEPT
+system_error::~system_error() noexcept
 {
 }
 

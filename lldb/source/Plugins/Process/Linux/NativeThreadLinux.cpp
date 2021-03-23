@@ -1,9 +1,8 @@
-//===-- NativeThreadLinux.cpp --------------------------------- -*- C++ -*-===//
+//===-- NativeThreadLinux.cpp ---------------------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -16,12 +15,12 @@
 #include "NativeRegisterContextLinux.h"
 #include "SingleStepCheck.h"
 
-#include "lldb/Core/State.h"
 #include "lldb/Host/HostNativeThread.h"
 #include "lldb/Host/linux/Ptrace.h"
 #include "lldb/Host/linux/Support.h"
 #include "lldb/Utility/LLDBAssert.h"
 #include "lldb/Utility/Log.h"
+#include "lldb/Utility/State.h"
 #include "lldb/lldb-enumerations.h"
 
 #include "llvm/ADT/SmallString.h"
@@ -85,10 +84,14 @@ void LogThreadStopInfo(Log &log, const ThreadStopInfo &stop_info,
 }
 }
 
-NativeThreadLinux::NativeThreadLinux(NativeProcessLinux *process,
+NativeThreadLinux::NativeThreadLinux(NativeProcessLinux &process,
                                      lldb::tid_t tid)
     : NativeThreadProtocol(process, tid), m_state(StateType::eStateInvalid),
-      m_stop_info(), m_reg_context_sp(), m_stop_description() {}
+      m_stop_info(),
+      m_reg_context_up(
+          NativeRegisterContextLinux::CreateHostNativeRegisterContextLinux(
+              process.GetArchitecture(), *this)),
+      m_stop_description() {}
 
 std::string NativeThreadLinux::GetName() {
   NativeProcessLinux &process = GetProcess();
@@ -96,7 +99,7 @@ std::string NativeThreadLinux::GetName() {
   auto BufferOrError = getProcFile(process.GetID(), GetID(), "comm");
   if (!BufferOrError)
     return "";
-  return BufferOrError.get()->getBuffer().rtrim('\n');
+  return std::string(BufferOrError.get()->getBuffer().rtrim('\n'));
 }
 
 lldb::StateType NativeThreadLinux::GetState() { return m_state; }
@@ -130,97 +133,77 @@ bool NativeThreadLinux::GetStopReason(ThreadStopInfo &stop_info,
   case eStateStepping:
   case eStateDetached:
     if (log) {
-      log->Printf("NativeThreadLinux::%s tid %" PRIu64
-                  " in state %s cannot answer stop reason",
-                  __FUNCTION__, GetID(), StateAsCString(m_state));
+      LLDB_LOGF(log,
+                "NativeThreadLinux::%s tid %" PRIu64
+                " in state %s cannot answer stop reason",
+                __FUNCTION__, GetID(), StateAsCString(m_state));
     }
     return false;
   }
   llvm_unreachable("unhandled StateType!");
 }
 
-NativeRegisterContextSP NativeThreadLinux::GetRegisterContext() {
-  // Return the register context if we already created it.
-  if (m_reg_context_sp)
-    return m_reg_context_sp;
-
-  NativeProcessProtocolSP m_process_sp = m_process_wp.lock();
-  if (!m_process_sp)
-    return NativeRegisterContextSP();
-
-  ArchSpec target_arch;
-  if (!m_process_sp->GetArchitecture(target_arch))
-    return NativeRegisterContextSP();
-
-  const uint32_t concrete_frame_idx = 0;
-  m_reg_context_sp.reset(
-      NativeRegisterContextLinux::CreateHostNativeRegisterContextLinux(
-          target_arch, *this, concrete_frame_idx));
-
-  return m_reg_context_sp;
-}
-
-Error NativeThreadLinux::SetWatchpoint(lldb::addr_t addr, size_t size,
-                                       uint32_t watch_flags, bool hardware) {
+Status NativeThreadLinux::SetWatchpoint(lldb::addr_t addr, size_t size,
+                                        uint32_t watch_flags, bool hardware) {
   if (!hardware)
-    return Error("not implemented");
+    return Status("not implemented");
   if (m_state == eStateLaunching)
-    return Error();
-  Error error = RemoveWatchpoint(addr);
+    return Status();
+  Status error = RemoveWatchpoint(addr);
   if (error.Fail())
     return error;
-  NativeRegisterContextSP reg_ctx = GetRegisterContext();
-  uint32_t wp_index = reg_ctx->SetHardwareWatchpoint(addr, size, watch_flags);
+  uint32_t wp_index =
+      m_reg_context_up->SetHardwareWatchpoint(addr, size, watch_flags);
   if (wp_index == LLDB_INVALID_INDEX32)
-    return Error("Setting hardware watchpoint failed.");
+    return Status("Setting hardware watchpoint failed.");
   m_watchpoint_index_map.insert({addr, wp_index});
-  return Error();
+  return Status();
 }
 
-Error NativeThreadLinux::RemoveWatchpoint(lldb::addr_t addr) {
+Status NativeThreadLinux::RemoveWatchpoint(lldb::addr_t addr) {
   auto wp = m_watchpoint_index_map.find(addr);
   if (wp == m_watchpoint_index_map.end())
-    return Error();
+    return Status();
   uint32_t wp_index = wp->second;
   m_watchpoint_index_map.erase(wp);
-  if (GetRegisterContext()->ClearHardwareWatchpoint(wp_index))
-    return Error();
-  return Error("Clearing hardware watchpoint failed.");
+  if (m_reg_context_up->ClearHardwareWatchpoint(wp_index))
+    return Status();
+  return Status("Clearing hardware watchpoint failed.");
 }
 
-Error NativeThreadLinux::SetHardwareBreakpoint(lldb::addr_t addr, size_t size) {
+Status NativeThreadLinux::SetHardwareBreakpoint(lldb::addr_t addr,
+                                                size_t size) {
   if (m_state == eStateLaunching)
-    return Error();
+    return Status();
 
-  Error error = RemoveHardwareBreakpoint(addr);
+  Status error = RemoveHardwareBreakpoint(addr);
   if (error.Fail())
     return error;
 
-  NativeRegisterContextSP reg_ctx = GetRegisterContext();
-  uint32_t bp_index = reg_ctx->SetHardwareBreakpoint(addr, size);
+  uint32_t bp_index = m_reg_context_up->SetHardwareBreakpoint(addr, size);
 
   if (bp_index == LLDB_INVALID_INDEX32)
-    return Error("Setting hardware breakpoint failed.");
+    return Status("Setting hardware breakpoint failed.");
 
   m_hw_break_index_map.insert({addr, bp_index});
-  return Error();
+  return Status();
 }
 
-Error NativeThreadLinux::RemoveHardwareBreakpoint(lldb::addr_t addr) {
+Status NativeThreadLinux::RemoveHardwareBreakpoint(lldb::addr_t addr) {
   auto bp = m_hw_break_index_map.find(addr);
   if (bp == m_hw_break_index_map.end())
-    return Error();
+    return Status();
 
   uint32_t bp_index = bp->second;
-  if (GetRegisterContext()->ClearHardwareBreakpoint(bp_index)) {
+  if (m_reg_context_up->ClearHardwareBreakpoint(bp_index)) {
     m_hw_break_index_map.erase(bp);
-    return Error();
+    return Status();
   }
 
-  return Error("Clearing hardware breakpoint failed.");
+  return Status("Clearing hardware breakpoint failed.");
 }
 
-Error NativeThreadLinux::Resume(uint32_t signo) {
+Status NativeThreadLinux::Resume(uint32_t signo) {
   const StateType new_state = StateType::eStateRunning;
   MaybeLogStateChange(new_state);
   m_state = new_state;
@@ -228,13 +211,13 @@ Error NativeThreadLinux::Resume(uint32_t signo) {
   m_stop_info.reason = StopReason::eStopReasonNone;
   m_stop_description.clear();
 
-  // If watchpoints have been set, but none on this thread,
-  // then this is a new thread. So set all existing watchpoints.
+  // If watchpoints have been set, but none on this thread, then this is a new
+  // thread. So set all existing watchpoints.
   if (m_watchpoint_index_map.empty()) {
     NativeProcessLinux &process = GetProcess();
 
     const auto &watchpoint_map = process.GetWatchpointMap();
-    GetRegisterContext()->ClearAllHardwareWatchpoints();
+    m_reg_context_up->ClearAllHardwareWatchpoints();
     for (const auto &pair : watchpoint_map) {
       const auto &wp = pair.second;
       SetWatchpoint(wp.m_addr, wp.m_size, wp.m_watch_flags, wp.m_hardware);
@@ -246,7 +229,7 @@ Error NativeThreadLinux::Resume(uint32_t signo) {
     NativeProcessLinux &process = GetProcess();
 
     const auto &hw_breakpoint_map = process.GetHardwareBreakpointMap();
-    GetRegisterContext()->ClearAllHardwareBreakpoints();
+    m_reg_context_up->ClearAllHardwareBreakpoints();
     for (const auto &pair : hw_breakpoint_map) {
       const auto &bp = pair.second;
       SetHardwareBreakpoint(bp.m_addr, bp.m_size);
@@ -262,7 +245,7 @@ Error NativeThreadLinux::Resume(uint32_t signo) {
                                            reinterpret_cast<void *>(data));
 }
 
-Error NativeThreadLinux::SingleStep(uint32_t signo) {
+Status NativeThreadLinux::SingleStep(uint32_t signo) {
   const StateType new_state = StateType::eStateStepping;
   MaybeLogStateChange(new_state);
   m_state = new_state;
@@ -280,8 +263,8 @@ Error NativeThreadLinux::SingleStep(uint32_t signo) {
     data = signo;
 
   // If hardware single-stepping is not supported, we just do a continue. The
-  // breakpoint on the
-  // next instruction has been setup in NativeProcessLinux::Resume.
+  // breakpoint on the next instruction has been setup in
+  // NativeProcessLinux::Resume.
   return NativeProcessLinux::PtraceWrapper(
       GetProcess().SupportHardwareSingleStepping() ? PTRACE_SINGLESTEP
                                                    : PTRACE_CONT,
@@ -291,9 +274,8 @@ Error NativeThreadLinux::SingleStep(uint32_t signo) {
 void NativeThreadLinux::SetStoppedBySignal(uint32_t signo,
                                            const siginfo_t *info) {
   Log *log(GetLogIfAllCategoriesSet(LIBLLDB_LOG_THREAD));
-  if (log)
-    log->Printf("NativeThreadLinux::%s called with signal 0x%02" PRIx32,
-                __FUNCTION__, signo);
+  LLDB_LOGF(log, "NativeThreadLinux::%s called with signal 0x%02" PRIx32,
+            __FUNCTION__, signo);
 
   SetStopped();
 
@@ -337,6 +319,9 @@ void NativeThreadLinux::SetStopped() {
   if (m_state == StateType::eStateStepping)
     m_step_workaround.reset();
 
+  // On every stop, clear any cached register data structures
+  GetRegisterContext().InvalidateAllRegisters();
+
   const StateType new_state = StateType::eStateStopped;
   MaybeLogStateChange(new_state);
   m_state = new_state;
@@ -345,8 +330,7 @@ void NativeThreadLinux::SetStopped() {
 
 void NativeThreadLinux::SetStoppedByExec() {
   Log *log(GetLogIfAllCategoriesSet(LIBLLDB_LOG_THREAD));
-  if (log)
-    log->Printf("NativeThreadLinux::%s()", __FUNCTION__);
+  LLDB_LOGF(log, "NativeThreadLinux::%s()", __FUNCTION__);
 
   SetStopped();
 
@@ -368,7 +352,7 @@ void NativeThreadLinux::SetStoppedByWatchpoint(uint32_t wp_index) {
   lldbassert(wp_index != LLDB_INVALID_INDEX32 && "wp_index cannot be invalid");
 
   std::ostringstream ostr;
-  ostr << GetRegisterContext()->GetWatchpointAddress(wp_index) << " ";
+  ostr << m_reg_context_up->GetWatchpointAddress(wp_index) << " ";
   ostr << wp_index;
 
   /*
@@ -382,7 +366,7 @@ void NativeThreadLinux::SetStoppedByWatchpoint(uint32_t wp_index) {
    * stop-info
    * packet.
   */
-  ostr << " " << GetRegisterContext()->GetWatchpointHitAddress(wp_index);
+  ostr << " " << m_reg_context_up->GetWatchpointHitAddress(wp_index);
 
   m_stop_description = ostr.str();
 
@@ -422,7 +406,7 @@ void NativeThreadLinux::SetExited() {
   m_stop_info.reason = StopReason::eStopReasonThreadExiting;
 }
 
-Error NativeThreadLinux::RequestStop() {
+Status NativeThreadLinux::RequestStop() {
   Log *log(GetLogIfAllCategoriesSet(LIBLLDB_LOG_THREAD));
 
   NativeProcessLinux &process = GetProcess();
@@ -430,19 +414,19 @@ Error NativeThreadLinux::RequestStop() {
   lldb::pid_t pid = process.GetID();
   lldb::tid_t tid = GetID();
 
-  if (log)
-    log->Printf("NativeThreadLinux::%s requesting thread stop(pid: %" PRIu64
-                ", tid: %" PRIu64 ")",
-                __FUNCTION__, pid, tid);
+  LLDB_LOGF(log,
+            "NativeThreadLinux::%s requesting thread stop(pid: %" PRIu64
+            ", tid: %" PRIu64 ")",
+            __FUNCTION__, pid, tid);
 
-  Error err;
+  Status err;
   errno = 0;
   if (::tgkill(pid, tid, SIGSTOP) != 0) {
     err.SetErrorToErrno();
-    if (log)
-      log->Printf("NativeThreadLinux::%s tgkill(%" PRIu64 ", %" PRIu64
-                  ", SIGSTOP) failed: %s",
-                  __FUNCTION__, pid, tid, err.AsCString());
+    LLDB_LOGF(log,
+              "NativeThreadLinux::%s tgkill(%" PRIu64 ", %" PRIu64
+              ", SIGSTOP) failed: %s",
+              __FUNCTION__, pid, tid, err.AsCString());
   }
 
   return err;
@@ -459,20 +443,10 @@ void NativeThreadLinux::MaybeLogStateChange(lldb::StateType new_state) {
   if (new_state == old_state)
     return;
 
-  NativeProcessProtocolSP m_process_sp = m_process_wp.lock();
-  lldb::pid_t pid =
-      m_process_sp ? m_process_sp->GetID() : LLDB_INVALID_PROCESS_ID;
-
-  // Log it.
-  log->Printf("NativeThreadLinux: thread (pid=%" PRIu64 ", tid=%" PRIu64
-              ") changing from state %s to %s",
-              pid, GetID(), StateAsCString(old_state),
-              StateAsCString(new_state));
+  LLDB_LOG(log, "pid={0}, tid={1}: changing from state {2} to {3}",
+           m_process.GetID(), GetID(), old_state, new_state);
 }
 
 NativeProcessLinux &NativeThreadLinux::GetProcess() {
-  auto process_sp = std::static_pointer_cast<NativeProcessLinux>(
-      NativeThreadProtocol::GetProcess());
-  assert(process_sp);
-  return *process_sp;
+  return static_cast<NativeProcessLinux &>(m_process);
 }

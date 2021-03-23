@@ -1,9 +1,8 @@
-//===-- source/Host/common/PipeBase.cpp -------------------------*- C++ -*-===//
+//===-- source/Host/common/PipeBase.cpp -----------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -13,12 +12,13 @@ using namespace lldb_private;
 
 PipeBase::~PipeBase() = default;
 
-Error PipeBase::OpenAsWriter(llvm::StringRef name, bool child_process_inherit) {
+Status PipeBase::OpenAsWriter(llvm::StringRef name,
+                              bool child_process_inherit) {
   return OpenAsWriterWithTimeout(name, child_process_inherit,
                                  std::chrono::microseconds::zero());
 }
 
-Error PipeBase::Read(void *buf, size_t size, size_t &bytes_read) {
+Status PipeBase::Read(void *buf, size_t size, size_t &bytes_read) {
   return ReadWithTimeout(buf, size, std::chrono::microseconds::zero(),
                          bytes_read);
 }

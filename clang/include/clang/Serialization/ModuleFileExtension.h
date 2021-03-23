@@ -1,9 +1,8 @@
 //===-- ModuleFileExtension.h - Module File Extensions ----------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -11,6 +10,7 @@
 #define LLVM_CLANG_SERIALIZATION_MODULEFILEEXTENSION_H
 
 #include "llvm/ADT/IntrusiveRefCntPtr.h"
+#include "llvm/Support/ExtensibleRTTI.h"
 #include <memory>
 #include <string>
 
@@ -26,7 +26,7 @@ namespace clang {
 class ASTReader;
 class ASTWriter;
 class Sema;
-  
+
 namespace serialization {
   class ModuleFile;
 } // end namespace serialization
@@ -60,8 +60,14 @@ class ModuleFileExtensionWriter;
 /// compiled module files (.pcm) and precompiled headers (.pch) via a
 /// custom writer that can then be accessed via a custom reader when
 /// the module file or precompiled header is loaded.
-class ModuleFileExtension {
+///
+/// Subclasses must use LLVM RTTI for open class hierarchies.
+class ModuleFileExtension
+    : public llvm::RTTIExtends<ModuleFileExtension, llvm::RTTIRoot> {
 public:
+  /// Discriminator for LLVM RTTI.
+  static char ID;
+
   virtual ~ModuleFileExtension();
 
   /// Retrieves the metadata for this module file extension.
@@ -128,7 +134,7 @@ public:
 /// Abstract base class that reads a module file extension block from
 /// a module file.
 ///
-/// Subclasses 
+/// Subclasses
 class ModuleFileExtensionReader {
   ModuleFileExtension *Extension;
 

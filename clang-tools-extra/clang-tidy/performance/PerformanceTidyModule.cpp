@@ -1,9 +1,8 @@
-//===--- PeformanceTidyModule.cpp - clang-tidy ----------------------------===//
+//===-- PerformanceTidyModule.cpp - clang-tidy ----------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -12,9 +11,16 @@
 #include "../ClangTidyModuleRegistry.h"
 #include "FasterStringFindCheck.h"
 #include "ForRangeCopyCheck.h"
-#include "ImplicitCastInLoopCheck.h"
+#include "ImplicitConversionInLoopCheck.h"
+#include "InefficientAlgorithmCheck.h"
 #include "InefficientStringConcatenationCheck.h"
 #include "InefficientVectorOperationCheck.h"
+#include "MoveConstArgCheck.h"
+#include "MoveConstructorInitCheck.h"
+#include "NoAutomaticMoveCheck.h"
+#include "NoIntToPtrCheck.h"
+#include "NoexceptMoveConstructorCheck.h"
+#include "TriviallyDestructibleCheck.h"
 #include "TypePromotionInMathFnCheck.h"
 #include "UnnecessaryCopyInitialization.h"
 #include "UnnecessaryValueParamCheck.h"
@@ -30,12 +36,25 @@ public:
         "performance-faster-string-find");
     CheckFactories.registerCheck<ForRangeCopyCheck>(
         "performance-for-range-copy");
-    CheckFactories.registerCheck<ImplicitCastInLoopCheck>(
-        "performance-implicit-cast-in-loop");
+    CheckFactories.registerCheck<ImplicitConversionInLoopCheck>(
+        "performance-implicit-conversion-in-loop");
+    CheckFactories.registerCheck<InefficientAlgorithmCheck>(
+        "performance-inefficient-algorithm");
     CheckFactories.registerCheck<InefficientStringConcatenationCheck>(
         "performance-inefficient-string-concatenation");
     CheckFactories.registerCheck<InefficientVectorOperationCheck>(
         "performance-inefficient-vector-operation");
+    CheckFactories.registerCheck<MoveConstArgCheck>(
+        "performance-move-const-arg");
+    CheckFactories.registerCheck<MoveConstructorInitCheck>(
+        "performance-move-constructor-init");
+    CheckFactories.registerCheck<NoAutomaticMoveCheck>(
+        "performance-no-automatic-move");
+    CheckFactories.registerCheck<NoIntToPtrCheck>("performance-no-int-to-ptr");
+    CheckFactories.registerCheck<NoexceptMoveConstructorCheck>(
+        "performance-noexcept-move-constructor");
+    CheckFactories.registerCheck<TriviallyDestructibleCheck>(
+        "performance-trivially-destructible");
     CheckFactories.registerCheck<TypePromotionInMathFnCheck>(
         "performance-type-promotion-in-math-fn");
     CheckFactories.registerCheck<UnnecessaryCopyInitialization>(

@@ -1,13 +1,16 @@
-; RUN: opt < %s -inline -S -inlinecold-threshold=75 | FileCheck %s
+; RUN: opt < %s -inline -S -inlinecold-threshold=25 -enable-new-pm=0 | FileCheck %s
+; RUN: opt < %s -passes='require<profile-summary>,cgscc(inline)' -S -inlinecold-threshold=25 | FileCheck %s
 ; Test that functions with attribute Cold are not inlined while the 
 ; same function without attribute Cold will be inlined.
 
-; RUN: opt < %s -inline -S -inline-threshold=600 | FileCheck %s -check-prefix=OVERRIDE
+; RUN: opt < %s -inline -S -inline-threshold=600 -enable-new-pm=0 | FileCheck %s -check-prefix=OVERRIDE
+; RUN: opt < %s -passes='require<profile-summary>,cgscc(inline)' -S -inline-threshold=600 -enable-new-pm=0 | FileCheck %s -check-prefix=OVERRIDE
 ; The command line argument for inline-threshold should override
 ; the default cold threshold, so a cold function with size bigger
 ; than the default cold threshold (225) will be inlined.
 
-; RUN: opt < %s -inline -S | FileCheck %s -check-prefix=DEFAULT
+; RUN: opt < %s -inline -S -enable-new-pm=0 | FileCheck %s -check-prefix=DEFAULT
+; RUN: opt < %s -passes='require<profile-summary>,cgscc(inline)' -S | FileCheck %s -check-prefix=DEFAULT
 ; The same cold function will not be inlined with the default behavior.
 
 @a = global i32 4
@@ -64,23 +67,7 @@ entry:
   %x3 = add i32 %x2, %a3
   %a4 = load volatile i32, i32* @a
   %x4 = add i32 %x3, %a4
-  %a5 = load volatile i32, i32* @a
-  %x5 = add i32 %x4, %a5
-  %a6 = load volatile i32, i32* @a
-  %x6 = add i32 %x5, %a6
-  %a7 = load volatile i32, i32* @a
-  %x7 = add i32 %x6, %a6
-  %a8 = load volatile i32, i32* @a
-  %x8 = add i32 %x7, %a8
-  %a9 = load volatile i32, i32* @a
-  %x9 = add i32 %x8, %a9
-  %a10 = load volatile i32, i32* @a
-  %x10 = add i32 %x9, %a10
-  %a11 = load volatile i32, i32* @a
-  %x11 = add i32 %x10, %a11
-  %a12 = load volatile i32, i32* @a
-  %x12 = add i32 %x11, %a12
-  %add = add i32 %x12, %a
+  %add = add i32 %x4, %a
   ret i32 %add
 }
 

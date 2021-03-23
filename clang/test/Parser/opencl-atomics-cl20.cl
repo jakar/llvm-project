@@ -42,21 +42,21 @@ void atomic_types_test() {
 // expected-error@-16 {{use of undeclared identifier 'atomic_size_t'}}
 // expected-error@-16 {{use of undeclared identifier 'atomic_ptrdiff_t'}}
 #elif !EXT
-// expected-error@-26 {{use of type 'atomic_long' (aka '_Atomic(long)') requires cl_khr_int64_base_atomics extension to be enabled}}
-// expected-error@-27 {{use of type 'atomic_long' (aka '_Atomic(long)') requires cl_khr_int64_extended_atomics extension to be enabled}}
-// expected-error@-27 {{use of type 'atomic_ulong' (aka '_Atomic(unsigned long)') requires cl_khr_int64_base_atomics extension to be enabled}}
-// expected-error@-28 {{use of type 'atomic_ulong' (aka '_Atomic(unsigned long)') requires cl_khr_int64_extended_atomics extension to be enabled}}
-// expected-error@-27 {{use of type 'atomic_double' (aka '_Atomic(double)') requires cl_khr_int64_base_atomics extension to be enabled}}
-// expected-error@-28 {{use of type 'atomic_double' (aka '_Atomic(double)') requires cl_khr_int64_extended_atomics extension to be enabled}}
+// expected-error@-26 {{use of type 'atomic_long' (aka '_Atomic(long)') requires cl_khr_int64_base_atomics support}}
+// expected-error@-27 {{use of type 'atomic_long' (aka '_Atomic(long)') requires cl_khr_int64_extended_atomics support}}
+// expected-error@-27 {{use of type 'atomic_ulong' (aka '_Atomic(unsigned long)') requires cl_khr_int64_base_atomics support}}
+// expected-error@-28 {{use of type 'atomic_ulong' (aka '_Atomic(unsigned long)') requires cl_khr_int64_extended_atomics support}}
+// expected-error@-27 {{use of type 'atomic_double' (aka '_Atomic(double)') requires cl_khr_int64_base_atomics support}}
+// expected-error@-28 {{use of type 'atomic_double' (aka '_Atomic(double)') requires cl_khr_int64_extended_atomics support}}
 #if __LP64__
-// expected-error-re@-28 {{use of type 'atomic_intptr_t' (aka '_Atomic({{.+}})') requires cl_khr_int64_base_atomics extension to be enabled}}
-// expected-error-re@-29 {{use of type 'atomic_intptr_t' (aka '_Atomic({{.+}})') requires cl_khr_int64_extended_atomics extension to be enabled}}
-// expected-error-re@-29 {{use of type 'atomic_uintptr_t' (aka '_Atomic({{.+}})') requires cl_khr_int64_base_atomics extension to be enabled}}
-// expected-error-re@-30 {{use of type 'atomic_uintptr_t' (aka '_Atomic({{.+}})') requires cl_khr_int64_extended_atomics extension to be enabled}}
-// expected-error-re@-30 {{use of type 'atomic_size_t' (aka '_Atomic({{.+}})') requires cl_khr_int64_base_atomics extension to be enabled}}
-// expected-error-re@-31 {{use of type 'atomic_size_t' (aka '_Atomic({{.+}})') requires cl_khr_int64_extended_atomics extension to be enabled}}
-// expected-error-re@-31 {{use of type 'atomic_ptrdiff_t' (aka '_Atomic({{.+}})') requires cl_khr_int64_base_atomics extension to be enabled}}
-// expected-error-re@-32 {{use of type 'atomic_ptrdiff_t' (aka '_Atomic({{.+}})') requires cl_khr_int64_extended_atomics extension to be enabled}}
+// expected-error-re@-28 {{use of type 'atomic_intptr_t' (aka '_Atomic({{.+}})') requires cl_khr_int64_base_atomics support}}
+// expected-error-re@-29 {{use of type 'atomic_intptr_t' (aka '_Atomic({{.+}})') requires cl_khr_int64_extended_atomics support}}
+// expected-error-re@-29 {{use of type 'atomic_uintptr_t' (aka '_Atomic({{.+}})') requires cl_khr_int64_base_atomics support}}
+// expected-error-re@-30 {{use of type 'atomic_uintptr_t' (aka '_Atomic({{.+}})') requires cl_khr_int64_extended_atomics support}}
+// expected-error-re@-30 {{use of type 'atomic_size_t' (aka '_Atomic({{.+}})') requires cl_khr_int64_base_atomics support}}
+// expected-error-re@-31 {{use of type 'atomic_size_t' (aka '_Atomic({{.+}})') requires cl_khr_int64_extended_atomics support}}
+// expected-error-re@-31 {{use of type 'atomic_ptrdiff_t' (aka '_Atomic({{.+}})') requires cl_khr_int64_base_atomics support}}
+// expected-error-re@-32 {{use of type 'atomic_ptrdiff_t' (aka '_Atomic({{.+}})') requires cl_khr_int64_extended_atomics support}}
 #endif
 #endif
 
@@ -66,9 +66,9 @@ void atomic_ops_test() {
   atomic_int i;
   foo(&i);
 // OpenCL v2.0 s6.13.11.8, arithemtic operations are not permitted on atomic types.
-  i++; // expected-error {{invalid argument type 'atomic_int' (aka '_Atomic(int)') to unary expression}}
+  i++; // expected-error {{invalid argument type '__private atomic_int' (aka '__private _Atomic(int)') to unary expression}}
   i = 1; // expected-error {{atomic variable can be assigned to a variable only in global address space}}
-  i += 1; // expected-error {{invalid operands to binary expression ('atomic_int' (aka '_Atomic(int)') and 'int')}}
-  i = i + i; // expected-error {{invalid operands to binary expression ('atomic_int' (aka '_Atomic(int)') and 'atomic_int')}}
+  i += 1; // expected-error {{invalid operands to binary expression ('__private atomic_int' (aka '__private _Atomic(int)') and 'int')}}
+  i = i + i; // expected-error {{invalid operands to binary expression ('__private atomic_int' (aka '__private _Atomic(int)') and '__private atomic_int')}}
 }
 #endif

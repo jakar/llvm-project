@@ -1,19 +1,13 @@
-// RUN: llvm-mc -filetype=obj -triple mipsel-unknown-linux %s -o - | llvm-readobj -t | FileCheck %s
+// RUN: llvm-mc -filetype=obj -triple mipsel-unknown-linux %s -o - | llvm-readobj --symbols - | FileCheck %s
 
 // Check that the appropriate symbols were created.
 
 // CHECK: Symbols [
 // CHECK:   Symbol {
-// CHECK:     Name: $.str
+// CHECK:     Name: .rodata.cst8
 // CHECK:   }
 // CHECK:   Symbol {
-// CHECK:     Name: $.str1
-// CHECK:   }
-// CHECK:   Symbol {
-// CHECK:     Name: $CPI0_0
-// CHECK:   }
-// CHECK:   Symbol {
-// CHECK:     Name: $CPI0_1
+// CHECK:     Name: .rodata.str1.1
 // CHECK:   }
 // CHECK: ]
 
@@ -40,7 +34,7 @@ foo1:                                   # @foo1
 	.set	noreorder
 	.set	nomacro
 	.set	noat
-# BB#0:                                 # %entry
+# %bb.0:                                # %entry
 	lui	$2, %hi(_gp_disp)
 	addiu	$2, $2, %lo(_gp_disp)
 	addu	$1, $2, $25

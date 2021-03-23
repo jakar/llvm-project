@@ -11,8 +11,8 @@ target triple = "armv7a--none-eabi"
 ; CHECK: vadd.f32 [[SREG5:s[0-9]+]], [[SREG4]], [[SREG1]]
 ; CHECK-NEXT: vcvtb.f16.f32 [[SREG6:s[0-9]+]], [[SREG5]]
 ; CHECK-NEXT: vmov [[RREG1:r[0-9]+]], [[SREG6]]
-; CHECK-NEXT: uxth [[RREG2:r[0-9]+]], [[RREG1]]
-; CHECK-NEXT: pkhbt [[RREG3:r[0-9]+]], [[RREG1]], [[RREG1]], lsl #16
+; CHECK-DAG: uxth [[RREG2:r[0-9]+]], [[RREG1]]
+; CHECK-DAG: pkhbt [[RREG3:r[0-9]+]], [[RREG1]], [[RREG1]], lsl #16
 ; CHECK-DAG: strh [[RREG1]], [r0, #4]
 ; CHECK-DAG: vmov [[DREG:d[0-9]+]], [[RREG3]], [[RREG2]]
 ; CHECK-DAG: vst1.32 {[[DREG]][0]}, [r0:32]
@@ -28,9 +28,6 @@ define void @test_vec3(<3 x half>* %arr, i32 %i) #0 {
 }
 
 ; CHECK-LABEL: test_bitcast:
-; CHECK: vcvtb.f16.f32
-; CHECK: vcvtb.f16.f32
-; CHECK: vcvtb.f16.f32
 ; CHECK: pkhbt
 ; CHECK: uxth
 define void @test_bitcast(<3 x half> %inp, <3 x i16>* %arr) #0 {

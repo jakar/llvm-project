@@ -1,9 +1,8 @@
 //===- lib/ReaderWriter/MachO/ObjCPass.cpp -------------------------------===//
 //
-//                             The LLVM Linker
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -11,10 +10,11 @@
 
 #include "ArchHandler.h"
 #include "File.h"
+#include "MachONormalizedFileBinaryUtils.h"
 #include "MachOPasses.h"
+#include "lld/Common/LLVM.h"
 #include "lld/Core/DefinedAtom.h"
 #include "lld/Core/File.h"
-#include "lld/Core/LLVM.h"
 #include "lld/Core/Reference.h"
 #include "lld/Core/Simple.h"
 #include "lld/ReaderWriter/MachOLinkingContext.h"
@@ -29,7 +29,7 @@ namespace mach_o {
 ///
 class ObjCImageInfoAtom : public SimpleDefinedAtom {
 public:
-  ObjCImageInfoAtom(const File &file,
+  ObjCImageInfoAtom(const File &file, bool isBig,
                     MachOLinkingContext::ObjCConstraint objCConstraint,
                     uint32_t swiftVersion)
       : SimpleDefinedAtom(file) {
@@ -54,6 +54,8 @@ public:
     }
 
     Data.info.flags |= (swiftVersion << 8);
+
+    normalized::write32(Data.bytes + 4, Data.info.flags, isBig);
   }
 
   ~ObjCImageInfoAtom() override = default;
@@ -109,7 +111,8 @@ public:
 private:
 
   const DefinedAtom* getImageInfo() {
-    return new (_file.allocator()) ObjCImageInfoAtom(_file,
+    bool IsBig = MachOLinkingContext::isBigEndian(_ctx.arch());
+    return new (_file.allocator()) ObjCImageInfoAtom(_file, IsBig,
                                                      _ctx.objcConstraint(),
                                                      _ctx.swiftVersion());
   }
@@ -121,7 +124,7 @@ private:
 
 
 void addObjCPass(PassManager &pm, const MachOLinkingContext &ctx) {
-  pm.add(llvm::make_unique<ObjCPass>(ctx));
+  pm.add(std::make_unique<ObjCPass>(ctx));
 }
 
 } // end namespace mach_o

@@ -1,9 +1,8 @@
 //===--- extra/module-map-checker/CoverageChecker.cpp -------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -59,6 +58,7 @@
 #include "clang/Basic/SourceManager.h"
 #include "clang/Driver/Options.h"
 #include "clang/Frontend/CompilerInstance.h"
+#include "clang/Frontend/FrontendAction.h"
 #include "clang/Frontend/FrontendActions.h"
 #include "clang/Lex/PPCallbacks.h"
 #include "clang/Lex/Preprocessor.h"
@@ -90,7 +90,8 @@ public:
                           StringRef FileName, bool IsAngled,
                           CharSourceRange FilenameRange, const FileEntry *File,
                           StringRef SearchPath, StringRef RelativePath,
-                          const Module *Imported) override {
+                          const Module *Imported,
+                          SrcMgr::CharacteristicKind FileType) override {
     Checker.collectUmbrellaHeaderHeader(File->getName());
   }
 
@@ -105,7 +106,7 @@ class CoverageCheckerConsumer : public ASTConsumer {
 public:
   CoverageCheckerConsumer(CoverageChecker &Checker, Preprocessor &PP) {
     // PP takes ownership.
-    PP.addPPCallbacks(llvm::make_unique<CoverageCheckerCallbacks>(Checker));
+    PP.addPPCallbacks(std::make_unique<CoverageCheckerCallbacks>(Checker));
   }
 };
 
@@ -116,7 +117,7 @@ public:
 protected:
   std::unique_ptr<ASTConsumer> CreateASTConsumer(CompilerInstance &CI,
     StringRef InFile) override {
-    return llvm::make_unique<CoverageCheckerConsumer>(Checker,
+    return std::make_unique<CoverageCheckerConsumer>(Checker,
       CI.getPreprocessor());
   }
 
@@ -129,8 +130,8 @@ public:
   CoverageCheckerFrontendActionFactory(CoverageChecker &Checker)
     : Checker(Checker) {}
 
-  CoverageCheckerAction *create() override {
-    return new CoverageCheckerAction(Checker);
+  std::unique_ptr<FrontendAction> create() override {
+    return std::make_unique<CoverageCheckerAction>(Checker);
   }
 
 private:
@@ -154,7 +155,7 @@ std::unique_ptr<CoverageChecker> CoverageChecker::createCoverageChecker(
     StringRef ModuleMapPath, std::vector<std::string> &IncludePaths,
     ArrayRef<std::string> CommandLine, clang::ModuleMap *ModuleMap) {
 
-  return llvm::make_unique<CoverageChecker>(ModuleMapPath, IncludePaths,
+  return std::make_unique<CoverageChecker>(ModuleMapPath, IncludePaths,
                                             CommandLine, ModuleMap);
 }
 
@@ -242,14 +243,15 @@ bool CoverageChecker::collectUmbrellaHeaders(StringRef UmbrellaDirName) {
     Directory = ".";
   // Walk the directory.
   std::error_code EC;
-  sys::fs::file_status Status;
   for (sys::fs::directory_iterator I(Directory.str(), EC), E; I != E;
     I.increment(EC)) {
     if (EC)
       return false;
     std::string File(I->path());
-    I->status(Status);
-    sys::fs::file_type Type = Status.type();
+    llvm::ErrorOr<sys::fs::basic_file_status> Status = I->status();
+    if (!Status)
+      return false;
+    sys::fs::file_type Type = Status->type();
     // If the file is a directory, ignore the name and recurse.
     if (Type == sys::fs::file_type::directory_file) {
       if (!collectUmbrellaHeaders(File))
@@ -265,7 +267,7 @@ bool CoverageChecker::collectUmbrellaHeaders(StringRef UmbrellaDirName) {
   return true;
 }
 
-// Collect headers rferenced from an umbrella file.
+// Collect headers referenced from an umbrella file.
 bool
 CoverageChecker::collectUmbrellaHeaderHeaders(StringRef UmbrellaHeaderName) {
 
@@ -280,7 +282,7 @@ CoverageChecker::collectUmbrellaHeaderHeaders(StringRef UmbrellaHeaderName) {
   Compilations.reset(new FixedCompilationDatabase(Twine(PathBuf), CommandLine));
 
   std::vector<std::string> HeaderPath;
-  HeaderPath.push_back(UmbrellaHeaderName);
+  HeaderPath.push_back(std::string(UmbrellaHeaderName));
 
   // Create the tool and run the compilation.
   ClangTool Tool(*Compilations, HeaderPath);
@@ -336,7 +338,7 @@ bool CoverageChecker::collectFileSystemHeaders() {
   }
 
   // Sort it, because different file systems might order the file differently.
-  std::sort(FileSystemHeaders.begin(), FileSystemHeaders.end());
+  llvm::sort(FileSystemHeaders);
 
   return true;
 }
@@ -363,7 +365,6 @@ bool CoverageChecker::collectFileSystemHeaders(StringRef IncludePath) {
 
   // Recursively walk the directory tree.
   std::error_code EC;
-  sys::fs::file_status Status;
   int Count = 0;
   for (sys::fs::recursive_directory_iterator I(Directory.str(), EC), E; I != E;
     I.increment(EC)) {
@@ -371,8 +372,10 @@ bool CoverageChecker::collectFileSystemHeaders(StringRef IncludePath) {
       return false;
     //std::string file(I->path());
     StringRef file(I->path());
-    I->status(Status);
-    sys::fs::file_type type = Status.type();
+    llvm::ErrorOr<sys::fs::basic_file_status> Status = I->status();
+    if (!Status)
+      return false;
+    sys::fs::file_type type = Status->type();
     // If the file is a directory, ignore the name (but still recurses).
     if (type == sys::fs::file_type::directory_file)
       continue;

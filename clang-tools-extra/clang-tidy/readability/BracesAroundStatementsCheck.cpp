@@ -1,9 +1,8 @@
 //===--- BracesAroundStatementsCheck.cpp - clang-tidy ---------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -43,7 +42,7 @@ SourceLocation forwardSkipWhitespaceAndComments(SourceLocation Loc,
       Loc = Loc.getLocWithOffset(1);
 
     tok::TokenKind TokKind = getTokenKind(Loc, SM, Context);
-    if (TokKind == tok::NUM_TOKENS || TokKind != tok::comment)
+    if (TokKind != tok::comment)
       return Loc;
 
     // Fast-forward current token.
@@ -54,14 +53,15 @@ SourceLocation forwardSkipWhitespaceAndComments(SourceLocation Loc,
 SourceLocation findEndLocation(SourceLocation LastTokenLoc,
                                const SourceManager &SM,
                                const ASTContext *Context) {
-  SourceLocation Loc = LastTokenLoc;
+  SourceLocation Loc =
+      Lexer::GetBeginningOfToken(LastTokenLoc, SM, Context->getLangOpts());
   // Loc points to the beginning of the last (non-comment non-ws) token
   // before end or ';'.
   assert(Loc.isValid());
   bool SkipEndWhitespaceAndComments = true;
   tok::TokenKind TokKind = getTokenKind(Loc, SM, Context);
   if (TokKind == tok::NUM_TOKENS || TokKind == tok::semi ||
-      TokKind == tok::r_brace || isStringLiteral(TokKind)) {
+      TokKind == tok::r_brace) {
     // If we are at ";" or "}", we found the last token. We could use as well
     // `if (isa<NullStmt>(S))`, but it wouldn't work for nested statements.
     SkipEndWhitespaceAndComments = false;
@@ -123,7 +123,10 @@ void BracesAroundStatementsCheck::storeOptions(
 }
 
 void BracesAroundStatementsCheck::registerMatchers(MatchFinder *Finder) {
-  Finder->addMatcher(ifStmt().bind("if"), this);
+  Finder->addMatcher(
+      ifStmt(unless(allOf(isConstexpr(), isInTemplateInstantiation())))
+          .bind("if"),
+      this);
   Finder->addMatcher(whileStmt().bind("while"), this);
   Finder->addMatcher(doStmt().bind("do"), this);
   Finder->addMatcher(forStmt().bind("for"), this);
@@ -136,18 +139,19 @@ void BracesAroundStatementsCheck::check(
   const ASTContext *Context = Result.Context;
 
   // Get location of closing parenthesis or 'do' to insert opening brace.
-  if (auto S = Result.Nodes.getNodeAs<ForStmt>("for")) {
+  if (const auto *S = Result.Nodes.getNodeAs<ForStmt>("for")) {
     checkStmt(Result, S->getBody(), S->getRParenLoc());
-  } else if (auto S = Result.Nodes.getNodeAs<CXXForRangeStmt>("for-range")) {
+  } else if (const auto *S =
+                 Result.Nodes.getNodeAs<CXXForRangeStmt>("for-range")) {
     checkStmt(Result, S->getBody(), S->getRParenLoc());
-  } else if (auto S = Result.Nodes.getNodeAs<DoStmt>("do")) {
+  } else if (const auto *S = Result.Nodes.getNodeAs<DoStmt>("do")) {
     checkStmt(Result, S->getBody(), S->getDoLoc(), S->getWhileLoc());
-  } else if (auto S = Result.Nodes.getNodeAs<WhileStmt>("while")) {
+  } else if (const auto *S = Result.Nodes.getNodeAs<WhileStmt>("while")) {
     SourceLocation StartLoc = findRParenLoc(S, SM, Context);
     if (StartLoc.isInvalid())
       return;
     checkStmt(Result, S->getBody(), StartLoc);
-  } else if (auto S = Result.Nodes.getNodeAs<IfStmt>("if")) {
+  } else if (const auto *S = Result.Nodes.getNodeAs<IfStmt>("if")) {
     SourceLocation StartLoc = findRParenLoc(S, SM, Context);
     if (StartLoc.isInvalid())
       return;
@@ -166,19 +170,19 @@ void BracesAroundStatementsCheck::check(
   }
 }
 
-/// Find location of right parenthesis closing condition
+/// Find location of right parenthesis closing condition.
 template <typename IfOrWhileStmt>
 SourceLocation
 BracesAroundStatementsCheck::findRParenLoc(const IfOrWhileStmt *S,
                                            const SourceManager &SM,
                                            const ASTContext *Context) {
   // Skip macros.
-  if (S->getLocStart().isMacroID())
+  if (S->getBeginLoc().isMacroID())
     return SourceLocation();
 
-  SourceLocation CondEndLoc = S->getCond()->getLocEnd();
+  SourceLocation CondEndLoc = S->getCond()->getEndLoc();
   if (const DeclStmt *CondVar = S->getConditionVariableDeclStmt())
-    CondEndLoc = CondVar->getLocEnd();
+    CondEndLoc = CondVar->getEndLoc();
 
   if (!CondEndLoc.isValid()) {
     return SourceLocation();
@@ -231,7 +235,7 @@ bool BracesAroundStatementsCheck::checkStmt(
   // level as the start of the statement. We also need file locations for
   // Lexer::getLocForEndOfToken working properly.
   InitialLoc = Lexer::makeFileCharRange(
-                   CharSourceRange::getCharRange(InitialLoc, S->getLocStart()),
+                   CharSourceRange::getCharRange(InitialLoc, S->getBeginLoc()),
                    SM, Context->getLangOpts())
                    .getBegin();
   if (InitialLoc.isInvalid())

@@ -1,9 +1,8 @@
 //===- Core/File.h - A Container of Atoms ---------------------------------===//
 //
-//                             The LLVM Linker
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -17,6 +16,7 @@
 #include "llvm/ADT/Optional.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/Twine.h"
+#include "llvm/Support/Allocator.h"
 #include "llvm/Support/ErrorHandling.h"
 #include <functional>
 #include <memory>
@@ -43,7 +43,7 @@ class File {
 public:
   virtual ~File();
 
-  /// \brief Kinds of files that are supported.
+  /// Kinds of files that are supported.
   enum Kind {
     kindErrorObject,          ///< a error object file (.o)
     kindNormalizedObject,     ///< a normalized file (.o)
@@ -59,7 +59,7 @@ public:
     kindArchiveLibrary        ///< archive (.a)
   };
 
-  /// \brief Returns file kind.  Need for dyn_cast<> on File objects.
+  /// Returns file kind.  Need for dyn_cast<> on File objects.
   Kind kind() const {
     return _kind;
   }
@@ -78,7 +78,7 @@ public:
   /// Returns the path of the archive file name if this file is instantiated
   /// from an archive file. Otherwise returns the empty string.
   StringRef archivePath() const { return _archivePath; }
-  void setArchivePath(StringRef path) { _archivePath = path; }
+  void setArchivePath(StringRef path) { _archivePath = std::string(path); }
 
   /// Returns the path name of this file. It doesn't include archive file name.
   StringRef memberPath() const { return _path; }
@@ -114,10 +114,8 @@ public:
     AtomRange(AtomVector<T> &v) : _v(v) {}
     AtomRange(const AtomVector<T> &v) : _v(const_cast<AtomVector<T> &>(v)) {}
 
-    typedef std::pointer_to_unary_function<const OwningAtomPtr<T>&,
-                                           const T*> ConstDerefFn;
-
-    typedef std::pointer_to_unary_function<OwningAtomPtr<T>&, T*> DerefFn;
+    using ConstDerefFn = const T* (*)(const OwningAtomPtr<T>&);
+    using DerefFn = T* (*)(OwningAtomPtr<T>&);
 
     typedef llvm::mapped_iterator<typename AtomVector<T>::const_iterator,
                                   ConstDerefFn> ConstItTy;
@@ -174,19 +172,19 @@ public:
     AtomVector<T> &_v;
   };
 
-  /// \brief Must be implemented to return the AtomVector object for
+  /// Must be implemented to return the AtomVector object for
   /// all DefinedAtoms in this File.
   virtual const AtomRange<DefinedAtom> defined() const = 0;
 
-  /// \brief Must be implemented to return the AtomVector object for
+  /// Must be implemented to return the AtomVector object for
   /// all UndefinedAtomw in this File.
   virtual const AtomRange<UndefinedAtom> undefined() const = 0;
 
-  /// \brief Must be implemented to return the AtomVector object for
+  /// Must be implemented to return the AtomVector object for
   /// all SharedLibraryAtoms in this File.
   virtual const AtomRange<SharedLibraryAtom> sharedLibrary() const = 0;
 
-  /// \brief Must be implemented to return the AtomVector object for
+  /// Must be implemented to return the AtomVector object for
   /// all AbsoluteAtoms in this File.
   virtual const AtomRange<AbsoluteAtom> absolute() const = 0;
 
@@ -196,7 +194,7 @@ public:
   /// of a different file.  We need to destruct all atoms before any files.
   virtual void clearAtoms() = 0;
 
-  /// \brief If a file is parsed using a different method than doParse(),
+  /// If a file is parsed using a different method than doParse(),
   /// one must use this method to set the last error status, so that
   /// doParse will not be called twice. Only YAML reader uses this
   /// (because YAML reader does not read blobs but structured data).
@@ -214,12 +212,12 @@ public:
   }
 
 protected:
-  /// \brief only subclasses of File can be instantiated
+  /// only subclasses of File can be instantiated
   File(StringRef p, Kind kind)
     : _path(p), _kind(kind), _ordinal(UINT64_MAX),
       _nextAtomOrdinal(0) {}
 
-  /// \brief Subclasses should override this method to parse the
+  /// Subclasses should override this method to parse the
   /// memory buffer passed to this file's constructor.
   virtual std::error_code doParse() { return std::error_code(); }
 

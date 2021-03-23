@@ -1,15 +1,14 @@
-//===-- ConnectionGenericFileWindows.cpp ------------------------*- C++ -*-===//
+//===-- ConnectionGenericFileWindows.cpp ----------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
 #include "lldb/Host/windows/ConnectionGenericFileWindows.h"
-#include "lldb/Utility/Error.h"
 #include "lldb/Utility/Log.h"
+#include "lldb/Utility/Status.h"
 #include "lldb/Utility/Timeout.h"
 
 #include "llvm/ADT/STLExtras.h"
@@ -21,12 +20,10 @@ using namespace lldb_private;
 
 namespace {
 // This is a simple helper class to package up the information needed to return
-// from a Read/Write
-// operation function.  Since there is a lot of code to be run before exit
-// regardless of whether the
-// operation succeeded or failed, combined with many possible return paths, this
-// is the cleanest
-// way to represent it.
+// from a Read/Write operation function.  Since there is a lot of code to be
+// run before exit regardless of whether the operation succeeded or failed,
+// combined with many possible return paths, this is the cleanest way to
+// represent it.
 class ReturnInfo {
 public:
   void Set(size_t bytes, ConnectionStatus status, DWORD error_code) {
@@ -43,10 +40,10 @@ public:
 
   size_t GetBytes() const { return m_bytes; }
   ConnectionStatus GetStatus() const { return m_status; }
-  const Error &GetError() const { return m_error; }
+  const Status &GetError() const { return m_error; }
 
 private:
-  Error m_error;
+  Status m_error;
   size_t m_bytes;
   ConnectionStatus m_status;
 };
@@ -78,11 +75,9 @@ void ConnectionGenericFile::InitializeEventHandles() {
   m_event_handles[kInterruptEvent] = CreateEvent(NULL, FALSE, FALSE, NULL);
 
   // Note, we should use a manual reset event for the hEvent argument of the
-  // OVERLAPPED.  This
-  // is because both WaitForMultipleObjects and GetOverlappedResult (if you set
-  // the bWait
-  // argument to TRUE) will wait for the event to be signalled.  If we use an
-  // auto-reset event,
+  // OVERLAPPED.  This is because both WaitForMultipleObjects and
+  // GetOverlappedResult (if you set the bWait argument to TRUE) will wait for
+  // the event to be signalled.  If we use an auto-reset event,
   // WaitForMultipleObjects will reset the event, return successfully, and then
   // GetOverlappedResult will block since the event is no longer signalled.
   m_event_handles[kBytesAvailableEvent] =
@@ -94,11 +89,10 @@ bool ConnectionGenericFile::IsConnected() const {
 }
 
 lldb::ConnectionStatus ConnectionGenericFile::Connect(llvm::StringRef path,
-                                                      Error *error_ptr) {
+                                                      Status *error_ptr) {
   Log *log(lldb_private::GetLogIfAnyCategoriesSet(LIBLLDB_LOG_CONNECTION));
-  if (log)
-    log->Printf("%p ConnectionGenericFile::Connect (url = '%s')",
-                static_cast<void *>(this), path.str().c_str());
+  LLDB_LOGF(log, "%p ConnectionGenericFile::Connect (url = '%s')",
+            static_cast<void *>(this), path.str().c_str());
 
   if (!path.consume_front("file://")) {
     if (error_ptr)
@@ -133,22 +127,20 @@ lldb::ConnectionStatus ConnectionGenericFile::Connect(llvm::StringRef path,
   }
 
   m_owns_file = true;
-  m_uri.assign(path);
+  m_uri = path.str();
   return eConnectionStatusSuccess;
 }
 
-lldb::ConnectionStatus ConnectionGenericFile::Disconnect(Error *error_ptr) {
+lldb::ConnectionStatus ConnectionGenericFile::Disconnect(Status *error_ptr) {
   Log *log(lldb_private::GetLogIfAnyCategoriesSet(LIBLLDB_LOG_CONNECTION));
-  if (log)
-    log->Printf("%p ConnectionGenericFile::Disconnect ()",
-                static_cast<void *>(this));
+  LLDB_LOGF(log, "%p ConnectionGenericFile::Disconnect ()",
+            static_cast<void *>(this));
 
   if (!IsConnected())
     return eConnectionStatusSuccess;
 
   // Reset the handle so that after we unblock any pending reads, subsequent
-  // calls to Read() will
-  // see a disconnected state.
+  // calls to Read() will see a disconnected state.
   HANDLE old_file = m_file;
   m_file = INVALID_HANDLE_VALUE;
 
@@ -157,8 +149,7 @@ lldb::ConnectionStatus ConnectionGenericFile::Disconnect(Error *error_ptr) {
   ::CancelIoEx(old_file, &m_overlapped);
 
   // Close the file handle if we owned it, but don't close the event handles.
-  // We could always
-  // reconnect with the same Connection instance.
+  // We could always reconnect with the same Connection instance.
   if (m_owns_file)
     ::CloseHandle(old_file);
 
@@ -171,7 +162,7 @@ lldb::ConnectionStatus ConnectionGenericFile::Disconnect(Error *error_ptr) {
 size_t ConnectionGenericFile::Read(void *dst, size_t dst_len,
                                    const Timeout<std::micro> &timeout,
                                    lldb::ConnectionStatus &status,
-                                   Error *error_ptr) {
+                                   Status *error_ptr) {
   ReturnInfo return_info;
   BOOL result = 0;
   DWORD bytes_read = 0;
@@ -190,8 +181,7 @@ size_t ConnectionGenericFile::Read(void *dst, size_t dst_len,
   if (result || ::GetLastError() == ERROR_IO_PENDING) {
     if (!result) {
       // The expected return path.  The operation is pending.  Wait for the
-      // operation to complete
-      // or be interrupted.
+      // operation to complete or be interrupted.
       DWORD milliseconds =
           timeout
               ? std::chrono::duration_cast<std::chrono::milliseconds>(*timeout)
@@ -219,11 +209,9 @@ size_t ConnectionGenericFile::Read(void *dst, size_t dst_len,
     // The data is ready.  Figure out how much was read and return;
     if (!::GetOverlappedResult(m_file, &m_overlapped, &bytes_read, FALSE)) {
       DWORD result_error = ::GetLastError();
-      // ERROR_OPERATION_ABORTED occurs when someone calls Disconnect() during a
-      // blocking read.
-      // This triggers a call to CancelIoEx, which causes the operation to
-      // complete and the
-      // result to be ERROR_OPERATION_ABORTED.
+      // ERROR_OPERATION_ABORTED occurs when someone calls Disconnect() during
+      // a blocking read. This triggers a call to CancelIoEx, which causes the
+      // operation to complete and the result to be ERROR_OPERATION_ABORTED.
       if (result_error == ERROR_HANDLE_EOF ||
           result_error == ERROR_OPERATION_ABORTED ||
           result_error == ERROR_BROKEN_PIPE)
@@ -250,26 +238,25 @@ finish:
   if (error_ptr)
     *error_ptr = return_info.GetError();
 
-  // kBytesAvailableEvent is a manual reset event.  Make sure it gets reset here
-  // so that any
-  // subsequent operations don't immediately see bytes available.
+  // kBytesAvailableEvent is a manual reset event.  Make sure it gets reset
+  // here so that any subsequent operations don't immediately see bytes
+  // available.
   ResetEvent(m_event_handles[kBytesAvailableEvent]);
 
   IncrementFilePointer(return_info.GetBytes());
   Log *log(lldb_private::GetLogIfAnyCategoriesSet(LIBLLDB_LOG_CONNECTION));
-  if (log) {
-    log->Printf("%p ConnectionGenericFile::Read()  handle = %p, dst = %p, "
-                "dst_len = %zu) => %zu, error = %s",
-                this, m_file, dst, dst_len, return_info.GetBytes(),
-                return_info.GetError().AsCString());
-  }
+  LLDB_LOGF(log,
+            "%p ConnectionGenericFile::Read()  handle = %p, dst = %p, "
+            "dst_len = %zu) => %zu, error = %s",
+            static_cast<void *>(this), m_file, dst, dst_len,
+            return_info.GetBytes(), return_info.GetError().AsCString());
 
   return return_info.GetBytes();
 }
 
 size_t ConnectionGenericFile::Write(const void *src, size_t src_len,
                                     lldb::ConnectionStatus &status,
-                                    Error *error_ptr) {
+                                    Status *error_ptr) {
   ReturnInfo return_info;
   DWORD bytes_written = 0;
   BOOL result = 0;
@@ -284,7 +271,8 @@ size_t ConnectionGenericFile::Write(const void *src, size_t src_len,
 
   m_overlapped.hEvent = NULL;
 
-  // Writes are not interruptible like reads are, so just block until it's done.
+  // Writes are not interruptible like reads are, so just block until it's
+  // done.
   result = ::WriteFile(m_file, src, src_len, NULL, &m_overlapped);
   if (!result && ::GetLastError() != ERROR_IO_PENDING) {
     return_info.Set(0, eConnectionStatusError, ::GetLastError());
@@ -306,12 +294,11 @@ finish:
 
   IncrementFilePointer(return_info.GetBytes());
   Log *log(lldb_private::GetLogIfAnyCategoriesSet(LIBLLDB_LOG_CONNECTION));
-  if (log) {
-    log->Printf("%p ConnectionGenericFile::Write()  handle = %p, src = %p, "
-                "src_len = %zu) => %zu, error = %s",
-                this, m_file, src, src_len, return_info.GetBytes(),
-                return_info.GetError().AsCString());
-  }
+  LLDB_LOGF(log,
+            "%p ConnectionGenericFile::Write()  handle = %p, src = %p, "
+            "src_len = %zu) => %zu, error = %s",
+            static_cast<void *>(this), m_file, src, src_len,
+            return_info.GetBytes(), return_info.GetError().AsCString());
   return return_info.GetBytes();
 }
 

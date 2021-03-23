@@ -1,9 +1,8 @@
-//===-- RecordLayout.cpp - Layout information for a struct/union -*- C++ -*-==//
+//===- RecordLayout.cpp - Layout information for a struct/union -----------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -11,9 +10,11 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "clang/AST/ASTContext.h"
 #include "clang/AST/RecordLayout.h"
+#include "clang/AST/ASTContext.h"
+#include "clang/Basic/TargetCXXABI.h"
 #include "clang/Basic/TargetInfo.h"
+#include <cassert>
 
 using namespace clang;
 
@@ -28,41 +29,42 @@ void ASTRecordLayout::Destroy(ASTContext &Ctx) {
 
 ASTRecordLayout::ASTRecordLayout(const ASTContext &Ctx, CharUnits size,
                                  CharUnits alignment,
+                                 CharUnits preferredAlignment,
+                                 CharUnits unadjustedAlignment,
                                  CharUnits requiredAlignment,
                                  CharUnits datasize,
                                  ArrayRef<uint64_t> fieldoffsets)
     : Size(size), DataSize(datasize), Alignment(alignment),
-      RequiredAlignment(requiredAlignment), CXXInfo(nullptr) {
+      PreferredAlignment(preferredAlignment),
+      UnadjustedAlignment(unadjustedAlignment),
+      RequiredAlignment(requiredAlignment) {
   FieldOffsets.append(Ctx, fieldoffsets.begin(), fieldoffsets.end());
 }
 
 // Constructor for C++ records.
-ASTRecordLayout::ASTRecordLayout(const ASTContext &Ctx,
-                                 CharUnits size, CharUnits alignment,
-                                 CharUnits requiredAlignment,
-                                 bool hasOwnVFPtr, bool hasExtendableVFPtr,
-                                 CharUnits vbptroffset,
-                                 CharUnits datasize,
-                                 ArrayRef<uint64_t> fieldoffsets,
-                                 CharUnits nonvirtualsize,
-                                 CharUnits nonvirtualalignment,
-                                 CharUnits SizeOfLargestEmptySubobject,
-                                 const CXXRecordDecl *PrimaryBase,
-                                 bool IsPrimaryBaseVirtual,
-                                 const CXXRecordDecl *BaseSharingVBPtr,
-                                 bool EndsWithZeroSizedObject,
-                                 bool LeadsWithZeroSizedBase,
-                                 const BaseOffsetsMapTy& BaseOffsets,
-                                 const VBaseOffsetsMapTy& VBaseOffsets)
-  : Size(size), DataSize(datasize), Alignment(alignment),
-    RequiredAlignment(requiredAlignment), CXXInfo(new (Ctx) CXXRecordLayoutInfo)
-{
+ASTRecordLayout::ASTRecordLayout(
+    const ASTContext &Ctx, CharUnits size, CharUnits alignment,
+    CharUnits preferredAlignment, CharUnits unadjustedAlignment,
+    CharUnits requiredAlignment, bool hasOwnVFPtr, bool hasExtendableVFPtr,
+    CharUnits vbptroffset, CharUnits datasize, ArrayRef<uint64_t> fieldoffsets,
+    CharUnits nonvirtualsize, CharUnits nonvirtualalignment,
+    CharUnits preferrednvalignment, CharUnits SizeOfLargestEmptySubobject,
+    const CXXRecordDecl *PrimaryBase, bool IsPrimaryBaseVirtual,
+    const CXXRecordDecl *BaseSharingVBPtr, bool EndsWithZeroSizedObject,
+    bool LeadsWithZeroSizedBase, const BaseOffsetsMapTy &BaseOffsets,
+    const VBaseOffsetsMapTy &VBaseOffsets)
+    : Size(size), DataSize(datasize), Alignment(alignment),
+      PreferredAlignment(preferredAlignment),
+      UnadjustedAlignment(unadjustedAlignment),
+      RequiredAlignment(requiredAlignment),
+      CXXInfo(new (Ctx) CXXRecordLayoutInfo) {
   FieldOffsets.append(Ctx, fieldoffsets.begin(), fieldoffsets.end());
 
   CXXInfo->PrimaryBase.setPointer(PrimaryBase);
   CXXInfo->PrimaryBase.setInt(IsPrimaryBaseVirtual);
   CXXInfo->NonVirtualSize = nonvirtualsize;
   CXXInfo->NonVirtualAlignment = nonvirtualalignment;
+  CXXInfo->PreferredNVAlignment = preferrednvalignment;
   CXXInfo->SizeOfLargestEmptySubobject = SizeOfLargestEmptySubobject;
   CXXInfo->BaseOffsets = BaseOffsets;
   CXXInfo->VBaseOffsets = VBaseOffsets;
@@ -72,7 +74,6 @@ ASTRecordLayout::ASTRecordLayout(const ASTContext &Ctx,
   CXXInfo->BaseSharingVBPtr = BaseSharingVBPtr;
   CXXInfo->EndsWithZeroSizedObject = EndsWithZeroSizedObject;
   CXXInfo->LeadsWithZeroSizedBase = LeadsWithZeroSizedBase;
-
 
 #ifndef NDEBUG
     if (const CXXRecordDecl *PrimaryBase = getPrimaryBase()) {
@@ -86,5 +87,5 @@ ASTRecordLayout::ASTRecordLayout(const ASTContext &Ctx,
                "Primary base must be at offset 0!");
       }
     }
-#endif        
+#endif
 }

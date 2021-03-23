@@ -9,6 +9,10 @@
 // RUN: not %clang -std=gnu++1y %s -fsyntax-only 2>&1 | FileCheck -check-prefix=GNUXX1Y %s
 // RUN: not %clang -std=c++1z %s -fsyntax-only 2>&1 | FileCheck -check-prefix=CXX1Z %s
 // RUN: not %clang -std=gnu++1z %s -fsyntax-only 2>&1 | FileCheck -check-prefix=GNUXX1Z %s
+// RUN: not %clang -std=c++2a %s -fsyntax-only 2>&1 | FileCheck -check-prefix=CXX2A %s
+// RUN: not %clang -std=gnu++2a %s -fsyntax-only 2>&1 | FileCheck -check-prefix=GNUXX2A %s
+// RUN: not %clang -std=c++2b %s -fsyntax-only 2>&1 | FileCheck -check-prefix=CXX2B %s
+// RUN: not %clang -std=gnu++2b %s -fsyntax-only 2>&1 | FileCheck -check-prefix=GNUXX2B %s
 
 void f(int n) {
   typeof(n)();
@@ -38,3 +42,15 @@ void f(int n) {
 
 // GNUXX1Z-NOT: undeclared identifier 'typeof'
 // GNUXX1Z-NOT: undeclared identifier 'decltype'
+
+// CXX2A: undeclared identifier 'typeof'
+// CXX2A-NOT: undeclared identifier 'decltype'
+
+// GNUXX2A-NOT: undeclared identifier 'typeof'
+// GNUXX2A-NOT: undeclared identifier 'decltype'
+
+// CXX2B: undeclared identifier 'typeof'
+// CXX2B-NOT: undeclared identifier 'decltype'
+
+// GNUXX2B-NOT: undeclared identifier 'typeof'
+// GNUXX2B-NOT: undeclared identifier 'decltype'

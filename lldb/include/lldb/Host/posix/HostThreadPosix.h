@@ -1,33 +1,33 @@
 //===-- HostThreadPosix.h -------------------------------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef lldb_Host_posix_HostThreadPosix_h_
-#define lldb_Host_posix_HostThreadPosix_h_
+#ifndef LLDB_HOST_POSIX_HOSTTHREADPOSIX_H
+#define LLDB_HOST_POSIX_HOSTTHREADPOSIX_H
 
 #include "lldb/Host/HostNativeThreadBase.h"
 
 namespace lldb_private {
 
 class HostThreadPosix : public HostNativeThreadBase {
-  DISALLOW_COPY_AND_ASSIGN(HostThreadPosix);
+  HostThreadPosix(const HostThreadPosix &) = delete;
+  const HostThreadPosix &operator=(const HostThreadPosix &) = delete;
 
 public:
   HostThreadPosix();
   HostThreadPosix(lldb::thread_t thread);
   ~HostThreadPosix() override;
 
-  Error Join(lldb::thread_result_t *result) override;
-  Error Cancel() override;
+  Status Join(lldb::thread_result_t *result) override;
+  Status Cancel() override;
 
-  Error Detach();
+  Status Detach();
 };
 
 } // namespace lldb_private
 
-#endif // lldb_Host_posix_HostThreadPosix_h_
+#endif // LLDB_HOST_POSIX_HOSTTHREADPOSIX_H

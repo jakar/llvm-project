@@ -1,9 +1,8 @@
 //===- lib/ReaderWriter/MachO/MachONormalizedFileBinaryReader.cpp ---------===//
 //
-//                             The LLVM Linker
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -21,24 +20,25 @@
 ///                  | normalized |
 ///                  +------------+
 
-#include "MachONormalizedFile.h"
 #include "ArchHandler.h"
+#include "MachONormalizedFile.h"
 #include "MachONormalizedFileBinaryUtils.h"
+#include "lld/Common/LLVM.h"
 #include "lld/Core/Error.h"
-#include "lld/Core/LLVM.h"
 #include "lld/Core/SharedLibraryFile.h"
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/StringSwitch.h"
-#include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/Twine.h"
+#include "llvm/BinaryFormat/MachO.h"
+#include "llvm/BinaryFormat/Magic.h"
 #include "llvm/Object/MachO.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/Errc.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/FileOutputBuffer.h"
 #include "llvm/Support/Host.h"
-#include "llvm/Support/MachO.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/raw_ostream.h"
 #include <functional>
@@ -46,6 +46,7 @@
 
 using namespace llvm::MachO;
 using llvm::object::ExportEntry;
+using llvm::file_magic;
 using llvm::object::MachOObjectFile;
 
 namespace lld {
@@ -506,10 +507,11 @@ readBinary(std::unique_ptr<MemoryBuffer> &mb,
   if (dyldInfo) {
     // If any exports, extract and add to normalized exportInfo vector.
     if (dyldInfo->export_size) {
-      const uint8_t *trieStart = reinterpret_cast<const uint8_t*>(start +
-                                                          dyldInfo->export_off);
-      ArrayRef<uint8_t> trie(trieStart, dyldInfo->export_size);
-      for (const ExportEntry &trieExport : MachOObjectFile::exports(trie)) {
+      const uint8_t *trieStart = reinterpret_cast<const uint8_t *>(
+          start + read32(&dyldInfo->export_off, isBig));
+      ArrayRef<uint8_t> trie(trieStart, read32(&dyldInfo->export_size, isBig));
+      Error Err = Error::success();
+      for (const ExportEntry &trieExport : MachOObjectFile::exports(Err, trie)) {
         Export normExport;
         normExport.name = trieExport.name().copy(f->ownedAllocations);
         normExport.offset = trieExport.address();
@@ -520,6 +522,8 @@ readBinary(std::unique_ptr<MemoryBuffer> &mb,
           normExport.otherName = trieExport.otherName().copy(f->ownedAllocations);
         f->exportInfo.push_back(normExport);
       }
+      if (Err)
+        return std::move(Err);
     }
   }
 
@@ -531,15 +535,14 @@ public:
   MachOObjectReader(MachOLinkingContext &ctx) : _ctx(ctx) {}
 
   bool canParse(file_magic magic, MemoryBufferRef mb) const override {
-    return (magic == llvm::sys::fs::file_magic::macho_object &&
-            mb.getBufferSize() > 32);
+    return (magic == file_magic::macho_object && mb.getBufferSize() > 32);
   }
 
   ErrorOr<std::unique_ptr<File>>
   loadFile(std::unique_ptr<MemoryBuffer> mb,
            const Registry &registry) const override {
     std::unique_ptr<File> ret =
-      llvm::make_unique<MachOFile>(std::move(mb), &_ctx);
+      std::make_unique<MachOFile>(std::move(mb), &_ctx);
     return std::move(ret);
   }
 
@@ -553,8 +556,8 @@ public:
 
   bool canParse(file_magic magic, MemoryBufferRef mb) const override {
     switch (magic) {
-    case llvm::sys::fs::file_magic::macho_dynamically_linked_shared_lib:
-    case llvm::sys::fs::file_magic::macho_dynamically_linked_shared_lib_stub:
+    case file_magic::macho_dynamically_linked_shared_lib:
+    case file_magic::macho_dynamically_linked_shared_lib_stub:
       return mb.getBufferSize() > 32;
     default:
       return false;
@@ -565,7 +568,27 @@ public:
   loadFile(std::unique_ptr<MemoryBuffer> mb,
            const Registry &registry) const override {
     std::unique_ptr<File> ret =
-        llvm::make_unique<MachODylibFile>(std::move(mb), &_ctx);
+        std::make_unique<MachODylibFile>(std::move(mb), &_ctx);
+    return std::move(ret);
+  }
+
+private:
+  MachOLinkingContext &_ctx;
+};
+
+class MachOTAPIReader : public Reader {
+public:
+  MachOTAPIReader(MachOLinkingContext &ctx) : _ctx(ctx) {}
+
+  bool canParse(file_magic magic, MemoryBufferRef mb) const override {
+    return magic == file_magic::tapi_file;
+  }
+
+  ErrorOr<std::unique_ptr<File>>
+  loadFile(std::unique_ptr<MemoryBuffer> mb,
+           const Registry &registry) const override {
+    std::unique_ptr<File> ret =
+        std::make_unique<TAPIFile>(std::move(mb), &_ctx);
     return std::move(ret);
   }
 
@@ -580,6 +603,7 @@ void Registry::addSupportMachOObjects(MachOLinkingContext &ctx) {
   MachOLinkingContext::Arch arch = ctx.arch();
   add(std::unique_ptr<Reader>(new mach_o::normalized::MachOObjectReader(ctx)));
   add(std::unique_ptr<Reader>(new mach_o::normalized::MachODylibReader(ctx)));
+  add(std::unique_ptr<Reader>(new mach_o::normalized::MachOTAPIReader(ctx)));
   addKindTable(Reference::KindNamespace::mach_o, ctx.archHandler().kindArch(),
                ctx.archHandler().kindStrings());
   add(std::unique_ptr<YamlIOTaggedDocumentHandler>(

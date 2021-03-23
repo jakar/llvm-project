@@ -1,9 +1,8 @@
 //===-- sanitizer/coverage_interface.h --------------------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -19,22 +18,16 @@
 extern "C" {
 #endif
 
-  // Initialize coverage.
-  void __sanitizer_cov_init();
   // Record and dump coverage info.
-  void __sanitizer_cov_dump();
+  void __sanitizer_cov_dump(void);
 
-  //  Dump collected coverage info. Sorts pcs by module into individual
-  //  .sancov files.
+  // Clear collected coverage info.
+  void __sanitizer_cov_reset(void);
+
+  // Dump collected coverage info. Sorts pcs by module into individual .sancov
+  // files.
   void __sanitizer_dump_coverage(const uintptr_t *pcs, uintptr_t len);
 
-  // Open <name>.sancov.packed in the coverage directory and return the file
-  // descriptor. Returns -1 on failure, or if coverage dumping is disabled.
-  // This is intended for use by sandboxing code.
-  intptr_t __sanitizer_maybe_open_cov_file(const char *name);
-  // Get the number of unique covered blocks (or edges).
-  // This can be useful for coverage-directed in-process fuzzers.
-  uintptr_t __sanitizer_get_total_unique_coverage();
 #ifdef __cplusplus
 }  // extern "C"
 #endif

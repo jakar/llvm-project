@@ -1,9 +1,8 @@
 //===----------------------------------------------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is dual licensed under the MIT and the University of Illinois Open
-// Source Licenses. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -15,9 +14,8 @@
 #include <stdexcept>
 #include <cassert>
 
-#include "min_allocator.h"
-
 #include "test_macros.h"
+#include "min_allocator.h"
 
 int sign(int x)
 {
@@ -40,7 +38,7 @@ test(const S& s, typename S::size_type pos1, typename S::size_type n1,
     {
         try
         {
-            s.compare(pos1, n1, str);
+            TEST_IGNORE_NODISCARD s.compare(pos1, n1, str);
             assert(false);
         }
         catch (std::out_of_range&)
@@ -362,7 +360,7 @@ void test2()
     test(S("abcdefghijklmnopqrst"), 21, 0, S("abcdefghijklmnopqrst"), 0);
 }
 
-int main()
+int main(int, char**)
 {
     {
     typedef std::string S;
@@ -378,4 +376,13 @@ int main()
     test2<S>();
     }
 #endif
+
+#if TEST_STD_VER > 3
+    {   // LWG 2946
+    std::string s = " !";
+    assert(s.compare(0, 1, {"abc", 1}) < 0);
+    }
+#endif
+
+  return 0;
 }

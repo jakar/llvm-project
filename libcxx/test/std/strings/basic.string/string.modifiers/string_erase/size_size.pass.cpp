@@ -1,9 +1,8 @@
 //===----------------------------------------------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is dual licensed under the MIT and the University of Illinois Open
-// Source Licenses. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -29,6 +28,7 @@ test(S s, typename S::size_type pos, typename S::size_type n, S expected)
     {
         s.erase(pos, n);
         LIBCPP_ASSERT(s.__invariants());
+        assert(s[s.size()] == typename S::value_type());
         assert(s == expected);
     }
 #ifndef TEST_HAS_NO_EXCEPTIONS
@@ -58,6 +58,7 @@ test(S s, typename S::size_type pos, S expected)
     {
         s.erase(pos);
         LIBCPP_ASSERT(s.__invariants());
+        assert(s[s.size()] == typename S::value_type());
         assert(s == expected);
     }
 #ifndef TEST_HAS_NO_EXCEPTIONS
@@ -83,10 +84,11 @@ test(S s, S expected)
 {
     s.erase();
     LIBCPP_ASSERT(s.__invariants());
+    assert(s[s.size()] == typename S::value_type());
     assert(s == expected);
 }
 
-int main()
+int main(int, char**)
 {
     {
     typedef std::string S;
@@ -296,4 +298,6 @@ int main()
     test(S("abcdefghijklmnopqrst"), S(""));
     }
 #endif
+
+  return 0;
 }

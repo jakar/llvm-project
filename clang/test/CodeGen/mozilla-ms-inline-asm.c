@@ -27,13 +27,13 @@ void invoke(void* that, unsigned methodIndex,
 // CHECK-SAME: sub esp,eax
 // CHECK-SAME: mov ecx,esp
 // CHECK-SAME: push $0
-// CHECK-SAME: call dword ptr $2
+// CHECK-SAME: call dword ptr ${2:P}
 // CHECK-SAME: {{.*}}__MSASMLABEL_.${:uid}__noparams:
 // CHECK-SAME: mov ecx,$3
 // CHECK-SAME: push ecx
 // CHECK-SAME: mov edx,[ecx]
 // CHECK-SAME: mov eax,$4
-// CHECK-SAME: call dword ptr[edx+eax*$$4]
+// CHECK-SAME: call dword ptr[edx + eax * $$4]
 // CHECK-SAME: mov esp,ebp
 // CHECK-SAME: pop ebp
 // CHECK-SAME: ret

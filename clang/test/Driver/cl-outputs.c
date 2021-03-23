@@ -73,7 +73,7 @@
 // RUN: %clang_cl /c /o .. -### -- %s 2>&1 | FileCheck -check-prefix=oCRAZY2 %s
 // oCRAZY2:  "-o" "..obj"
 
-// RUN: %clang_cl /c %s -### /o 2>&1 | FileCheck -check-prefix=oMISSINGARG %s
+// RUN: not %clang_cl /c %s -### /o 2>&1 | FileCheck -check-prefix=oMISSINGARG %s
 // oMISSINGARG: error: argument to '/o' is missing (expected 1 value)
 
 // RUN: %clang_cl /c /omydir/ -### -- %s %s 2>&1 | FileCheck -check-prefix=CHECK-oMULTIPLESOURCEOK1 %s
@@ -99,6 +99,7 @@
 // DEFAULTDLL: "-implib:cl-outputs.lib"
 
 // RUN: %clang_cl /Fefoo -### -- %s 2>&1 | FileCheck -check-prefix=FeNOEXT %s
+// RUN: %clang_cl /Fe:foo -### -- %s 2>&1 | FileCheck -check-prefix=FeNOEXT %s
 // FeNOEXT: "-out:foo.exe"
 
 // RUN: %clang_cl /Fe -### -- %s 2>&1 | FileCheck -check-prefix=FeEMPTY %s
@@ -111,6 +112,7 @@
 // FeNOEXTDLL: "-implib:foo.lib"
 
 // RUN: %clang_cl /Fefoo.ext -### -- %s 2>&1 | FileCheck -check-prefix=FeEXT %s
+// RUN: %clang_cl /Fe:foo.ext -### -- %s 2>&1 | FileCheck -check-prefix=FeEXT %s
 // FeEXT: "-out:foo.ext"
 
 // RUN: %clang_cl /LD /Fefoo.ext -### -- %s 2>&1 | FileCheck -check-prefix=FeEXTDLL %s
@@ -208,7 +210,7 @@
 // FeoDIRNAMEEXTDLL: "-out:foo.dir{{[/\\]+}}a.ext"
 // FeoDIRNAMEEXTDLL: "-implib:foo.dir{{[/\\]+}}a.lib"
 
-// RUN: %clang_cl -### /o 2>&1 | FileCheck -check-prefix=FeoMISSINGARG %s
+// RUN: not %clang_cl -### /o 2>&1 | FileCheck -check-prefix=FeoMISSINGARG %s
 // FeoMISSINGARG: error: argument to '/o' is missing (expected 1 value)
 
 // RUN: %clang_cl /ofoo /o bar -### -- %s 2>&1 | FileCheck -check-prefix=FeoOVERRIDE %s

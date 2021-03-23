@@ -6,17 +6,20 @@ add_lldb_library(lldbBreakpoint
   BreakpointLocation.cpp
   BreakpointLocationCollection.cpp
   BreakpointLocationList.cpp
+  BreakpointName.cpp
   BreakpointOptions.cpp
+  BreakpointPrecondition.cpp
   BreakpointResolver.cpp
   BreakpointResolverAddress.cpp
   BreakpointResolverFileLine.cpp
   BreakpointResolverFileRegex.cpp
   BreakpointResolverName.cpp
+  BreakpointResolverScripted.cpp
   BreakpointSite.cpp
   BreakpointSiteList.cpp
   Stoppoint.cpp
   StoppointCallbackContext.cpp
-  StoppointLocation.cpp
+  StoppointSite.cpp
   Watchpoint.cpp
   WatchpointList.cpp
   WatchpointOptions.cpp
@@ -28,8 +31,6 @@ add_lldb_library(lldbBreakpoint
     lldbSymbol
     lldbTarget
     lldbUtility
-    lldbPluginCPlusPlusLanguage
-    lldbPluginObjCLanguage
 
   LINK_COMPONENTS
     Support

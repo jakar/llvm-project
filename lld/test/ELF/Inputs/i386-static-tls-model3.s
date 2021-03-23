@@ -6,4 +6,4 @@ var:
 .global _start
 _start:
  movl %gs:0, %eax
- addl var@indntpoff, %eax #R_386_TLS_IE
+ addl var@indntpoff, %eax # R_386_TLS_IE

@@ -1,9 +1,8 @@
-//===--- BitTracker.h -------------------------------------------*- C++ -*-===//
+//===- BitTracker.h ---------------------------------------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -13,7 +12,7 @@
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/SetVector.h"
 #include "llvm/ADT/SmallVector.h"
-#include "llvm/CodeGen/MachineFunction.h"
+#include "llvm/CodeGen/MachineInstr.h"
 #include "llvm/CodeGen/MachineOperand.h"
 #include <cassert>
 #include <cstdint>
@@ -24,11 +23,14 @@
 
 namespace llvm {
 
+class BitVector;
 class ConstantInt;
 class MachineRegisterInfo;
 class MachineBasicBlock;
-class MachineInstr;
+class MachineFunction;
 class raw_ostream;
+class TargetRegisterClass;
+class TargetRegisterInfo;
 
 struct BitTracker {
   struct BitRef;
@@ -38,9 +40,8 @@ struct BitTracker {
   struct RegisterCell;
   struct MachineEvaluator;
 
-  typedef SetVector<const MachineBasicBlock *> BranchTargetList;
-
-  typedef std::map<unsigned, RegisterCell> CellMapType;
+  using BranchTargetList = SetVector<const MachineBasicBlock *>;
+  using CellMapType = std::map<unsigned, RegisterCell>;
 
   BitTracker(const MachineEvaluator &E, MachineFunction &F);
   ~BitTracker();
@@ -61,24 +62,64 @@ private:
   void visitPHI(const MachineInstr &PI);
   void visitNonBranch(const MachineInstr &MI);
   void visitBranchesFrom(const MachineInstr &BI);
-  void visitUsesOf(unsigned Reg);
+  void visitUsesOf(Register Reg);
+
+  using CFGEdge = std::pair<int, int>;
+  using EdgeSetType = std::set<CFGEdge>;
+  using InstrSetType = std::set<const MachineInstr *>;
+  using EdgeQueueType = std::queue<CFGEdge>;
+
+  // Priority queue of instructions using modified registers, ordered by
+  // their relative position in a basic block.
+  struct UseQueueType {
+    UseQueueType() : Uses(Dist) {}
+
+    unsigned size() const {
+      return Uses.size();
+    }
+    bool empty() const {
+      return size() == 0;
+    }
+    MachineInstr *front() const {
+      return Uses.top();
+    }
+    void push(MachineInstr *MI) {
+      if (Set.insert(MI).second)
+        Uses.push(MI);
+    }
+    void pop() {
+      Set.erase(front());
+      Uses.pop();
+    }
+    void reset() {
+      Dist.clear();
+    }
+  private:
+    struct Cmp {
+      Cmp(DenseMap<const MachineInstr*,unsigned> &Map) : Dist(Map) {}
+      bool operator()(const MachineInstr *MI, const MachineInstr *MJ) const;
+      DenseMap<const MachineInstr*,unsigned> &Dist;
+    };
+    std::priority_queue<MachineInstr*, std::vector<MachineInstr*>, Cmp> Uses;
+    DenseSet<const MachineInstr*> Set; // Set to avoid adding duplicate entries.
+    DenseMap<const MachineInstr*,unsigned> Dist;
+  };
+
   void reset();
-
-  typedef std::pair<int,int> CFGEdge;
-  typedef std::set<CFGEdge> EdgeSetType;
-  typedef std::set<const MachineInstr *> InstrSetType;
-  typedef std::queue<CFGEdge> EdgeQueueType;
-
-  EdgeSetType EdgeExec;         // Executable flow graph edges.
-  InstrSetType InstrExec;       // Executable instructions.
-  EdgeQueueType FlowQ;          // Work queue of CFG edges.
-  DenseSet<unsigned> ReachedBB; // Cache of reached blocks.
-  bool Trace;                   // Enable tracing for debugging.
+  void runEdgeQueue(BitVector &BlockScanned);
+  void runUseQueue();
 
   const MachineEvaluator &ME;
   MachineFunction &MF;
   MachineRegisterInfo &MRI;
   CellMapType &Map;
+
+  EdgeSetType EdgeExec;         // Executable flow graph edges.
+  InstrSetType InstrExec;       // Executable instructions.
+  UseQueueType UseQ;            // Work queue of register uses.
+  EdgeQueueType FlowQ;          // Work queue of CFG edges.
+  DenseSet<unsigned> ReachedBB; // Cache of reached blocks.
+  bool Trace;                   // Enable tracing for debugging.
 };
 
 // Abstraction of a reference to bit at position Pos from a register Reg.
@@ -90,19 +131,20 @@ struct BitTracker::BitRef {
     return Reg == BR.Reg && (Reg == 0 || Pos == BR.Pos);
   }
 
-  unsigned Reg;
+  Register Reg;
   uint16_t Pos;
 };
 
 // Abstraction of a register reference in MachineOperand.  It contains the
 // register number and the subregister index.
+// FIXME: Consolidate duplicate definitions of RegisterRef
 struct BitTracker::RegisterRef {
-  RegisterRef(unsigned R = 0, unsigned S = 0)
-    : Reg(R), Sub(S) {}
+  RegisterRef(Register R = 0, unsigned S = 0) : Reg(R), Sub(S) {}
   RegisterRef(const MachineOperand &MO)
       : Reg(MO.getReg()), Sub(MO.getSubReg()) {}
 
-  unsigned Reg, Sub;
+  Register Reg;
+  unsigned Sub;
 };
 
 // Value that a single bit can take.  This is outside of the context of
@@ -271,7 +313,7 @@ struct BitTracker::RegisterCell {
     return Bits[BitN];
   }
 
-  bool meet(const RegisterCell &RC, unsigned SelfR);
+  bool meet(const RegisterCell &RC, Register SelfR);
   RegisterCell &insert(const RegisterCell &RC, const BitMask &M);
   RegisterCell extract(const BitMask &M) const;  // Returns a new cell.
   RegisterCell &rol(uint16_t Sh);    // Rotate left.
@@ -301,7 +343,7 @@ private:
   // The DefaultBitN is here only to avoid frequent reallocation of the
   // memory in the vector.
   static const unsigned DefaultBitN = 32;
-  typedef SmallVector<BitValue, DefaultBitN> BitValueList;
+  using BitValueList = SmallVector<BitValue, DefaultBitN>;
   BitValueList Bits;
 
   friend raw_ostream &operator<<(raw_ostream &OS, const RegisterCell &RC);
@@ -420,7 +462,7 @@ struct BitTracker::MachineEvaluator {
   // Sub == 0, in this case, the function should return a mask that spans
   // the entire register Reg (which is what the default implementation
   // does).
-  virtual BitMask mask(unsigned Reg, unsigned Sub) const;
+  virtual BitMask mask(Register Reg, unsigned Sub) const;
   // Indicate whether a given register class should be tracked.
   virtual bool track(const TargetRegisterClass *RC) const { return true; }
   // Evaluate a non-branching machine instruction, given the cell map with
@@ -434,6 +476,16 @@ struct BitTracker::MachineEvaluator {
   // has been successfully computed, "false" otherwise.
   virtual bool evaluate(const MachineInstr &BI, const CellMapType &Inputs,
                         BranchTargetList &Targets, bool &FallsThru) const = 0;
+  // Given a register class RC, return a register class that should be assumed
+  // when a register from class RC is used with a subregister of index Idx.
+  virtual const TargetRegisterClass&
+  composeWithSubRegIndex(const TargetRegisterClass &RC, unsigned Idx) const {
+    if (Idx == 0)
+      return RC;
+    llvm_unreachable("Unimplemented composeWithSubRegIndex");
+  }
+  // Return the size in bits of the physical register Reg.
+  virtual uint16_t getPhysRegBitWidth(MCRegister Reg) const;
 
   const TargetRegisterInfo &TRI;
   MachineRegisterInfo &MRI;

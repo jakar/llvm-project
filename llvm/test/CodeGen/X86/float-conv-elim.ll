@@ -1,4 +1,4 @@
-; RUN: llc -mtriple=i686-unknown-linux-gnu -march=x86-64 -mcpu=x86-64 < %s | FileCheck %s
+; RUN: llc -mtriple=x86_64-unknown-linux-gnu -mcpu=x86-64 < %s | FileCheck %s
 
 ; Make sure the float conversion is folded away as it should be.
 ; CHECK-LABEL: foo
@@ -28,5 +28,5 @@ define zeroext i8 @bar(i8 zeroext %a) #0 {
   ret i8 %conv1
 }
 
-attributes #0 = { nounwind ssp uwtable "less-precise-fpmad"="false" "no-frame-pointer-elim"="true" "no-frame-pointer-elim-non-leaf" "no-infs-fp-math"="false" "no-nans-fp-math"="false" "stack-protector-buffer-size"="8" "unsafe-fp-math"="false" "use-soft-float"="false" }
+attributes #0 = { nounwind ssp uwtable "less-precise-fpmad"="false" "frame-pointer"="all" "no-infs-fp-math"="false" "no-nans-fp-math"="false" "stack-protector-buffer-size"="8" "unsafe-fp-math"="false" "use-soft-float"="false" }
 

@@ -13,7 +13,6 @@
 #include <isl_seq.h>
 #include <isl_val_private.h>
 #include <isl_vec_private.h>
-#include <isl/deprecated/vec_int.h>
 
 isl_ctx *isl_vec_get_ctx(__isl_keep isl_vec *vec)
 {
@@ -30,7 +29,7 @@ uint32_t isl_vec_get_hash(__isl_keep isl_vec *vec)
 	return isl_seq_get_hash(vec->el, vec->size);
 }
 
-struct isl_vec *isl_vec_alloc(struct isl_ctx *ctx, unsigned size)
+__isl_give isl_vec *isl_vec_alloc(struct isl_ctx *ctx, unsigned size)
 {
 	struct isl_vec *vec;
 
@@ -126,6 +125,19 @@ __isl_give isl_vec *isl_vec_expand(__isl_take isl_vec *vec, int pos, int n,
 	return vec;
 }
 
+/* Create a vector of size "size" with zero-valued elements.
+ */
+__isl_give isl_vec *isl_vec_zero(isl_ctx *ctx, unsigned size)
+{
+	isl_vec *vec;
+
+	vec = isl_vec_alloc(ctx, size);
+	if (!vec)
+		return NULL;
+	isl_seq_clr(vec->el, size);
+	return vec;
+}
+
 __isl_give isl_vec *isl_vec_zero_extend(__isl_take isl_vec *vec, unsigned size)
 {
 	int extra;
@@ -182,7 +194,7 @@ error:
 	return NULL;
 }
 
-struct isl_vec *isl_vec_copy(struct isl_vec *vec)
+__isl_give isl_vec *isl_vec_copy(__isl_keep isl_vec *vec)
 {
 	if (!vec)
 		return NULL;
@@ -191,7 +203,7 @@ struct isl_vec *isl_vec_copy(struct isl_vec *vec)
 	return vec;
 }
 
-struct isl_vec *isl_vec_dup(struct isl_vec *vec)
+__isl_give isl_vec *isl_vec_dup(__isl_keep isl_vec *vec)
 {
 	struct isl_vec *vec2;
 
@@ -204,7 +216,7 @@ struct isl_vec *isl_vec_dup(struct isl_vec *vec)
 	return vec2;
 }
 
-struct isl_vec *isl_vec_cow(struct isl_vec *vec)
+__isl_give isl_vec *isl_vec_cow(__isl_take isl_vec *vec)
 {
 	struct isl_vec *vec2;
 	if (!vec)
@@ -233,21 +245,9 @@ __isl_null isl_vec *isl_vec_free(__isl_take isl_vec *vec)
 	return NULL;
 }
 
-int isl_vec_size(__isl_keep isl_vec *vec)
+isl_size isl_vec_size(__isl_keep isl_vec *vec)
 {
-	return vec ? vec->size : -1;
-}
-
-int isl_vec_get_element(__isl_keep isl_vec *vec, int pos, isl_int *v)
-{
-	if (!vec)
-		return -1;
-
-	if (pos < 0 || pos >= vec->size)
-		isl_die(vec->ctx, isl_error_invalid, "position out of range",
-			return -1);
-	isl_int_set(*v, vec->el[pos]);
-	return 0;
+	return vec ? vec->size : isl_size_error;
 }
 
 /* Extract the element at position "pos" of "vec".
@@ -328,6 +328,15 @@ int isl_vec_cmp_element(__isl_keep isl_vec *vec1, __isl_keep isl_vec *vec2,
 	return isl_int_cmp(vec1->el[pos], vec2->el[pos]);
 }
 
+/* Does "vec" contain only zero elements?
+ */
+isl_bool isl_vec_is_zero(__isl_keep isl_vec *vec)
+{
+	if (!vec)
+		return isl_bool_error;
+	return isl_bool_ok(isl_seq_first_non_zero(vec->el, vec->size) < 0);
+}
+
 isl_bool isl_vec_is_equal(__isl_keep isl_vec *vec1, __isl_keep isl_vec *vec2)
 {
 	if (!vec1 || !vec2)
@@ -336,7 +345,7 @@ isl_bool isl_vec_is_equal(__isl_keep isl_vec *vec1, __isl_keep isl_vec *vec2)
 	if (vec1->size != vec2->size)
 		return isl_bool_false;
 
-	return isl_seq_eq(vec1->el, vec2->el, vec1->size);
+	return isl_bool_ok(isl_seq_eq(vec1->el, vec2->el, vec1->size));
 }
 
 __isl_give isl_printer *isl_printer_print_vec(__isl_take isl_printer *printer,
@@ -361,7 +370,7 @@ error:
 	return NULL;
 }
 
-void isl_vec_dump(struct isl_vec *vec)
+void isl_vec_dump(__isl_keep isl_vec *vec)
 {
 	isl_printer *printer;
 
@@ -422,7 +431,7 @@ __isl_give isl_vec *isl_vec_clr(__isl_take isl_vec *vec)
 	return vec;
 }
 
-void isl_vec_lcm(struct isl_vec *vec, isl_int *lcm)
+void isl_vec_lcm(__isl_keep isl_vec *vec, isl_int *lcm)
 {
 	isl_seq_lcm(vec->block.data, vec->size, lcm);
 }
@@ -430,7 +439,7 @@ void isl_vec_lcm(struct isl_vec *vec, isl_int *lcm)
 /* Given a rational vector, with the denominator in the first element
  * of the vector, round up all coordinates.
  */
-struct isl_vec *isl_vec_ceil(struct isl_vec *vec)
+__isl_give isl_vec *isl_vec_ceil(__isl_take isl_vec *vec)
 {
 	vec = isl_vec_cow(vec);
 	if (!vec)
@@ -443,7 +452,7 @@ struct isl_vec *isl_vec_ceil(struct isl_vec *vec)
 	return vec;
 }
 
-struct isl_vec *isl_vec_normalize(struct isl_vec *vec)
+__isl_give isl_vec *isl_vec_normalize(__isl_take isl_vec *vec)
 {
 	if (!vec)
 		return NULL;
@@ -574,6 +583,15 @@ error:
 	isl_vec_free(vec);
 	isl_vec_free(ext);
 	return NULL;
+}
+
+/* Add "n" elements at the end of "vec".
+ */
+__isl_give isl_vec *isl_vec_add_els(__isl_take isl_vec *vec, unsigned n)
+{
+	if (!vec)
+		return NULL;
+	return isl_vec_insert_els(vec, vec->size, n);
 }
 
 __isl_give isl_vec *isl_vec_insert_zero_els(__isl_take isl_vec *vec,

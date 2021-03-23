@@ -1,9 +1,8 @@
 //===-- SystemZCallingConv.h - Calling conventions for SystemZ --*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -16,11 +15,11 @@
 
 namespace llvm {
 namespace SystemZ {
-  const unsigned NumArgGPRs = 5;
-  extern const MCPhysReg ArgGPRs[NumArgGPRs];
+  const unsigned ELFNumArgGPRs = 5;
+  extern const MCPhysReg ELFArgGPRs[ELFNumArgGPRs];
 
-  const unsigned NumArgFPRs = 4;
-  extern const MCPhysReg ArgFPRs[NumArgFPRs];
+  const unsigned ELFNumArgFPRs = 4;
+  extern const MCPhysReg ELFArgFPRs[ELFNumArgFPRs];
 } // end namespace SystemZ
 
 class SystemZCCState : public CCState {
@@ -108,8 +107,8 @@ inline bool CC_SystemZ_I128Indirect(unsigned &ValNo, MVT &ValVT,
   // OK, we've collected all parts in the pending list.  Allocate
   // the location (register or stack slot) for the indirect pointer.
   // (This duplicates the usual i64 calling convention rules.)
-  unsigned Reg = State.AllocateReg(SystemZ::ArgGPRs);
-  unsigned Offset = Reg ? 0 : State.AllocateStack(8, 8);
+  unsigned Reg = State.AllocateReg(SystemZ::ELFArgGPRs);
+  unsigned Offset = Reg ? 0 : State.AllocateStack(8, Align(8));
 
   // Use that same location for all the pending parts.
   for (auto &It : PendingMembers) {
@@ -123,6 +122,13 @@ inline bool CC_SystemZ_I128Indirect(unsigned &ValNo, MVT &ValVT,
   PendingMembers.clear();
 
   return true;
+}
+
+inline bool CC_SystemZ_GHC_Error(unsigned &, MVT &, MVT &,
+                                 CCValAssign::LocInfo &, ISD::ArgFlagsTy &,
+                                 CCState &) {
+  report_fatal_error("No registers left in GHC calling convention");
+  return false;
 }
 
 } // end namespace llvm

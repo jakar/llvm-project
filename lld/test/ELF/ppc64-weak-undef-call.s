@@ -1,17 +1,19 @@
-# RUN: llvm-mc -filetype=obj -triple=powerpc64-unknown-linux %s -o %t
-# RUN: ld.lld %t -o %t2
-# RUN: llvm-objdump -d %t2 | FileCheck %s
 # REQUIRES: ppc
 
-# CHECK: Disassembly of section .text:
+# RUN: llvm-mc -filetype=obj -triple=powerpc64le-unknown-linux %s -o %t
+# RUN: ld.lld %t -o %t2
+# RUN: llvm-objdump -d --no-show-raw-insn %t2 | FileCheck %s
 
-.section        ".opd","aw"
-.global _start
-_start:
-.quad   .Lfoo,.TOC.@tocbase,0
+# RUN: llvm-mc -filetype=obj -triple=powerpc64-unknown-linux %s -o %t
+# RUN: ld.lld %t -o %t2
+# RUN: llvm-objdump -d --no-show-raw-insn %t2 | FileCheck %s
+
+# CHECK: Disassembly of section .text:
+# CHECK-EMPTY:
 
 .text
-.Lfoo:
+.global _start
+_start:
   bl weakfunc
   nop
   blr
@@ -22,6 +24,6 @@ _start:
 # be unreachable. But, we should link successfully. We should not, however,
 # generate a .plt entry (this would be wasted space). For now, we do nothing
 # (leaving the zero relative offset present in the input).
-# CHECK: 10010000:       48 00 00 01     bl .+0
-# CHECK: 10010004:       60 00 00 00     nop
-# CHECK: 10010008:       4e 80 00 20     blr
+# CHECK: 10010158:       bl 0x10010158
+# CHECK: 1001015c:       nop
+# CHECK: 10010160:       blr

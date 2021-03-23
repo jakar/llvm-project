@@ -1,36 +1,38 @@
-//===- ModuleDebugStream.h - PDB Module Info Stream Access ----------------===//
+//===- ModuleDebugStream.h - PDB Module Info Stream Access ------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_DEBUGINFO_PDB_RAW_MODULEDEBUGSTREAM_H
-#define LLVM_DEBUGINFO_PDB_RAW_MODULEDEBUGSTREAM_H
+#ifndef LLVM_DEBUGINFO_PDB_NATIVE_MODULEDEBUGSTREAM_H
+#define LLVM_DEBUGINFO_PDB_NATIVE_MODULEDEBUGSTREAM_H
 
 #include "llvm/ADT/iterator_range.h"
-#include "llvm/DebugInfo/CodeView/CVRecord.h"
-#include "llvm/DebugInfo/CodeView/ModuleDebugFragmentRecord.h"
+#include "llvm/DebugInfo/CodeView/DebugChecksumsSubsection.h"
+#include "llvm/DebugInfo/CodeView/DebugSubsectionRecord.h"
 #include "llvm/DebugInfo/CodeView/SymbolRecord.h"
 #include "llvm/DebugInfo/MSF/MappedBlockStream.h"
-#include "llvm/Support/BinaryStreamArray.h"
+#include "llvm/DebugInfo/PDB/Native/DbiModuleDescriptor.h"
 #include "llvm/Support/BinaryStreamRef.h"
 #include "llvm/Support/Error.h"
+#include <cstdint>
+#include <memory>
 
 namespace llvm {
 namespace pdb {
-class PDBFile;
+
 class DbiModuleDescriptor;
 
 class ModuleDebugStreamRef {
-  typedef codeview::ModuleDebugFragmentArray::Iterator
-      LinesAndChecksumsIterator;
+  using DebugSubsectionIterator = codeview::DebugSubsectionArray::Iterator;
 
 public:
   ModuleDebugStreamRef(const DbiModuleDescriptor &Module,
                        std::unique_ptr<msf::MappedBlockStream> Stream);
+  ModuleDebugStreamRef(ModuleDebugStreamRef &&Other) = default;
+  ModuleDebugStreamRef(const ModuleDebugStreamRef &Other) = default;
   ~ModuleDebugStreamRef();
 
   Error reload();
@@ -40,27 +42,51 @@ public:
   iterator_range<codeview::CVSymbolArray::Iterator>
   symbols(bool *HadError) const;
 
-  llvm::iterator_range<LinesAndChecksumsIterator> linesAndChecksums() const;
+  const codeview::CVSymbolArray &getSymbolArray() const { return SymbolArray; }
+  const codeview::CVSymbolArray
+  getSymbolArrayForScope(uint32_t ScopeBegin) const;
 
-  bool hasLineInfo() const;
+  BinarySubstreamRef getSymbolsSubstream() const;
+  BinarySubstreamRef getC11LinesSubstream() const;
+  BinarySubstreamRef getC13LinesSubstream() const;
+  BinarySubstreamRef getGlobalRefsSubstream() const;
+
+  ModuleDebugStreamRef &operator=(ModuleDebugStreamRef &&Other) = delete;
+
+  codeview::CVSymbol readSymbolAtOffset(uint32_t Offset) const;
+
+  iterator_range<DebugSubsectionIterator> subsections() const;
+  codeview::DebugSubsectionArray getSubsectionsArray() const {
+    return Subsections;
+  }
+
+  bool hasDebugSubsections() const;
 
   Error commit();
 
+  Expected<codeview::DebugChecksumsSubsectionRef>
+  findChecksumsSubsection() const;
+
 private:
-  const DbiModuleDescriptor &Mod;
+  Error reloadSerialize(BinaryStreamReader &Reader);
+
+  DbiModuleDescriptor Mod;
 
   uint32_t Signature;
 
-  std::unique_ptr<msf::MappedBlockStream> Stream;
+  std::shared_ptr<msf::MappedBlockStream> Stream;
 
-  codeview::CVSymbolArray SymbolsSubstream;
-  BinaryStreamRef C11LinesSubstream;
-  BinaryStreamRef C13LinesSubstream;
-  BinaryStreamRef GlobalRefsSubstream;
+  codeview::CVSymbolArray SymbolArray;
 
-  codeview::ModuleDebugFragmentArray LinesAndChecksums;
+  BinarySubstreamRef SymbolsSubstream;
+  BinarySubstreamRef C11LinesSubstream;
+  BinarySubstreamRef C13LinesSubstream;
+  BinarySubstreamRef GlobalRefsSubstream;
+
+  codeview::DebugSubsectionArray Subsections;
 };
-}
-}
 
-#endif
+} // end namespace pdb
+} // end namespace llvm
+
+#endif // LLVM_DEBUGINFO_PDB_NATIVE_MODULEDEBUGSTREAM_H

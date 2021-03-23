@@ -26,3 +26,11 @@ defaulted functions as trivial.
 
 .. note::
   Move-constructor and move-assignment operator are not supported yet.
+
+Options
+-------
+
+.. option:: IgnoreMacros
+
+   If set to `true`, the check will not give warnings inside macros. Default
+   is `true`.

@@ -1,7 +1,7 @@
 ; RUN: opt < %s -partial-inliner -S | FileCheck %s
 ; RUN: opt < %s -passes=partial-inliner -S | FileCheck %s
-; RUN: opt < %s -partial-inliner -max-num-inline-blocks=2 -S | FileCheck --check-prefix=LIMIT %s
-; RUN: opt < %s -passes=partial-inliner -max-num-inline-blocks=2 -S | FileCheck  --check-prefix=LIMIT %s
+; RUN: opt < %s -partial-inliner -skip-partial-inlining-cost-analysis -max-num-inline-blocks=2 -S | FileCheck --check-prefix=LIMIT %s
+; RUN: opt < %s -passes=partial-inliner -skip-partial-inlining-cost-analysis -max-num-inline-blocks=2 -S | FileCheck  --check-prefix=LIMIT %s
 
 ; Function Attrs: nounwind uwtable
 define i32 @bar(i32 %arg) local_unnamed_addr #0 {
@@ -41,11 +41,11 @@ bb:
 ; CHECK-LABEL: @dummy_caller
 ; CHECK: br i1
 ; CHECK: br i1
-; CHECK: call void @bar.1_
+; CHECK: call void @bar.1.
 ; LIMIT-LABEL: @dummy_caller
 ; LIMIT: br i1
 ; LIMIT-NOT: br
-; LIMIT: call void @bar.1_
+; LIMIT: call void @bar.1.
   %tmp = tail call i32 @bar(i32 %arg)
   ret i32 %tmp
 }

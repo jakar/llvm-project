@@ -1,4 +1,4 @@
-; RUN: llc -verify-machineinstrs < %s -march=ppc32 -fp-contract=fast -mattr=-vsx -disable-ppc-vsx-fma-mutation=false | FileCheck %s
+; RUN: llc -verify-machineinstrs < %s -mtriple=ppc32-- -fp-contract=fast -mattr=-vsx -disable-ppc-vsx-fma-mutation=false | FileCheck %s
 ; RUN: llc -verify-machineinstrs < %s -mtriple=powerpc64-unknown-linux-gnu -fp-contract=fast -mattr=+vsx -mcpu=pwr7 -disable-ppc-vsx-fma-mutation=false | FileCheck -check-prefix=CHECK-VSX %s
 
 define double @test_FMADD_EXT1(float %A, float %B, double %C) {
@@ -49,12 +49,28 @@ define double @test_FMSUB_EXT2(float %A, float %B, double %C) {
     %F = fsub double %C, %E         ; <double> [#uses=1]
     ret double %F
 ; CHECK-LABEL: test_FMSUB_EXT2:
-; CHECK: fnmsub
+; CHECK: fneg
+; CHECK-NEXT: fmadd
 ; CHECK-NEXT: blr
                                 
 ; CHECK-VSX-LABEL: test_FMSUB_EXT2:
+; CHECK-VSX: xsnegdp
+; CHECK-VSX-NEXT: xsmaddmdp
+; CHECK-VSX-NEXT: blr
+}
+
+; need nsz flag to generate fnmsub since it may affect sign of zero
+define double @test_FMSUB_EXT2_NSZ(float %A, float %B, double %C) {
+    %D = fmul nsz float %A, %B      ; <float> [#uses=1]
+    %E = fpext float %D to double   ; <double> [#uses=1]
+    %F = fsub nsz double %C, %E     ; <double> [#uses=1]
+    ret double %F
+; CHECK-LABEL: test_FMSUB_EXT2_NSZ:
+; CHECK: fnmsub
+; CHECK-NEXT: blr
+
+; CHECK-VSX-LABEL: test_FMSUB_EXT2_NSZ:
 ; CHECK-VSX: xsnmsubmdp
-; CHECK-VSX-NEXT: fmr
 ; CHECK-VSX-NEXT: blr
 }
 

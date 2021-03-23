@@ -1,19 +1,13 @@
-//===-- OptionGroupFormat.cpp -----------------------------------*- C++ -*-===//
+//===-- OptionGroupFormat.cpp ---------------------------------------------===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
 #include "lldb/Interpreter/OptionGroupFormat.h"
 
-// C Includes
-// C++ Includes
-// Other libraries and framework includes
-// Project includes
-#include "lldb/Core/ArchSpec.h"
 #include "lldb/Host/OptionParser.h"
 #include "lldb/Interpreter/CommandInterpreter.h"
 #include "lldb/Target/ExecutionContext.h"
@@ -30,20 +24,18 @@ OptionGroupFormat::OptionGroupFormat(lldb::Format default_format,
       m_count(default_count, default_count), m_prev_gdb_format('x'),
       m_prev_gdb_size('w') {}
 
-OptionGroupFormat::~OptionGroupFormat() {}
-
-static OptionDefinition g_option_table[] = {
+static constexpr OptionDefinition g_option_table[] = {
     {LLDB_OPT_SET_1, false, "format", 'f', OptionParser::eRequiredArgument,
-     nullptr, nullptr, 0, eArgTypeFormat,
+     nullptr, {}, 0, eArgTypeFormat,
      "Specify a format to be used for display."},
     {LLDB_OPT_SET_2, false, "gdb-format", 'G', OptionParser::eRequiredArgument,
-     nullptr, nullptr, 0, eArgTypeGDBFormat,
+     nullptr, {}, 0, eArgTypeGDBFormat,
      "Specify a format using a GDB format specifier string."},
     {LLDB_OPT_SET_3, false, "size", 's', OptionParser::eRequiredArgument,
-     nullptr, nullptr, 0, eArgTypeByteSize,
+     nullptr, {}, 0, eArgTypeByteSize,
      "The size in bytes to use when displaying with the selected format."},
     {LLDB_OPT_SET_4, false, "count", 'c', OptionParser::eRequiredArgument,
-     nullptr, nullptr, 0, eArgTypeCount,
+     nullptr, {}, 0, eArgTypeCount,
      "The number of total items to display."},
 };
 
@@ -58,10 +50,10 @@ llvm::ArrayRef<OptionDefinition> OptionGroupFormat::GetDefinitions() {
   return result.take_front(2);
 }
 
-Error OptionGroupFormat::SetOptionValue(uint32_t option_idx,
-                                        llvm::StringRef option_arg,
-                                        ExecutionContext *execution_context) {
-  Error error;
+Status OptionGroupFormat::SetOptionValue(uint32_t option_idx,
+                                         llvm::StringRef option_arg,
+                                         ExecutionContext *execution_context) {
+  Status error;
   const int short_option = g_option_table[option_idx].short_option;
 
   switch (short_option) {
@@ -107,8 +99,8 @@ Error OptionGroupFormat::SetOptionValue(uint32_t option_idx,
 
     // We the first character of the "gdb_format_str" is not the
     // NULL terminator, we didn't consume the entire string and
-    // something is wrong. Also, if none of the format, size or count
-    // was specified correctly, then abort.
+    // something is wrong. Also, if none of the format, size or count was
+    // specified correctly, then abort.
     if (!gdb_format_str.empty() ||
         (format == eFormatInvalid && byte_size == 0 && count == 0)) {
       // Nothing got set correctly
@@ -117,9 +109,8 @@ Error OptionGroupFormat::SetOptionValue(uint32_t option_idx,
       return error;
     }
 
-    // At least one of the format, size or count was set correctly.
-    // Anything that wasn't set correctly should be set to the
-    // previous default
+    // At least one of the format, size or count was set correctly. Anything
+    // that wasn't set correctly should be set to the previous default
     if (format == eFormatInvalid)
       ParserGDBFormatLetter(execution_context, m_prev_gdb_format, format,
                             byte_size);
@@ -132,9 +123,8 @@ Error OptionGroupFormat::SetOptionValue(uint32_t option_idx,
         ParserGDBFormatLetter(execution_context, m_prev_gdb_size, format,
                               byte_size);
     } else {
-      // Byte size is disabled, make sure it wasn't specified
-      // but if this is an address, it's actually necessary to
-      // specify one so don't error out
+      // Byte size is disabled, make sure it wasn't specified but if this is an
+      // address, it's actually necessary to specify one so don't error out
       if (byte_size > 0 && format != lldb::eFormatAddressInfo) {
         error.SetErrorString(
             "this command doesn't support specifying a byte size");
@@ -168,8 +158,7 @@ Error OptionGroupFormat::SetOptionValue(uint32_t option_idx,
   } break;
 
   default:
-    error.SetErrorStringWithFormat("unrecognized option '%c'", short_option);
-    break;
+    llvm_unreachable("Unimplemented option");
   }
 
   return error;
@@ -240,10 +229,9 @@ bool OptionGroupFormat::ParserGDBFormatLetter(
   case 'w':
   case 'g':
     {
-      // Size isn't used for printing instructions, so if a size is specified, and
-      // the previous format was
-      // 'i', then we should reset it to the default ('x').  Otherwise we'll
-      // continue to print as instructions,
+      // Size isn't used for printing instructions, so if a size is specified,
+      // and the previous format was 'i', then we should reset it to the
+      // default ('x').  Otherwise we'll continue to print as instructions,
       // which isn't expected.
       if (format_letter == 'b')
           byte_size = 1;

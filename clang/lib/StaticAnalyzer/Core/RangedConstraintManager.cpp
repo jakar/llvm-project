@@ -1,9 +1,8 @@
 //== RangedConstraintManager.cpp --------------------------------*- C++ -*--==//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -12,8 +11,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "RangedConstraintManager.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/ProgramState.h"
+#include "clang/StaticAnalyzer/Core/PathSensitive/RangedConstraintManager.h"
 
 namespace clang {
 
@@ -33,7 +32,7 @@ ProgramStateRef RangedConstraintManager::assumeSym(ProgramStateRef State,
     // We can only simplify expressions whose RHS is an integer.
 
     BinaryOperator::Opcode op = SIE->getOpcode();
-    if (BinaryOperator::isComparisonOp(op)) {
+    if (BinaryOperator::isComparisonOp(op) && op != BO_Cmp) {
       if (!Assumption)
         op = BinaryOperator::negateComparisonOp(op);
 
@@ -41,28 +40,49 @@ ProgramStateRef RangedConstraintManager::assumeSym(ProgramStateRef State,
     }
 
   } else if (const SymSymExpr *SSE = dyn_cast<SymSymExpr>(Sym)) {
-    // Translate "a != b" to "(b - a) != 0".
-    // We invert the order of the operands as a heuristic for how loop
-    // conditions are usually written ("begin != end") as compared to length
-    // calculations ("end - begin"). The more correct thing to do would be to
-    // canonicalize "a - b" and "b - a", which would allow us to treat
-    // "a != b" and "b != a" the same.
-    SymbolManager &SymMgr = getSymbolManager();
     BinaryOperator::Opcode Op = SSE->getOpcode();
     assert(BinaryOperator::isComparisonOp(Op));
 
-    // For now, we only support comparing pointers.
-    assert(Loc::isLocType(SSE->getLHS()->getType()));
-    assert(Loc::isLocType(SSE->getRHS()->getType()));
-    QualType DiffTy = SymMgr.getContext().getPointerDiffType();
-    SymbolRef Subtraction =
-        SymMgr.getSymSymExpr(SSE->getRHS(), BO_Sub, SSE->getLHS(), DiffTy);
+    // We convert equality operations for pointers only.
+    if (Loc::isLocType(SSE->getLHS()->getType()) &&
+        Loc::isLocType(SSE->getRHS()->getType())) {
+      // Translate "a != b" to "(b - a) != 0".
+      // We invert the order of the operands as a heuristic for how loop
+      // conditions are usually written ("begin != end") as compared to length
+      // calculations ("end - begin"). The more correct thing to do would be to
+      // canonicalize "a - b" and "b - a", which would allow us to treat
+      // "a != b" and "b != a" the same.
 
-    const llvm::APSInt &Zero = getBasicVals().getValue(0, DiffTy);
-    Op = BinaryOperator::reverseComparisonOp(Op);
-    if (!Assumption)
-      Op = BinaryOperator::negateComparisonOp(Op);
-    return assumeSymRel(State, Subtraction, Op, Zero);
+      SymbolManager &SymMgr = getSymbolManager();
+      QualType DiffTy = SymMgr.getContext().getPointerDiffType();
+      SymbolRef Subtraction =
+          SymMgr.getSymSymExpr(SSE->getRHS(), BO_Sub, SSE->getLHS(), DiffTy);
+
+      const llvm::APSInt &Zero = getBasicVals().getValue(0, DiffTy);
+      Op = BinaryOperator::reverseComparisonOp(Op);
+      if (!Assumption)
+        Op = BinaryOperator::negateComparisonOp(Op);
+      return assumeSymRel(State, Subtraction, Op, Zero);
+    }
+
+    if (BinaryOperator::isEqualityOp(Op)) {
+      SymbolManager &SymMgr = getSymbolManager();
+
+      QualType ExprType = SSE->getType();
+      SymbolRef CanonicalEquality =
+          SymMgr.getSymSymExpr(SSE->getLHS(), BO_EQ, SSE->getRHS(), ExprType);
+
+      bool WasEqual = SSE->getOpcode() == BO_EQ;
+      bool IsExpectedEqual = WasEqual == Assumption;
+
+      const llvm::APSInt &Zero = getBasicVals().getValue(0, ExprType);
+
+      if (IsExpectedEqual) {
+        return assumeSymNE(State, CanonicalEquality, Zero, Zero);
+      }
+
+      return assumeSymEQ(State, CanonicalEquality, Zero, Zero);
+    }
   }
 
   // If we get here, there's nothing else we can do but treat the symbol as
@@ -200,5 +220,4 @@ void RangedConstraintManager::computeAdjustment(SymbolRef &Sym,
 }
 
 } // end of namespace ento
-
 } // end of namespace clang

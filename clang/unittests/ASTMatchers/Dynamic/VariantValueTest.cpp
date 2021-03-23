@@ -1,9 +1,8 @@
 //===- unittest/ASTMatchers/Dynamic/VariantValueTest.cpp - VariantValue unit tests -===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===-----------------------------------------------------------------------------===//
 
@@ -75,12 +74,16 @@ TEST(VariantValueTest, Assignment) {
   EXPECT_TRUE(Value.isString());
   EXPECT_EQ("A", Value.getString());
   EXPECT_TRUE(Value.hasValue());
+  EXPECT_FALSE(Value.isBoolean());
+  EXPECT_FALSE(Value.isDouble());
   EXPECT_FALSE(Value.isUnsigned());
   EXPECT_FALSE(Value.isMatcher());
   EXPECT_EQ("String", Value.getTypeAsString());
 
   Value = VariantMatcher::SingleMatcher(recordDecl());
   EXPECT_TRUE(Value.hasValue());
+  EXPECT_FALSE(Value.isBoolean());
+  EXPECT_FALSE(Value.isDouble());
   EXPECT_FALSE(Value.isUnsigned());
   EXPECT_FALSE(Value.isString());
   EXPECT_TRUE(Value.isMatcher());
@@ -88,15 +91,36 @@ TEST(VariantValueTest, Assignment) {
   EXPECT_FALSE(Value.getMatcher().hasTypedMatcher<UnaryOperator>());
   EXPECT_EQ("Matcher<Decl>", Value.getTypeAsString());
 
+  Value = true;
+  EXPECT_TRUE(Value.isBoolean());
+  EXPECT_EQ(true, Value.getBoolean());
+  EXPECT_TRUE(Value.hasValue());
+  EXPECT_FALSE(Value.isUnsigned());
+  EXPECT_FALSE(Value.isMatcher());
+  EXPECT_FALSE(Value.isString());
+
+  Value = 3.14;
+  EXPECT_TRUE(Value.isDouble());
+  EXPECT_EQ(3.14, Value.getDouble());
+  EXPECT_TRUE(Value.hasValue());
+  EXPECT_FALSE(Value.isBoolean());
+  EXPECT_FALSE(Value.isUnsigned());
+  EXPECT_FALSE(Value.isMatcher());
+  EXPECT_FALSE(Value.isString());
+
   Value = 17;
   EXPECT_TRUE(Value.isUnsigned());
   EXPECT_EQ(17U, Value.getUnsigned());
+  EXPECT_FALSE(Value.isBoolean());
+  EXPECT_FALSE(Value.isDouble());
   EXPECT_TRUE(Value.hasValue());
   EXPECT_FALSE(Value.isMatcher());
   EXPECT_FALSE(Value.isString());
 
   Value = VariantValue();
   EXPECT_FALSE(Value.hasValue());
+  EXPECT_FALSE(Value.isBoolean());
+  EXPECT_FALSE(Value.isDouble());
   EXPECT_FALSE(Value.isUnsigned());
   EXPECT_FALSE(Value.isString());
   EXPECT_FALSE(Value.isMatcher());
@@ -158,6 +182,25 @@ TEST(VariantValueTest, Matcher) {
               VariantValue(VariantMatcher::SingleMatcher(declRefExpr()))
                   .getMatcher()
                   .getTypedMatcher<Stmt>()));
+}
+
+TEST(VariantValueTest, NodeKind) {
+  VariantValue Value = ASTNodeKind::getFromNodeKind<Stmt>();
+  EXPECT_TRUE(Value.isNodeKind());
+  EXPECT_TRUE(Value.getNodeKind().isSame(ASTNodeKind::getFromNodeKind<Stmt>()));
+
+  Value = ASTNodeKind::getFromNodeKind<CXXMethodDecl>();
+  EXPECT_TRUE(Value.isNodeKind());
+  EXPECT_TRUE(Value.getNodeKind().isSame(
+      ASTNodeKind::getFromNodeKind<CXXMethodDecl>()));
+
+  Value.setNodeKind(ASTNodeKind::getFromNodeKind<PointerType>());
+  EXPECT_TRUE(Value.isNodeKind());
+  EXPECT_TRUE(
+      Value.getNodeKind().isSame(ASTNodeKind::getFromNodeKind<PointerType>()));
+
+  Value = 42;
+  EXPECT_TRUE(!Value.isNodeKind());
 }
 
 } // end anonymous namespace

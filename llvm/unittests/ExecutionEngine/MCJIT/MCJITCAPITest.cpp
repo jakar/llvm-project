@@ -1,9 +1,8 @@
 //===- MCJITTest.cpp - Unit tests for the MCJIT -----------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 //
@@ -12,8 +11,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm-c/Analysis.h"
 #include "MCJITTestAPICommon.h"
+#include "llvm-c/Analysis.h"
 #include "llvm-c/Core.h"
 #include "llvm-c/ExecutionEngine.h"
 #include "llvm-c/Target.h"
@@ -89,8 +88,9 @@ public:
   bool needsToReserveAllocationSpace() override { return true; }
 
   void reserveAllocationSpace(uintptr_t CodeSize, uint32_t CodeAlign,
-			      uintptr_t DataSizeRO, uint32_t RODataAlign,
-                              uintptr_t DataSizeRW, uint32_t RWDataAlign) override {
+                              uintptr_t DataSizeRO, uint32_t RODataAlign,
+                              uintptr_t DataSizeRW,
+                              uint32_t RWDataAlign) override {
     ReservedCodeSize = CodeSize;
     ReservedDataSizeRO = DataSizeRO;
     ReservedDataSizeRW = DataSizeRW;
@@ -285,7 +285,6 @@ protected:
   
   void buildAndRunPasses() {
     LLVMPassManagerRef pass = LLVMCreatePassManager();
-    LLVMAddConstantPropagationPass(pass);
     LLVMAddInstructionCombiningPass(pass);
     LLVMRunPassManager(pass, Module);
     LLVMDisposePassManager(pass);
@@ -425,9 +424,15 @@ TEST_F(MCJITCAPITest, stackmap_creates_compact_unwind_on_darwin) {
     didAllocateCompactUnwindSection);
 }
 
-TEST_F(MCJITCAPITest, reserve_allocation_space) {
+#if defined(__APPLE__) && defined(__aarch64__)
+// FIXME: Figure out why this fails on mac/arm, PR46647
+#define MAYBE_reserve_allocation_space DISABLED_reserve_allocation_space
+#else
+#define MAYBE_reserve_allocation_space reserve_allocation_space
+#endif
+TEST_F(MCJITCAPITest, MAYBE_reserve_allocation_space) {
   SKIP_UNSUPPORTED_PLATFORM;
-  
+
   TestReserveAllocationSpaceMemoryManager* MM = new TestReserveAllocationSpaceMemoryManager();
   
   buildModuleWithCodeAndData();

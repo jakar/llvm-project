@@ -1,6 +1,5 @@
 ; RUN: opt %loadPolly -polly-simplify -analyze < %s | FileCheck %s -match-full-lines
-; RUN: opt %loadPolly -polly-simplify -disable-output -stats < %s 2>&1 | FileCheck %s --check-prefix=STATS -match-full-lines
-; REQUIRES: asserts
+; RUN: opt %loadPolly "-passes=scop(print<polly-simplify>)" -disable-output -aa-pipeline=basic-aa < %s | FileCheck %s -match-full-lines
 ;
 ; Don't remove store where there is another store to the same target
 ; in-between them.
@@ -38,4 +37,3 @@ return:
 
 ; CHECK: SCoP could not be simplified
 
-; STATS: 1 polly-simplify   - Number of Load-Store pairs NOT removed because there is another store between them

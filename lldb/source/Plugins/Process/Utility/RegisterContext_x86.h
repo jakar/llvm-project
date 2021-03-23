@@ -1,23 +1,23 @@
 //===-- RegisterContext_x86.h -----------------------------------*- C++ -*-===//
 //
-//                     The LLVM Compiler Infrastructure
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef liblldb_RegisterContext_x86_H_
-#define liblldb_RegisterContext_x86_H_
+#ifndef LLDB_SOURCE_PLUGINS_PROCESS_UTILITY_REGISTERCONTEXT_X86_H
+#define LLDB_SOURCE_PLUGINS_PROCESS_UTILITY_REGISTERCONTEXT_X86_H
 
 #include <cstddef>
 #include <cstdint>
 
+#include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/BitmaskEnum.h"
 #include "llvm/Support/Compiler.h"
 
-//---------------------------------------------------------------------------
+namespace lldb_private {
 // i386 ehframe, dwarf regnums
-//---------------------------------------------------------------------------
 
 // Register numbers seen in eh_frame (eRegisterKindEHFrame) on i386 systems
 // (non-Darwin)
@@ -130,9 +130,7 @@ enum {
   dwarf_bnd3_i386,
 };
 
-//---------------------------------------------------------------------------
 // AMD x86_64, AMD64, Intel EM64T, or Intel 64 ehframe, dwarf regnums
-//---------------------------------------------------------------------------
 
 // EHFrame and DWARF Register numbers (eRegisterKindEHFrame &
 // eRegisterKindDWARF)
@@ -240,14 +238,25 @@ enum {
   // dwarf_k7_x86_64,
 };
 
-//---------------------------------------------------------------------------
 // Generic floating-point registers
-//---------------------------------------------------------------------------
+
+LLVM_PACKED_START
+struct MMSRegComp {
+  uint64_t mantissa;
+  uint16_t sign_exp;
+};
 
 struct MMSReg {
-  uint8_t bytes[10];
+  union {
+    uint8_t bytes[10];
+    MMSRegComp comp;
+  };
   uint8_t pad[6];
 };
+LLVM_PACKED_END
+
+static_assert(sizeof(MMSRegComp) == 10, "MMSRegComp is not 10 bytes of size");
+static_assert(sizeof(MMSReg) == 16, "MMSReg is not 16 bytes of size");
 
 struct XMMReg {
   uint8_t bytes[16]; // 128-bits for each XMM register
@@ -257,8 +266,7 @@ struct XMMReg {
 struct FXSAVE {
   uint16_t fctrl;     // FPU Control Word (fcw)
   uint16_t fstat;     // FPU Status Word (fsw)
-  uint8_t ftag;       // FPU Tag Word (ftw)
-  uint8_t reserved_1; // Reserved
+  uint16_t ftag;      // FPU Tag Word (ftw)
   uint16_t fop;       // Last Instruction Opcode (fop)
   union {
     struct {
@@ -282,9 +290,7 @@ struct FXSAVE {
   uint8_t padding2[40];
 };
 
-//---------------------------------------------------------------------------
 // Extended floating-point registers
-//---------------------------------------------------------------------------
 
 struct YMMHReg {
   uint8_t bytes[16]; // 16 * 8 bits for the high bytes of each YMM register
@@ -314,18 +320,33 @@ struct MPX {
 
 LLVM_PACKED_START
 struct XSAVE_HDR {
-  uint64_t xstate_bv; // OS enabled xstate mask to determine the extended states
+  enum class XFeature : uint64_t {
+    FP = 1,
+    SSE = FP << 1,
+    YMM = SSE << 1,
+    BNDREGS = YMM << 1,
+    BNDCSR = BNDREGS << 1,
+    OPMASK = BNDCSR << 1,
+    ZMM_Hi256 = OPMASK << 1,
+    Hi16_ZMM = ZMM_Hi256 << 1,
+    PT = Hi16_ZMM << 1,
+    PKRU = PT << 1,
+    LLVM_MARK_AS_BITMASK_ENUM(/*LargestValue*/ PKRU)
+  };
+
+  XFeature xstate_bv; // OS enabled xstate mask to determine the extended states
                       // supported by the processor
-  uint64_t xcomp_bv;  // Mask to indicate the format of the XSAVE area and of
+  XFeature xcomp_bv;  // Mask to indicate the format of the XSAVE area and of
                       // the XRSTOR instruction
   uint64_t reserved1[1];
   uint64_t reserved2[5];
 };
+static_assert(sizeof(XSAVE_HDR) == 64, "XSAVE_HDR layout incorrect");
 LLVM_PACKED_END
 
 // x86 extensions to FXSAVE (i.e. for AVX and MPX processors)
 LLVM_PACKED_START
-struct LLVM_ALIGNAS(64) XSAVE {
+struct XSAVE {
   FXSAVE i387;      // floating point registers typical in i387_fxsave_struct
   XSAVE_HDR header; // The xsave_hdr_struct can be used to determine if the
                     // following extensions are usable
@@ -339,21 +360,33 @@ struct LLVM_ALIGNAS(64) XSAVE {
 LLVM_PACKED_END
 
 // Floating-point registers
-struct FPR {
-  // Thread state for the floating-point unit of the processor read by ptrace.
-  union XSTATE {
-    FXSAVE fxsave; // Generic floating-point registers.
-    XSAVE xsave;   // x86 extended processor state.
-  } xstate;
+union FPR {
+  FXSAVE fxsave; // Generic floating-point registers.
+  XSAVE xsave;   // x86 extended processor state.
 };
 
-//---------------------------------------------------------------------------
-// ptrace PTRACE_GETREGSET, PTRACE_SETREGSET structure
-//---------------------------------------------------------------------------
+LLVM_ENABLE_BITMASK_ENUMS_IN_NAMESPACE();
 
-struct IOVEC {
-  void *iov_base; // pointer to XSAVE
-  size_t iov_len; // sizeof(XSAVE)
-};
+// Convenience function to combine YMM register data from XSAVE-style input.
+inline YMMReg XStateToYMM(const void* xmm_bytes, const void* ymmh_bytes) {
+  YMMReg ret;
+
+  ::memcpy(ret.bytes, xmm_bytes, sizeof(XMMReg));
+  ::memcpy(ret.bytes + sizeof(XMMReg), ymmh_bytes, sizeof(YMMHReg));
+
+  return ret;
+}
+
+// Convenience function to copy YMM register data into XSAVE-style output.
+inline void YMMToXState(const YMMReg& input, void* xmm_bytes, void* ymmh_bytes) {
+  ::memcpy(xmm_bytes, input.bytes, sizeof(XMMReg));
+  ::memcpy(ymmh_bytes, input.bytes + sizeof(XMMReg), sizeof(YMMHReg));
+}
+
+uint16_t AbridgedToFullTagWord(uint8_t abridged_tw, uint16_t sw,
+                               llvm::ArrayRef<MMSReg> st_regs);
+uint8_t FullToAbridgedTagWord(uint16_t tw);
+
+} // namespace lldb_private
 
 #endif

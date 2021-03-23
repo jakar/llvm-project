@@ -1,9 +1,8 @@
 //===- lib/ReaderWriter/MachO/MachONormalizedFileFromAtoms.cpp ------------===//
 //
-//                             The LLVM Linker
-//
-// This file is distributed under the University of Illinois Open Source
-// License. See LICENSE.TXT for details.
+// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+// See https://llvm.org/LICENSE.txt for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
 
@@ -20,19 +19,19 @@
 ///                    | Atoms |
 ///                    +-------+
 
-#include "MachONormalizedFile.h"
 #include "ArchHandler.h"
 #include "DebugInfo.h"
+#include "MachONormalizedFile.h"
 #include "MachONormalizedFileBinaryUtils.h"
+#include "lld/Common/LLVM.h"
 #include "lld/Core/Error.h"
-#include "lld/Core/LLVM.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/StringSwitch.h"
+#include "llvm/BinaryFormat/MachO.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/Format.h"
-#include "llvm/Support/MachO.h"
 #include <map>
 #include <system_error>
 #include <unordered_set>
@@ -172,6 +171,8 @@ private:
                                    SymbolScope &symbolScope);
   void         appendSection(SectionInfo *si, NormalizedFile &file);
   uint32_t     sectionIndexForAtom(const Atom *atom);
+  void fixLazyReferenceImm(const DefinedAtom *atom, uint32_t offset,
+                           NormalizedFile &file);
 
   typedef llvm::DenseMap<const Atom*, uint32_t> AtomToIndex;
   struct AtomAndIndex { const Atom *atom; uint32_t index; SymbolScope scope; };
@@ -515,6 +516,7 @@ void Util::organizeSections() {
       // Main executables, need a zero-page segment
       segmentForName("__PAGEZERO");
       // Fall into next case.
+      LLVM_FALLTHROUGH;
     case llvm::MachO::MH_DYLIB:
     case llvm::MachO::MH_BUNDLE:
       // All dynamic code needs TEXT segment to hold the load commands.
@@ -585,7 +587,8 @@ void Util::layoutSectionsInTextSegment(size_t hlcSize, SegmentInfo *seg,
 
 void Util::assignAddressesToSections(const NormalizedFile &file) {
   // NOTE!: Keep this in sync with organizeSections.
-  size_t hlcSize = headerAndLoadCommandsSize(file);
+  size_t hlcSize = headerAndLoadCommandsSize(file,
+                                      _ctx.generateFunctionStartsLoadCommand());
   uint64_t address = 0;
   for (SegmentInfo *seg : _segmentInfos) {
     if (seg->name.equals("__PAGEZERO")) {
@@ -987,7 +990,7 @@ llvm::Error Util::getSymbolTableRegion(const DefinedAtom* atom,
     inGlobalsRegion = false;
     return llvm::Error::success();
   case Atom::scopeLinkageUnit:
-    if ((_ctx.exportMode() == MachOLinkingContext::ExportMode::whiteList) &&
+    if ((_ctx.exportMode() == MachOLinkingContext::ExportMode::exported) &&
         _ctx.exportSymbolNamed(atom->name())) {
       return llvm::make_error<GenericError>(
                           Twine("cannot export hidden symbol ") + atom->name());
@@ -1034,7 +1037,7 @@ llvm::Error Util::addSymbols(const lld::File &atomFile,
 
   // Add all stabs.
   for (auto &stab : _stabs) {
-    Symbol sym;
+    lld::mach_o::normalized::Symbol sym;
     sym.type = static_cast<NListType>(stab.type);
     sym.scope = 0;
     sym.sect = stab.other;
@@ -1063,7 +1066,7 @@ llvm::Error Util::addSymbols(const lld::File &atomFile,
           AtomAndIndex ai = { atom, sect->finalSectionIndex, symbolScope };
           globals.push_back(ai);
         } else {
-          Symbol sym;
+          lld::mach_o::normalized::Symbol sym;
           sym.name  = atom->name();
           sym.type  = N_SECT;
           sym.scope = symbolScope;
@@ -1079,7 +1082,7 @@ llvm::Error Util::addSymbols(const lld::File &atomFile,
         char tmpName[16];
         sprintf(tmpName, "L%04u", tempNum++);
         StringRef tempRef(tmpName);
-        Symbol sym;
+        lld::mach_o::normalized::Symbol sym;
         sym.name  = tempRef.copy(file.ownedAllocations);
         sym.type  = N_SECT;
         sym.scope = 0;
@@ -1096,7 +1099,7 @@ llvm::Error Util::addSymbols(const lld::File &atomFile,
   std::sort(globals.begin(), globals.end(), AtomSorter());
   const uint32_t globalStartIndex = file.localSymbols.size();
   for (AtomAndIndex &ai : globals) {
-    Symbol sym;
+    lld::mach_o::normalized::Symbol sym;
     sym.name  = ai.atom->name();
     sym.type  = N_SECT;
     sym.scope = ai.scope;
@@ -1121,7 +1124,7 @@ llvm::Error Util::addSymbols(const lld::File &atomFile,
   std::sort(undefs.begin(), undefs.end(), AtomSorter());
   const uint32_t start = file.globalSymbols.size() + file.localSymbols.size();
   for (AtomAndIndex &ai : undefs) {
-    Symbol sym;
+    lld::mach_o::normalized::Symbol sym;
     uint16_t desc = 0;
     if (!rMode) {
       uint8_t ordinal = 0;
@@ -1422,6 +1425,8 @@ void Util::addRebaseAndBindingInfo(const lld::File &atomFile,
 
   uint8_t segmentIndex;
   uint64_t segmentStartAddr;
+  uint32_t offsetInBindInfo = 0;
+
   for (SectionInfo *sect : _sectionInfos) {
     segIndexForSection(sect, segmentIndex, segmentStartAddr);
     for (const AtomInfo &info : sect->atomsAndOffsets) {
@@ -1466,6 +1471,59 @@ void Util::addRebaseAndBindingInfo(const lld::File &atomFile,
           bind.symbolName = targ->name();
           bind.addend = ref->addend();
           nFile.lazyBindingInfo.push_back(bind);
+
+          // Now that we know the segmentOffset and the ordinal attribute,
+          // we can fix the helper's code
+
+          fixLazyReferenceImm(atom, offsetInBindInfo, nFile);
+
+          // 5 bytes for opcodes + variable sizes (target name + \0 and offset
+          // encode's size)
+          offsetInBindInfo +=
+              6 + targ->name().size() + llvm::getULEB128Size(bind.segOffset);
+          if (bind.ordinal > BIND_IMMEDIATE_MASK)
+            offsetInBindInfo += llvm::getULEB128Size(bind.ordinal);
+        }
+      }
+    }
+  }
+}
+
+void Util::fixLazyReferenceImm(const DefinedAtom *atom, uint32_t offset,
+                               NormalizedFile &file) {
+  for (const Reference *ref : *atom) {
+    const DefinedAtom *da = dyn_cast<DefinedAtom>(ref->target());
+    if (da == nullptr)
+      return;
+
+    const Reference *helperRef = nullptr;
+    for (const Reference *hr : *da) {
+      if (hr->kindValue() == _archHandler.lazyImmediateLocationKind()) {
+        helperRef = hr;
+        break;
+      }
+    }
+    if (helperRef == nullptr)
+      continue;
+
+    // TODO: maybe get the fixed atom content from _archHandler ?
+    for (SectionInfo *sectInfo : _sectionInfos) {
+      for (const AtomInfo &atomInfo : sectInfo->atomsAndOffsets) {
+        if (atomInfo.atom == helperRef->target()) {
+          auto sectionContent =
+              file.sections[sectInfo->normalizedSectionIndex].content;
+          uint8_t *rawb =
+              file.ownedAllocations.Allocate<uint8_t>(sectionContent.size());
+          llvm::MutableArrayRef<uint8_t> newContent{rawb,
+                                                    sectionContent.size()};
+          std::copy(sectionContent.begin(), sectionContent.end(),
+                    newContent.begin());
+          llvm::support::ulittle32_t *loc =
+              reinterpret_cast<llvm::support::ulittle32_t *>(
+                  &newContent[atomInfo.offsetInSection +
+                              helperRef->offsetInAtom()]);
+          *loc = offset;
+          file.sections[sectInfo->normalizedSectionIndex].content = newContent;
         }
       }
     }
@@ -1503,7 +1561,7 @@ void Util::addExportInfo(const lld::File &atomFile, NormalizedFile &nFile) {
 uint32_t Util::fileFlags() {
   // FIXME: these need to determined at runtime.
   if (_ctx.outputMachOType() == MH_OBJECT) {
-    return _subsectionsViaSymbols ? MH_SUBSECTIONS_VIA_SYMBOLS : 0;
+    return _subsectionsViaSymbols ? (uint32_t)MH_SUBSECTIONS_VIA_SYMBOLS : 0;
   } else {
     uint32_t flags = MH_DYLDLINK;
     if (!_ctx.useFlatNamespace())
