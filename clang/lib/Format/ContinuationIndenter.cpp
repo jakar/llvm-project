@@ -323,9 +323,6 @@ bool ContinuationIndenter::canBreak(const LineState &State) {
   if (Previous.is(tok::l_square) && Previous.is(TT_ObjCMethodExpr))
     return false;
     
-  if(Current.is(tok::r_paren) && !State.Stack.back().BreakBeforeClosingParen)
-    return false;
-
   return !State.Stack.back().NoLineBreak;
 }
 
@@ -342,7 +339,7 @@ bool ContinuationIndenter::mustBreak(const LineState &State) {
   if (State.Stack.back().BreakBeforeClosingBrace &&
       Current.closesBlockOrBlockTypeList(Style))
     return true;
-  if(State.Stack.back().BreakBeforeClosingParen && Current.is(tok::r_paren))
+  if (State.Stack.back().BreakBeforeClosingParen && Current.is(tok::r_paren))
     return true;
   if (Previous.is(tok::semi) && State.LineContainsContinuedForLoopSection)
     return true;
